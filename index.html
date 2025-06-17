@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PromptPrim Studio</title>
+    <!-- Library for Drag & Drop functionality -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- Libraries for Markdown Rendering & Syntax Highlighting -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --background-gradient: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            --text-dark: #2d3748;
+            --text-light: #f7fafc;
+            --border-color: #e2e8f0;
+            --success-color: #48bb78;
+            --error-color: #e53e3e;
+            --warning-color: #ed8936;
+            --white-alpha-95: rgba(255, 255, 255, 0.95);
+            --white-alpha-50: rgba(247, 250, 252, 0.5);
+            --shadow-light: rgba(102, 126, 234, 0.1);
+            --shadow-dark: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: var(--background-gradient);
+            color: var(--text-dark);
+            overflow: hidden;
+        }
+        
+        /* --- Main Layout --- */
+        .app-wrapper {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .sidebar {
+            width: 380px;
+            min-width: 380px;
+            background: var(--white-alpha-95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            border-right: 1px solid var(--border-color);
+            transition: margin-left 0.3s ease-in-out;
+        }
+        
+        .app-wrapper.sidebar-collapsed .sidebar {
+            margin-left: -380px;
+        }
+        
+        .sidebar-header {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .menu-toggle-btn, #collapse-sidebar-btn {
+            font-size: 24px;
+            cursor: pointer;
+            margin-right: 15px;
+            background: none;
+            border: none;
+            color: var(--text-dark);
+            padding: 5px;
+            line-height: 1;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-right: auto;
+        }
+
+        .sidebar-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sessions-frame {
+            flex: 1 1 55%;
+            min-height: 100px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .sidebar-resizer {
+            flex: 0 0 8px;
+            cursor: ns-resize;
+            background: #e2e8f0;
+            border-top: 1px solid #d1d5db;
+            border-bottom: 1px solid #d1d5db;
+        }
+        .sidebar-resizer:hover {
+            background: var(--primary-color);
+            opacity: 0.3;
+        }
+        
+        .memories-frame {
+            flex: 1 1 45%;
+            min-height: 100px;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .main-chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: var(--white-alpha-50);
+        }
+
+        /* --- Settings Panel --- */
+        #settings-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 450px;
+            height: 100%;
+            background: white;
+            z-index: 1000;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #settings-panel.open {
+            transform: translateX(0);
+        }
+
+        .settings-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .settings-header h2 { font-size: 22px; }
+
+        .close-settings-btn {
+            font-size: 28px;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        .settings-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* --- Generic UI Components --- */
+        .section-box {
+            background: var(--text-light);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .section-box h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #4a5568;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .form-group { margin-bottom: 15px; }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="text"], input[type="password"], input[type="number"], select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px white inset !important;
+            -webkit-text-fill-color: var(--text-dark) !important;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--shadow-light);
+        }
+        
+        textarea { resize: vertical; min-height: 100px; }
+        
+        .btn {
+            background: var(--background-gradient);
+            color: white; border: none; padding: 10px 18px;
+            border-radius: 8px; cursor: pointer; font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px var(--shadow-light);
+        }
+        
+        .btn-small { padding: 6px 12px; font-size: 12px; }
+        .btn-secondary { background: #cbd5e0; color: var(--text-dark); }
+        .btn-danger { background: var(--error-color); }
+        
+        .flex-group { display: flex; gap: 10px; align-items: center; }
+        .flex-group > select { flex-grow: 1; }
+        
+        /* --- Improved List Styles --- */
+        .item-list > .item {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .item-list > .item.active {
+            border-color: var(--success-color);
+            box-shadow: 0 0 8px rgba(72, 187, 120, 0.2);
+        }
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .item-name {
+            font-weight: 600;
+            cursor: pointer;
+            flex-grow: 1;
+            padding-right: 10px;
+        }
+        .memory-item .item-name { cursor: grab; }
+        .memory-item .item-name:active { cursor: grabbing; }
+
+        .item-actions { display: flex; gap: 5px; align-items: center; }
+        .item-actions .btn-small { padding: 4px 8px; }
+
+        /* --- Collapsible Section --- */
+        .collapsible-section summary {
+            cursor: pointer;
+            font-weight: 500;
+            padding: 5px;
+            border-radius: 5px;
+            transition: background 0.2s;
+        }
+        .collapsible-section summary:hover { background: #f0f0f0; }
+        .collapsible-section .item-list { padding-top: 10px; }
+        
+        /* --- Memory Toggle Switch --- */
+        .memory-toggle {
+            width: 40px; height: 20px; background: #cbd5e0;
+            border-radius: 10px; position: relative; cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .memory-toggle.active { background: var(--success-color); }
+        .memory-toggle::after {
+            content: ''; width: 16px; height: 16px; background: white;
+            border-radius: 50%; position: absolute; top: 2px; left: 2px;
+            transition: transform 0.3s ease;
+        }
+        .memory-toggle.active::after { transform: translateX(20px); }
+
+        /* --- Chat Area --- */
+        .chat-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--white-alpha-95);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-title { font-size: 24px; font-weight: 700; flex-grow: 1; }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .message {
+            max-width: 85%; padding: 12px 18px; border-radius: 18px;
+            position: relative; white-space: pre-wrap;
+            line-height: 1.6; word-wrap: break-word;
+        }
+        .message-content { outline: none; }
+        .message.user {
+            background: var(--background-gradient);
+            color: white; align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+        .message.assistant {
+            background: white; align-self: flex-start;
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: 5px;
+        }
+        .message-actions {
+            position: absolute;
+            top: -12px;
+            right: 0px;
+            display: none;
+            gap: 5px;
+        }
+         .message:hover .message-actions {
+            display: flex;
+        }
+
+        .message-actions button {
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Markdown Styles */
+        .message-content pre {
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 1em;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1em 0;
+        }
+        .message-content code {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f0f0f0;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+        }
+        .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .message-content ul, .message-content ol { padding-left: 20px; }
+        .message-content blockquote {
+            border-left: 4px solid #ccc;
+            padding-left: 10px;
+            margin-left: 0;
+            color: #666;
+        }
+        .message-content img.multimodal-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .chat-input-area {
+            padding: 15px 25px;
+            border-top: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .input-container { display: flex; gap: 10px; align-items: flex-end; }
+        #chatInput {
+            flex: 1; min-height: 48px; max-height: 150px;
+            padding: 12px 18px; border: 1px solid var(--border-color);
+            border-radius: 24px; resize: none;
+        }
+        .send-btn, .stop-btn, #upload-image-btn {
+            width: 48px; height: 48px; border-radius: 50%;
+            flex-shrink: 0;
+        }
+        #upload-image-btn { background: #e2e8f0; color: var(--text-dark); }
+        .stop-btn { background: var(--error-color); display: none; }
+        
+        #image-preview-container {
+            display: none;
+            position: relative;
+            margin-bottom: 10px;
+            max-width: 200px;
+        }
+        #image-preview {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        #remove-image-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: var(--error-color);
+            color: white;
+            border-radius: 50%;
+            border: none;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        /* --- Status Panel --- */
+        #status-panel {
+            padding: 8px 25px; font-size: 13px; color: #4a5568;
+            border-top: 1px solid var(--border-color);
+            background: var(--text-light); display: flex;
+            align-items: center; gap: 10px;
+        }
+        .status-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--warning-color); transition: background 0.3s;
+        }
+        .status-dot.connected { background: var(--success-color); }
+        .status-dot.error { background: var(--error-color); }
+
+        /* --- Etc --- */
+        .loading { display: flex; gap: 4px; align-items: center; }
+        .loading-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--primary-color);
+            animation: loadingBounce 1.4s infinite ease-in-out both;
+        }
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes loadingBounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none;
+            align-items: center; justify-content: center; z-index: 2000;
+        }
+        .modal-box {
+            background: white; padding: 25px; border-radius: 15px;
+            width: 90%; max-width: 500px; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+        .modal-box h3 { margin-top: 0; }
+        .modal-actions {
+            margin-top: 20px; display: flex;
+            justify-content: flex-end; gap: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-wrapper">
+        <!-- Settings Panel -->
+        <div id="settings-panel">
+            <div class="settings-header">
+                <h2>การตั้งค่า</h2>
+                <button class="close-settings-btn" onclick="toggleSettingsPanel()">&times;</button>
+            </div>
+            <div class="settings-content">
+                <div class="section-box">
+                    <h3>จัดการ Preset</h3>
+                    <div class="flex-group">
+                         <select id="settingsPresetSelect" onchange="handlePresetSelectionChange()"></select>
+                         <button class="btn btn-small btn-danger" onclick="deleteSettingsPreset()">ลบ</button>
+                    </div>
+                    <hr style="margin: 15px 0; border-color: var(--border-color); border-style: solid;">
+                    <div class="form-group" id="newPresetNameContainer">
+                        <label for="newPresetName">ชื่อ Preset ใหม่</label>
+                        <input type="text" id="newPresetName" placeholder="เช่น 'Creative Writing Setup'">
+                    </div>
+                    <button id="saveOrUpdatePresetBtn" class="btn" onclick="handleSaveOrUpdatePreset()">บันทึกเป็น Preset ใหม่</button>
+                </div>
+                <div class="section-box">
+                    <h3>🔧 API Settings</h3>
+                    <div class="form-group">
+                        <label for="apiProvider">API Provider</label>
+                        <select id="apiProvider">
+                            <option value="openrouter">OpenRouter</option>
+                            <option value="ollama">Ollama (Local)</option>
+                        </select>
+                    </div>
+                    <div id="openRouterApiKeyGroup" class="form-group">
+                         <label for="apiKey">OpenRouter API Key</label>
+                         <input type="password" id="apiKey">
+                    </div>
+                    <div id="ollamaBaseUrlGroup" class="form-group">
+                         <label for="ollamaBaseUrl">Ollama Base URL</label>
+                         <input type="text" id="ollamaBaseUrl">
+                    </div>
+                    <div class="form-group">
+                        <label for="modelSelect">Model</label>
+                        <div class="flex-group">
+                            <select id="modelSelect"></select>
+                            <button class="btn btn-small btn-secondary" onclick="loadModels()">โหลดใหม่</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-box">
+                    <h3>📝 System Prompt &amp; Parameters</h3>
+                    <div class="form-group">
+                         <label for="systemPrompt">คำสั่งเริ่มต้นของระบบ</label>
+                         <textarea id="systemPrompt" rows="5"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="flex-group">
+                            <input type="checkbox" id="useMarkdown">
+                            ใช้ Markdown สำหรับการตอบกลับ
+                        </label>
+                    </div>
+                    <details open>
+                        <summary>ตั้งค่าขั้นสูง</summary>
+                        <div style="margin-top: 15px;">
+                             <div class="form-group"><label for="temperature">Temperature</label><input type="number" id="temperature" step="0.1" min="0" max="2"></div>
+                             <div class="form-group"><label for="topP">Top P</label><input type="number" id="topP" step="0.1" min="0" max="1"></div>
+                             <div class="form-group"><label for="topK">Top K</label><input type="number" id="topK" step="1" min="0"></div>
+                             <div class="form-group"><label for="presence_penalty">Presence Penalty</label><input type="number" id="presence_penalty" step="0.1" min="-2" max="2"></div>
+                             <div class="form-group"><label for="frequency_penalty">Frequency Penalty</label><input type="number" id="frequency_penalty" step="0.1" min="-2" max="2"></div>
+                             <div class="form-group"><label for="max_tokens">Max Tokens</label><input type="number" id="max_tokens" step="1" min="1"></div>
+                             <div class="form-group"><label for="seed">Seed</label><input type="number" id="seed" step="1" placeholder="ใส่ -1 เพื่อสุ่ม"></div>
+                             <div class="form-group"><label for="stop_sequences">Stop Sequences (คั่นด้วย ,)</label><input type="text" id="stop_sequences"></div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <button class="menu-toggle-btn" onclick="toggleSettingsPanel()">&#9776;</button>
+                <h1 class="sidebar-title">PromptPrim Studio</h1>
+            </div>
+            <div class="sidebar-content">
+                <div class="sessions-frame">
+                    <div class="section-box">
+                        <h3>📂 Chat Sessions</h3>
+                        <div id="sessionListContainer" class="item-list">
+                        </div>
+                        <div class="collapsible-section" id="olderSessionsSection" style="display:none;">
+                            <details>
+                                <summary>Older Sessions</summary>
+                                <div id="olderSessionList" class="item-list"></div>
+                            </details>
+                        </div>
+                        <button class="btn btn-small" onclick="createNewChatSession()" style="margin-top:15px;">+ สร้าง Chat ใหม่</button>
+                    </div>
+                </div>
+                <div class="sidebar-resizer"></div>
+                <div class="memories-frame">
+                    <div class="section-box">
+                        <h3>🧠 Command Memories</h3>
+                         <div class="form-group">
+                            <label>Memory Presets</label>
+                            <div class="flex-group">
+                                 <select id="memoryPresetSelect" onchange="loadMemoryPreset()"></select>
+                                 <button class="btn btn-small btn-danger" onclick="deleteMemoryPreset()">ลบ</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-small" onclick="saveMemoryPreset()">บันทึก Preset</button>
+                        <hr style="margin: 15px 0; border-color: var(--border-color); border-style: solid;">
+                        
+                        <div id="activeMemoriesList" class="item-list"></div>
+                        <div class="collapsible-section" id="inactiveMemoriesSection" style="display:none;">
+                            <details>
+                                <summary>Inactive Memories</summary>
+                                <div id="inactiveMemoriesList" class="item-list"></div>
+                            </details>
+                        </div>
+
+                        <button class="btn btn-small" onclick="showMemoryEditor()" style="margin-top: 15px;">+ เพิ่ม Memory</button>
+                        <hr style="margin: 15px 0; border-color: var(--border-color); border-style: solid;">
+                         <div class="flex-group">
+                            <button class="btn btn-small" onclick="exportMemories()">Export Memories</button>
+                            <input type="file" id="importMemoriesFile" accept=".json" style="display: none;" onchange="importMemories(event)">
+                            <button class="btn btn-small" onclick="document.getElementById('importMemoriesFile').click()">Import Memories</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="main-chat-area">
+            <div class="chat-header">
+                <button id="collapse-sidebar-btn" class="menu-toggle-btn" onclick="toggleSidebarCollapse()" style="margin-right: 15px;">&laquo;</button>
+                <h1 id="chat-title" class="chat-title">AI Assistant</h1>
+                 <button class="btn btn-small" onclick="exportChat()">Export Chat</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div id="status-panel">
+                 <div class="status-dot" id="statusDot"></div>
+                 <span id="statusText">Disconnected</span>
+            </div>
+            <div class="chat-input-area">
+                <div id="image-preview-container">
+                    <img id="image-preview" src="" alt="Image preview">
+                    <button id="remove-image-btn" onclick="removeAttachedImage()">&times;</button>
+                </div>
+                <div class="input-container">
+                    <button class="btn" id="upload-image-btn" onclick="showImageUploadModal()">+</button>
+                    <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
+                    <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
+                    <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">&#9724;</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="memory-editor-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="memory-modal-title">เพิ่ม/แก้ไข Memory</h3>
+            <div class="form-group"><label for="memory-name-input">ชื่อ Memory</label><input type="text" id="memory-name-input"></div>
+            <div class="form-group"><label for="memory-content-input">เนื้อหา Memory</label><textarea id="memory-content-input" rows="8"></textarea></div>
+            <input type="hidden" id="memory-edit-index">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideMemoryEditor()">ยกเลิก</button>
+                <button class="btn" onclick="saveMemory()">บันทึก</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="image-upload-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>เพิ่มรูปภาพ</h3>
+            <div class="form-group">
+                <label for="image-url-input">วาง Image URL</label>
+                <input type="text" id="image-url-input" placeholder="https://example.com/image.png">
+            </div>
+            <button class="btn" onclick="handleImageUrlConfirm()">ยืนยัน URL</button>
+            <hr style="margin: 20px 0;">
+            <p style="text-align: center; margin-bottom: 10px;">หรือ</p>
+            <button class="btn" onclick="document.getElementById('image-file-input').click()">อัปโหลดจากเครื่อง</button>
+            <input type="file" id="image-file-input" accept="image/*" style="display: none;" onchange="handleImageFileUpload(event)">
+             <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideImageUploadModal()">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- IndexedDB Config & Functions ---
+        const DB_NAME = 'AIChatbotDB_v4';
+        const DB_VERSION = 1;
+        const SESSIONS_STORE_NAME = 'chatSessions';
+        let db;
+
+        async function openDb() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = e => {
+                    const dbInstance = e.target.result;
+                    if (!dbInstance.objectStoreNames.contains(SESSIONS_STORE_NAME)) {
+                        dbInstance.createObjectStore(SESSIONS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+                request.onsuccess = e => {
+                    db = e.target.result;
+                    resolve(db);
+                };
+                request.onerror = e => {
+                    console.error("IndexedDB error:", e.target.error);
+                    reject(e.target.error);
+                };
+            });
+        }
+        
+        async function dbRequest(storeName, mode, action, data) {
+            return new Promise((resolve, reject) => {
+                if (!db) {
+                    console.error("Database is not open.");
+                    return reject("Database is not open.");
+                }
+                try {
+                    const transaction = db.transaction(storeName, mode);
+                    const store = transaction.objectStore(storeName);
+                    const request = store[action](data);
+                    request.onsuccess = e => resolve(e.target.result || []); 
+                    request.onerror = e => {
+                        console.error(`DB request error on ${action}:`, e.target.error);
+                        reject(e.target.error);
+                    };
+                } catch (error) {
+                    console.error("Error creating DB transaction:", error);
+                    reject(error);
+                }
+            });
+        }
+
+        // --- Global State & Controllers ---
+        let isLoading = false;
+        let memories = [];
+        let currentChatHistory = [];
+        let currentSessionId = null;
+        let allSessions = [];
+        let abortController = null;
+        let memorySortable = null;
+        let attachedImage = null;
+
+        // --- Default Data ---
+        const defaultMemories = [
+            { name: "Code Assistant", content: "You are an expert programmer.", active: false },
+            { name: "Creative Writer", content: "You are a creative writing assistant.", active: false }
+        ];
+
+        const creativeWritingDefaults = {
+            apiProvider: 'ollama', apiKey: '', ollamaBaseUrl: 'http://localhost:11434', modelSelect: '',
+            systemPrompt: 'You are a master storyteller...',
+            temperature: 1.1, topP: 0.9, topK: 40, presence_penalty: 0.2,
+            frequency_penalty: 0.2, max_tokens: 4096, seed: -1, stop_sequences: '',
+            useMarkdown: true
+        };
+
+        // --- Core Initialization ---
+        async function init() {
+            try {
+                marked.setOptions({
+                    highlight: function(code, lang) {
+                        const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                        return hljs.highlight(code, { language }).value;
+                    },
+                    gfm: true,
+                    breaks: true,
+                });
+                
+                await openDb(); 
+                
+                memories = JSON.parse(localStorage.getItem('chatMemories')) || defaultMemories;
+                loadAndRenderMemories();
+                loadMemoryPresets();
+
+                await loadSettings();
+                loadSettingsPresets();
+                
+                setupEventListeners();
+                makeSidebarResizable();
+
+                await loadAllChatSessions();
+                const lastActiveSessionId = localStorage.getItem('lastActiveChatSessionId');
+                
+                if (allSessions.length === 0) { await createNewChatSession(); }
+                else if (lastActiveSessionId && allSessions.some(s => s.id === parseInt(lastActiveSessionId))) { await loadChatSession(parseInt(lastActiveSessionId)); }
+                else if (allSessions.length > 0) { await loadChatSession(allSessions[0].id); }
+                else { await createNewChatSession(); }
+                
+                updateStatus('Initialized. Please select API provider and model.');
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                updateStatus("Error initializing database. Please refresh.", "error");
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('chatInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+            });
+
+            document.getElementById('chatInput').addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = `${Math.min(this.scrollHeight, 150)}px`;
+            });
+
+            ALL_SETTINGS_IDS.forEach(id => {
+                 const element = document.getElementById(id);
+                 if (element) {
+                    element.addEventListener('change', saveCurrentSettingsToLocalStorage);
+                    if(!['modelSelect', 'apiProvider', 'useMarkdown'].includes(id)) { 
+                        element.addEventListener('input', saveCurrentSettingsToLocalStorage);
+                    }
+                 }
+            });
+            
+            document.getElementById('apiProvider').addEventListener('change', async () => {
+                 toggleApiSettingsVisibility();
+                 await loadModels();
+            });
+        }
+        
+        // --- UI Toggles & Handlers ---
+        function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
+        function toggleApiSettingsVisibility() {
+            const provider = document.getElementById('apiProvider').value;
+            document.getElementById('openRouterApiKeyGroup').style.display = provider === 'openrouter' ? 'block' : 'none';
+            document.getElementById('ollamaBaseUrlGroup').style.display = provider === 'ollama' ? 'block' : 'none';
+        }
+        function toggleSidebarCollapse() {
+            const wrapper = document.querySelector('.app-wrapper');
+            const btn = document.getElementById('collapse-sidebar-btn');
+            wrapper.classList.toggle('sidebar-collapsed');
+            btn.innerHTML = wrapper.classList.contains('sidebar-collapsed') ? '&raquo;' : '&laquo;';
+        }
+        function showImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'flex'; }
+        function hideImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'none'; }
+        
+        // --- Settings & Presets Management ---
+        const ALL_SETTINGS_IDS = ['apiProvider', 'apiKey', 'ollamaBaseUrl', 'modelSelect', 'systemPrompt', 'temperature', 'topP', 'topK', 'presence_penalty', 'frequency_penalty', 'max_tokens', 'seed', 'stop_sequences', 'useMarkdown'];
+        
+        function getCurrentSettingsFromForm() {
+            const settings = {};
+            ALL_SETTINGS_IDS.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    settings[id] = element.type === 'checkbox' ? element.checked : element.value;
+                }
+            });
+            return settings;
+        }
+
+        function saveCurrentSettingsToLocalStorage() {
+            const settings = getCurrentSettingsFromForm();
+            localStorage.setItem('currentChatSettings', JSON.stringify(settings));
+            updateStatus();
+        }
+
+        async function loadSettings(settingsToLoad = null) {
+            let settings = settingsToLoad || JSON.parse(localStorage.getItem('currentChatSettings')) || creativeWritingDefaults;
+            
+            ALL_SETTINGS_IDS.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    if (element.type === 'checkbox') {
+                        element.checked = settings[id] !== false; 
+                    } else if (id !== 'modelSelect') {
+                        element.value = settings[id] || '';
+                    }
+                }
+            });
+
+            toggleApiSettingsVisibility();
+            await loadModels(); 
+            
+            const modelSelect = document.getElementById('modelSelect');
+            if (settings.modelSelect && Array.from(modelSelect.options).some(opt => opt.value === settings.modelSelect)) {
+                modelSelect.value = settings.modelSelect;
+            }
+        }
+        
+        function getSettingsPresets() { return JSON.parse(localStorage.getItem('settingsPresets')) || {}; }
+        
+        function saveSettingsPresets(presets, nameToSelect) {
+             localStorage.setItem('settingsPresets', JSON.stringify(presets));
+             loadSettingsPresets(nameToSelect);
+        }
+
+        function loadSettingsPresets(nameToSelect = '') {
+            const presets = getSettingsPresets();
+            const select = document.getElementById('settingsPresetSelect');
+            
+            const lastActive = nameToSelect || localStorage.getItem('lastActiveSettingsPreset');
+
+            select.innerHTML = '<option value="">-- สร้าง Preset ใหม่ --</option>';
+            for (const name in presets) {
+                select.add(new Option(name, name));
+            }
+            if (lastActive && presets[lastActive]) {
+                 select.value = lastActive;
+            }
+            handlePresetSelectionChange();
+        }
+        
+        function handleSaveOrUpdatePreset() {
+            const presetSelect = document.getElementById('settingsPresetSelect');
+            const selectedName = presetSelect.value;
+            const newNameInput = document.getElementById('newPresetName');
+            const newName = newNameInput.value.trim();
+            const settingsToSave = getCurrentSettingsFromForm();
+            let nameToSave = '';
+
+            if (selectedName) {
+                if (confirm(`คุณต้องการอัปเดต Preset '${selectedName}' ใช่หรือไม่?`)) {
+                    nameToSave = selectedName;
+                    const presets = getSettingsPresets();
+                    presets[nameToSave] = settingsToSave;
+                    saveSettingsPresets(presets, nameToSave); 
+                    alert(`อัปเดต Preset '${nameToSave}' เรียบร้อยแล้ว`);
+                }
+            } else {
+                if (!newName) {
+                    alert('กรุณาใส่ชื่อสำหรับ Preset ใหม่');
+                    return;
+                }
+                nameToSave = newName;
+                const presets = getSettingsPresets();
+                if (presets[nameToSave]) {
+                    alert('มี Preset ชื่อนี้อยู่แล้ว กรุณาใช้ชื่ออื่น');
+                    return;
+                }
+                presets[nameToSave] = settingsToSave;
+                newNameInput.value = '';
+                saveSettingsPresets(presets, nameToSave); 
+                alert(`บันทึก Preset '${nameToSave}' เรียบร้อยแล้ว`);
+            }
+        }
+        
+        async function handlePresetSelectionChange() {
+            const presetSelect = document.getElementById('settingsPresetSelect');
+            const newNameContainer = document.getElementById('newPresetNameContainer');
+            const saveOrUpdateBtn = document.getElementById('saveOrUpdatePresetBtn');
+            const selectedValue = presetSelect.value;
+            
+            localStorage.setItem('lastActiveSettingsPreset', selectedValue);
+
+            if (selectedValue) {
+                await loadSettingsPreset();
+                newNameContainer.style.display = 'none';
+                saveOrUpdateBtn.textContent = 'อัปเดต Preset ที่เลือก';
+            } else {
+                newNameContainer.style.display = 'block';
+                saveOrUpdateBtn.textContent = 'บันทึกเป็น Preset ใหม่';
+            }
+        }
+
+        async function loadSettingsPreset() {
+            const name = document.getElementById('settingsPresetSelect').value;
+            if (!name) return;
+            const presets = getSettingsPresets();
+            if (presets[name]) {
+                await loadSettings(presets[name]);
+                localStorage.setItem('currentChatSettings', JSON.stringify(presets[name]));
+            }
+        }
+
+        function deleteSettingsPreset() {
+            const name = document.getElementById('settingsPresetSelect').value;
+            if (!name || !confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Preset '${name}'?`)) return;
+            const presets = getSettingsPresets();
+            delete presets[name];
+            localStorage.removeItem('lastActiveSettingsPreset');
+            saveSettingsPresets(presets, '');
+        }
+
+        // --- API & Model Loading ---
+        async function loadModels() {
+            const provider = document.getElementById('apiProvider').value;
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '<option value="">กำลังโหลด models...</option>';
+            updateStatus(`กำลังโหลด models จาก ${provider}...`, 'loading');
+            
+            try {
+                let models = [];
+                if (provider === 'openrouter') {
+                    const apiKey = document.getElementById('apiKey').value.trim();
+                    if (!apiKey) throw new Error('กรุณาใส่ OpenRouter API key');
+                    models = await fetchOpenRouterModels(apiKey);
+                } else if (provider === 'ollama') {
+                    const baseUrl = document.getElementById('ollamaBaseUrl').value.trim();
+                    if (!baseUrl) throw new Error('กรุณาใส่ Ollama Base URL');
+                    models = await fetchOllamaModels(baseUrl);
+                }
+
+                select.innerHTML = '<option value="">เลือก Model...</option>';
+                models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = typeof model === 'string' ? model : model.id;
+                    option.textContent = typeof model === 'string' ? model : model.name;
+                    select.appendChild(option);
+                });
+                
+                updateStatus(`โหลด ${models.length} models เรียบร้อยแล้ว`, 'connected');
+            } catch (error) {
+                select.innerHTML = '<option value="">เกิดข้อผิดพลาด</option>';
+                updateStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchOpenRouterModels(apiKey) {
+            const response = await fetch('https://openrouter.ai/api/v1/models', {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+            if (!response.ok) throw new Error('ไม่สามารถโหลด models จาก OpenRouter ได้, กรุณาตรวจสอบ API Key');
+            const data = await response.json();
+            return data.data.map(m => ({ id: m.id, name: m.name || m.id })).sort((a,b) => a.name.localeCompare(b.name));
+        }
+
+        async function fetchOllamaModels(baseUrl) {
+            const response = await fetch(`${baseUrl}/api/tags`);
+            if (!response.ok) throw new Error('ไม่สามารถเชื่อมต่อ Ollama ได้, กรุณาตรวจสอบ URL และสถานะของ Ollama');
+            const data = await response.json();
+            return data.models.map(m => m.name).sort();
+        }
+
+        function updateStatus(message, state = 'disconnected') {
+            document.getElementById('statusText').textContent = message || 'Ready';
+            const dot = document.getElementById('statusDot');
+            dot.className = 'status-dot';
+            if (state === 'connected') dot.classList.add('connected');
+            else if (state === 'error') dot.classList.add('error');
+        }
+
+        // --- Memory Management ---
+        function loadAndRenderMemories() {
+            const activeList = document.getElementById('activeMemoriesList');
+            const inactiveList = document.getElementById('inactiveMemoriesList');
+            activeList.innerHTML = '';
+            inactiveList.innerHTML = '';
+            
+            const activeMemories = memories.filter(m => m.active);
+            const inactiveMemories = memories.filter(m => !m.active);
+
+            activeMemories.forEach(memory => {
+                const itemDiv = createMemoryElement(memory);
+                activeList.appendChild(itemDiv);
+            });
+            
+            inactiveMemories.forEach(memory => {
+                const itemDiv = createMemoryElement(memory);
+                inactiveList.appendChild(itemDiv);
+            });
+
+            document.getElementById('inactiveMemoriesSection').style.display = inactiveMemories.length > 0 ? 'block' : 'none';
+            
+            if (memorySortable) memorySortable.destroy();
+            memorySortable = new Sortable(activeList, {
+                animation: 150,
+                onEnd: (evt) => {
+                    const movedMemory = memories.find(m => m.name === evt.item.dataset.name);
+                    memories.splice(memories.indexOf(movedMemory), 1);
+                    memories.splice(evt.newDraggableIndex, 0, movedMemory);
+                    saveMemoriesToStorage();
+                    loadAndRenderMemories();
+                }
+            });
+        }
+
+        function createMemoryElement(memory) {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = `item memory-item ${memory.active ? 'active' : ''}`;
+            itemDiv.dataset.name = memory.name;
+            const memoryIndex = memories.findIndex(m => m.name === memory.name);
+
+            itemDiv.innerHTML = `
+                <div class="item-header">
+                    <span class="item-name">${memory.name}</span>
+                    <div class="item-actions">
+                        <div class="memory-toggle ${memory.active ? 'active' : ''}" onclick="toggleMemory(${memoryIndex}, event)"></div>
+                        <button class="btn btn-small" onclick="showMemoryEditor(${memoryIndex}, event)">แก้ไข</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteMemory(${memoryIndex}, event)">ลบ</button>
+                    </div>
+                </div>`;
+            return itemDiv;
+        }
+        
+        function toggleMemory(index, event) {
+            event.stopPropagation();
+            memories[index].active = !memories[index].active;
+            saveMemoriesToStorage();
+            loadAndRenderMemories();
+        }
+
+        function saveMemoriesToStorage() {
+             localStorage.setItem('chatMemories', JSON.stringify(memories));
+        }
+
+        function showMemoryEditor(index = null, event) {
+            if(event)event.stopPropagation();
+            const modal=document.getElementById('memory-editor-modal');
+            const t=document.getElementById('memory-modal-title');
+            const n=document.getElementById('memory-name-input');
+            const c=document.getElementById('memory-content-input');
+            const i=document.getElementById('memory-edit-index');
+            if(index!==null){
+                const m=memories[index];
+                t.textContent='แก้ไข Memory';
+                n.value=m.name;
+                c.value=m.content;
+                i.value=index;
+            } else {
+                t.textContent='เพิ่ม Memory ใหม่';
+                n.value='';
+                c.value='';
+                i.value='';
+            }
+            modal.style.display='flex';
+        }
+
+        function hideMemoryEditor() { document.getElementById('memory-editor-modal').style.display = 'none'; }
+        
+        function saveMemory() {
+            const n=document.getElementById('memory-name-input').value.trim(); 
+            const c=document.getElementById('memory-content-input').value.trim(); 
+            const i=document.getElementById('memory-edit-index').value; 
+            if(!n||!c){alert('กรุณากรอกข้อมูลให้ครบ');return;} 
+            if(i!==''){
+                memories[parseInt(i)]={...memories[parseInt(i)],name:n,content:c};
+            }else{
+                memories.push({name:n,content:c,active:false});
+            } 
+            saveMemoriesToStorage(); 
+            loadAndRenderMemories(); 
+            hideMemoryEditor(); 
+        }
+
+        function deleteMemory(index, e) { 
+            e.stopPropagation(); 
+            if(confirm(`ลบ '${memories[index].name}'?`)){ 
+                memories.splice(index,1); 
+                saveMemoriesToStorage(); 
+                loadAndRenderMemories(); 
+            } 
+        }
+        
+        // --- Memory Presets ---
+        function getMemoryPresets() { return JSON.parse(localStorage.getItem('memoryPresets')) || {}; }
+        
+        function saveMemoryPreset() {
+            const name = prompt("ตั้งชื่อสำหรับ Memory Preset นี้:");
+            if (!name) return;
+            const presets = getMemoryPresets();
+            presets[name] = memories.filter(m => m.active).map(m => m.name);
+            localStorage.setItem('memoryPresets', JSON.stringify(presets));
+            localStorage.setItem('lastActiveMemoryPreset', name);
+            loadMemoryPresets();
+        }
+
+        function loadMemoryPresets() {
+             const presets = getMemoryPresets();
+             const select = document.getElementById('memoryPresetSelect');
+             select.innerHTML = '<option value="">เลือก Preset...</option>';
+             Object.keys(presets).forEach(name => select.add(new Option(name, name)));
+             const lastActive = localStorage.getItem('lastActiveMemoryPreset');
+             if (lastActive && presets[lastActive]) {
+                 select.value = lastActive;
+             }
+        }
+
+        function loadMemoryPreset() {
+            const name = document.getElementById('memoryPresetSelect').value;
+            localStorage.setItem('lastActiveMemoryPreset', name);
+            const presets = getMemoryPresets();
+            if (!name || !presets[name]) {
+                loadAndRenderMemories();
+                return;
+            }
+            const activeNamesInPreset = presets[name];
+            memories.forEach(m => {
+                m.active = activeNamesInPreset.includes(m.name);
+            });
+            saveMemoriesToStorage();
+            loadAndRenderMemories();
+        }
+        
+        function deleteMemoryPreset() { 
+            const name = document.getElementById('memoryPresetSelect').value; 
+            if(!name||!confirm(`ลบ Preset '${name}'?`))return; 
+            const p=getMemoryPresets(); 
+            delete p[name]; 
+            localStorage.setItem('memoryPresets',JSON.stringify(p));
+            if (localStorage.getItem('lastActiveMemoryPreset') === name) {
+                localStorage.removeItem('lastActiveMemoryPreset');
+            }
+            loadMemoryPresets(); 
+        }
+        
+        // --- Chat Session Management ---
+        async function loadAllChatSessions() {
+            const allSessionsData = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'getAll');
+            allSessions = Array.isArray(allSessionsData) ? allSessionsData.sort((a, b) => b.updatedAt - a.updatedAt) : [];
+            renderSessionList();
+        }
+
+        function renderSessionList() {
+            const recentContainer = document.getElementById('sessionListContainer');
+            const olderList = document.getElementById('olderSessionList');
+            const olderSection = document.getElementById('olderSessionsSection');
+            
+            recentContainer.innerHTML = '';
+            olderList.innerHTML = '';
+
+            const RECENT_COUNT = 5;
+            const recentSessions = allSessions.slice(0, RECENT_COUNT);
+            const olderSessions = allSessions.slice(RECENT_COUNT);
+
+            recentSessions.forEach(session => {
+                const item = createSessionElement(session);
+                recentContainer.appendChild(item);
+            });
+
+            if (olderSessions.length > 0) {
+                olderSection.style.display = 'block';
+                olderSessions.forEach(session => {
+                    const item = createSessionElement(session);
+                    olderList.appendChild(item);
+                });
+            } else {
+                olderSection.style.display = 'none';
+            }
+        }
+        
+        function createSessionElement(session) {
+            const item = document.createElement('div');
+            item.className = `item session-item ${session.id === currentSessionId ? 'active' : ''}`;
+            item.onclick = () => loadChatSession(session.id);
+            item.innerHTML = `
+                <div class="item-header">
+                    <span class="item-name">${session.name}</span>
+                    <div class="item-actions">
+                        <button class="btn btn-small" onclick="renameChatSession(${session.id}, event)">เปลี่ยนชื่อ</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteChatSession(${session.id}, event)">ลบ</button>
+                    </div>
+                </div>`;
+            return item;
+        }
+        
+        async function createNewChatSession(){const n='New Chat'; const s={name:n,history:[],createdAt:Date.now(),updatedAt:Date.now()}; const id=await dbRequest(SESSIONS_STORE_NAME,'readwrite','add',s); await loadAllChatSessions(); await loadChatSession(id);}
+        
+        async function loadChatSession(id){if(isLoading)return; const s=await dbRequest(SESSIONS_STORE_NAME,'readonly','get',id); if(s){currentSessionId=id;currentChatHistory=s.history||[];localStorage.setItem('lastActiveChatSessionId',id);document.getElementById('chat-title').textContent=s.name;renderChatMessages();renderSessionList();}}
+        
+        async function renameChatSession(id, e, newNamePrompt=null){if(e)e.stopPropagation();const s=allSessions.find(s=>s.id===id);if(!s)return; const n=newNamePrompt||prompt("ชื่อใหม่:",s.name);if(n&&n.trim()){s.name=n.trim();s.updatedAt=Date.now();await dbRequest(SESSIONS_STORE_NAME,'readwrite','put',s);await loadAllChatSessions();if(id===currentSessionId)document.getElementById('chat-title').textContent=n;}}
+        
+        async function deleteChatSession(id, e){e.stopPropagation();if(!confirm("ลบ Chat?"))return;await dbRequest(SESSIONS_STORE_NAME,'readwrite','delete',id);allSessions=allSessions.filter(s=>s.id!==id);if(currentSessionId===id){currentSessionId=null;localStorage.removeItem('lastActiveChatSessionId');if(allSessions.length>0){await loadChatSession(allSessions[0].id);}else{await createNewChatSession();}}else{renderSessionList();}}
+        
+        async function saveCurrentChatHistory(){if(!currentSessionId)return;const s=await dbRequest(SESSIONS_STORE_NAME,'readonly','get',currentSessionId);if(s){s.history=currentChatHistory;s.updatedAt=Date.now();await dbRequest(SESSIONS_STORE_NAME,'readwrite','put',s);}}
+        
+        function renderChatMessages(){const c=document.getElementById('chatMessages');c.innerHTML='';currentChatHistory.forEach((m,i)=>addMessageToUI(m.role,m.content,i));c.scrollTop=c.scrollHeight;}
+        
+        function addMessageToUI(role, content, index) {
+            const container = document.getElementById('chatMessages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+            msgDiv.dataset.index = index;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const useMarkdown = document.getElementById('useMarkdown').checked;
+            
+            // Handle both string and array content
+            const contentArray = Array.isArray(content) ? content : [{ type: 'text', text: content }];
+            
+            contentArray.forEach(part => {
+                if (part.type === 'text') {
+                    if (role === 'assistant' && useMarkdown) {
+                         const textSpan = document.createElement('span');
+                         textSpan.innerHTML = marked.parse(part.text);
+                         contentDiv.appendChild(textSpan);
+                    } else {
+                         const textNode = document.createTextNode(part.text);
+                         contentDiv.appendChild(textNode);
+                    }
+                } else if (part.type === 'image_url') {
+                    const img = document.createElement('img');
+                    img.src = part.url;
+                    img.className = 'multimodal-image';
+                    contentDiv.appendChild(img);
+                }
+            });
+            
+            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.innerHTML = '&#128203;'; // Clipboard emoji
+            copyBtn.title = 'Copy';
+            copyBtn.onclick = (e) => copyMessageToClipboard(e, index);
+            
+            const editBtn = document.createElement('button');
+            editBtn.innerHTML = '&#9998;'; // Pencil emoji
+            editBtn.title = 'Edit';
+            editBtn.onclick = () => editMessage(index);
+
+            actionsDiv.appendChild(copyBtn);
+            if (role === 'user') { // Only allow editing user messages for now
+                actionsDiv.appendChild(editBtn);
+            }
+
+            msgDiv.appendChild(contentDiv);
+            if (role !== 'system') {
+                msgDiv.appendChild(actionsDiv);
+            }
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+            return msgDiv;
+        }
+
+
+        function copyMessageToClipboard(event, index) {
+            let textToCopy = '';
+            const content = currentChatHistory[index].content;
+            if (typeof content === 'string') {
+                textToCopy = content;
+            } else if (Array.isArray(content)) {
+                // Find the text part to copy
+                const textPart = content.find(part => part.type === 'text');
+                if (textPart) {
+                    textToCopy = textPart.text;
+                }
+            }
+
+            if (!textToCopy) return;
+
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                const btn = event.currentTarget;
+                btn.innerHTML = '&#10003;'; // Checkmark
+                setTimeout(() => { btn.innerHTML = '&#128203;'; }, 1500);
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+                alert('Failed to copy text.');
+            }
+            document.body.removeChild(textArea);
+        }
+        
+        function editMessage(index){const msg=currentChatHistory[index];if(msg.role==='user'){const newContent=prompt('แก้ไข:',msg.content);if(newContent&&newContent.trim()!==msg.content){currentChatHistory=currentChatHistory.slice(0,index);renderChatMessages();document.getElementById('chatInput').value=newContent;sendMessage();}}else if(msg.role==='assistant'){const div=document.querySelector(`.message[data-index='${index}'] .message-content`);const isEditing=div.isContentEditable;if(isEditing){div.contentEditable=false;currentChatHistory[index].content=div.textContent;saveCurrentChatHistory();div.style.border='none';}else{div.contentEditable=true;div.style.border='1px solid var(--primary-color)';div.focus();}}}
+        
+        function buildPayloadMessages(){const settings=getCurrentSettingsFromForm();const systemPrompt=settings.systemPrompt||'';const activeMemories=memories.filter(m=>m.active).map(m=>m.content).join('\n');const messages=[];let finalSystemContent=systemPrompt;if(activeMemories){finalSystemContent+=`\n\n--- Active Memories ---\n`+activeMemories;}if(finalSystemContent.trim()){messages.push({role:'system',content:finalSystemContent.trim()});}
+        
+            currentChatHistory.forEach(msg => {
+                let apiMessage = { role: msg.role };
+                if (typeof msg.content === 'string') {
+                    apiMessage.content = msg.content;
+                } else if (Array.isArray(msg.content)) {
+                    if (settings.apiProvider === 'ollama') {
+                        // Ollama format
+                        const textPart = msg.content.find(p => p.type === 'text');
+                        const imagePart = msg.content.find(p => p.type === 'image_url');
+                        if (textPart) apiMessage.content = textPart.text;
+                        if (imagePart) {
+                             // Assuming base64 for now
+                            apiMessage.images = [imagePart.url.split(',')[1]];
+                        }
+                    } else {
+                        // OpenAI / OpenRouter format
+                        apiMessage.content = msg.content.map(part => {
+                            if(part.type === 'image_url') {
+                                return { type: 'image_url', image_url: { url: part.url } };
+                            }
+                            return part;
+                        });
+                    }
+                }
+                messages.push(apiMessage);
+            });
+            return messages;
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if ((!message && !attachedImage) || isLoading) return;
+
+            const settings = getCurrentSettingsFromForm();
+            if (!settings.modelSelect) {
+                alert('กรุณาเลือก Model');
+                return;
+            }
+            
+            const shouldRenameSession = allSessions.find(s => s.id === currentSessionId)?.name === 'New Chat' && currentChatHistory.length === 0;
+            
+            let userMessageContent = [];
+            if (message) {
+                userMessageContent.push({ type: 'text', text: message });
+            }
+            if (attachedImage) {
+                userMessageContent.push({ type: 'image_url', url: attachedImage });
+            }
+            if (userMessageContent.length === 1 && userMessageContent[0].type === 'text') {
+                userMessageContent = userMessageContent[0].text;
+            }
+
+            input.value = '';
+            input.style.height = 'auto';
+            removeAttachedImage();
+            
+            currentChatHistory.push({ role: 'user', content: userMessageContent });
+            renderChatMessages();
+            await saveCurrentChatHistory();
+            
+            isLoading = true;
+            document.getElementById('sendBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'flex';
+            updateStatus('กำลังรอการตอบกลับ...', 'loading');
+            
+            const assistantMsgIndex = currentChatHistory.length;
+            const assistantMsgDiv = addMessageToUI('assistant', '', assistantMsgIndex);
+            const contentDiv = assistantMsgDiv.querySelector('.message-content');
+            contentDiv.innerHTML = '<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
+            
+            abortController = new AbortController();
+
+            try {
+                const finalResponseText = await streamLLMResponse(contentDiv, settings);
+                
+                currentChatHistory.push({ role: 'assistant', content: finalResponseText });
+                await saveCurrentChatHistory();
+
+                if (shouldRenameSession) {
+                    await generateAndRenameSession(currentChatHistory);
+                }
+
+                await loadAllChatSessions();
+
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    contentDiv.innerHTML = `เกิดข้อผิดพลาด: ${error.message}`;
+                    updateStatus(`Error: ${error.message}`, 'error');
+                } else {
+                    contentDiv.innerHTML = `<i>การสร้างข้อความถูกยกเลิก</i>`;
+                    updateStatus('การสร้างข้อความถูกยกเลิก', 'warning');
+                }
+            } finally {
+                isLoading = false;
+                document.getElementById('sendBtn').style.display = 'flex';
+                document.getElementById('stopBtn').style.display = 'none';
+                abortController = null;
+                if(!document.querySelector('.message-content .loading')) {
+                    updateStatus('Ready', 'connected');
+                }
+                renderChatMessages();
+            }
+        }
+        
+        async function streamLLMResponse(contentDiv, settings) {
+            const messages = buildPayloadMessages();
+            const body = {
+                model: settings.modelSelect,
+                messages: messages,
+                stream: true
+            };
+
+            const params = {
+                temperature: parseFloat(settings.temperature),
+                top_p: parseFloat(settings.topP),
+                top_k: parseInt(settings.topK, 10),
+                presence_penalty: parseFloat(settings.presence_penalty),
+                frequency_penalty: parseFloat(settings.frequency_penalty),
+                max_tokens: parseInt(settings.max_tokens, 10),
+                seed: parseInt(settings.seed, 10),
+            };
+
+            if (settings.stop_sequences) {
+                params.stop = settings.stop_sequences.split(',').map(s => s.trim());
+            }
+
+            let url, headers;
+            if (settings.apiProvider === 'openrouter') {
+                url = 'https://openrouter.ai/api/v1/chat/completions';
+                headers = { 'Authorization': `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' };
+                Object.assign(body, params);
+            } else {
+                url = `${settings.ollamaBaseUrl}/api/chat`;
+                headers = { 'Content-Type': 'application/json' };
+                const ollamaBody = { model: settings.modelSelect, stream: true };
+                const lastMessage = messages[messages.length-1];
+                ollamaBody.prompt = (typeof lastMessage.content === 'string') ? lastMessage.content : lastMessage.content.find(p => p.type === 'text')?.text || '';
+                const imagePart = (Array.isArray(lastMessage.content)) ? lastMessage.content.find(p => p.type === 'image_url') : null;
+                if (imagePart) {
+                    ollamaBody.images = [imagePart.url.split(',')[1]];
+                }
+                Object.assign(body, ollamaBody);
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(body),
+                signal: abortController.signal
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error: ${errorText}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullResponseText = '';
+            contentDiv.innerHTML = ''; 
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                for (const line of lines) {
+                    let token = '';
+                    try {
+                         if (settings.apiProvider === 'openrouter') {
+                            if (line.startsWith('data: ')) {
+                                const jsonStr = line.substring(6);
+                                if (jsonStr.trim() === '[DONE]') break;
+                                const data = JSON.parse(jsonStr);
+                                token = data.choices[0]?.delta?.content || '';
+                            }
+                        } else { // Ollama
+                            const data = JSON.parse(line);
+                            token = data.response || (data.message?.content || '');
+                            if(data.done) break;
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    if (token) {
+                        fullResponseText += token;
+                        if (settings.useMarkdown) {
+                            contentDiv.innerHTML = marked.parse(fullResponseText);
+                        } else {
+                            contentDiv.textContent = fullResponseText;
+                        }
+                    }
+                }
+            }
+
+            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+
+            return fullResponseText;
+        }
+        
+        async function generateAndRenameSession(history){
+            try{
+                const settings = getCurrentSettingsFromForm();
+                if(!settings.modelSelect) return;
+                
+                const conversation = history.map(m => {
+                    if (typeof m.content === 'string') return `${m.role}: ${m.content}`;
+                    const textPart = m.content.find(p => p.type === 'text');
+                    return textPart ? `${m.role}: ${textPart.text}` : '';
+                }).join('\n');
+                
+                const titlePrompt = `Based on the following conversation, create a concise title (3-5 words max). Do not answer the query. Do not add quotes. Just provide the raw title text.\n\nConversation:\n${conversation}\n\nTitle:`;
+                
+                const messages = [{ role: "user", content: titlePrompt }];
+                const body = { model: settings.modelSelect, messages: messages, stream: false, options: { temperature: 0.2, num_predict: 20 } };
+                let url, headers;
+
+                if (settings.apiProvider === 'openrouter') {
+                    url = 'https://openrouter.ai/api/v1/chat/completions';
+                    headers = { 'Authorization': `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' };
+                } else {
+                    url = `${settings.ollamaBaseUrl}/api/chat`;
+                    headers = { 'Content-Type': 'application/json' };
+                }
+
+                const response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const newTitle = (data.choices ? data.choices[0].message.content : data.message.content).trim().replace(/["']/g, "");
+
+                if (newTitle) {
+                    await renameChatSession(currentSessionId, null, newTitle);
+                }
+            } catch(e) {
+                console.error("Auto-rename failed:", e);
+            }
+        }
+        
+        function stopGeneration(){if(abortController){abortController.abort();}}
+        
+        function exportChat() {
+            if (!currentSessionId) {
+                alert('No active chat session to export.');
+                return;
+            }
+            const session = allSessions.find(s => s.id === currentSessionId);
+            if (!session) {
+                alert('Could not find active session data.');
+                return;
+            }
+            const sessionName = session.name || 'Untitled_Chat';
+            let exportText = `Chat Export - Session: ${sessionName}\n================\n\n`;
+            
+            currentChatHistory.forEach(msg => {
+                const sender = msg.role.charAt(0).toUpperCase() + msg.role.slice(1);
+                let contentText = '';
+                if(typeof msg.content === 'string') {
+                    contentText = msg.content;
+                } else if (Array.isArray(msg.content)) {
+                    contentText = msg.content.find(p => p.type === 'text')?.text || '[Image]';
+                }
+                exportText += `${sender}: ${contentText}\n\n`;
+            });
+            
+            const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-export-${sessionName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportMemories() {
+            try {
+                const dataStr = JSON.stringify(memories, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `promptprim_memories_${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('Error exporting memories.');
+                console.error(e);
+            }
+        }
+
+        function importMemories(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData) && importedData.every(item => 'name' in item && 'content' in item && 'active' in item)) {
+                        memories = importedData;
+                        saveMemoriesToStorage();
+                        loadAndRenderMemories();
+                        alert('Memories imported successfully!');
+                    } else {
+                        throw new Error('Invalid JSON format for memories.');
+                    }
+                } catch (error) {
+                    alert(`Error importing memories: ${error.message}`);
+                    console.error('Error importing memories:', error);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+        
+        function handleImageFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                showImagePreview(e.target.result);
+            };
+            reader.readAsDataURL(file);
+            hideImageUploadModal();
+            event.target.value = ''; // Reset for same-file upload
+        }
+
+        function handleImageUrlConfirm() {
+            const url = document.getElementById('image-url-input').value.trim();
+            if (url) {
+                showImagePreview(url);
+            }
+             hideImageUploadModal();
+        }
+
+        function showImagePreview(imageData) {
+            attachedImage = imageData;
+            document.getElementById('image-preview').src = imageData;
+            document.getElementById('image-preview-container').style.display = 'block';
+        }
+
+        function removeAttachedImage() {
+            attachedImage = null;
+            document.getElementById('image-preview').src = '';
+            document.getElementById('image-preview-container').style.display = 'none';
+        }
+
+        function makeSidebarResizable() {
+            const resizer = document.querySelector('.sidebar-resizer');
+            if (!resizer) return;
+            const sessionsFrame = document.querySelector('.sessions-frame');
+            const memoriesFrame = document.querySelector('.memories-frame');
+            
+            function handleMouseMove(e) {
+                const sidebarContent = document.querySelector('.sidebar-content');
+                const sidebarRect = sidebarContent.getBoundingClientRect();
+                let newHeight = e.clientY - sidebarRect.top;
+                const totalHeight = sidebarContent.offsetHeight;
+
+                if (newHeight < 100) newHeight = 100;
+                if (newHeight > totalHeight - 100) newHeight = totalHeight - 100;
+                
+                const resizerHeight = resizer.offsetHeight;
+                const sessionsHeight = newHeight;
+                const memoriesHeight = totalHeight - newHeight - resizerHeight;
+
+                sessionsFrame.style.flex = `0 1 ${sessionsHeight}px`;
+                memoriesFrame.style.flex = `1 1 ${memoriesHeight}px`;
+
+                localStorage.setItem('sidebarSplitHeight', sessionsHeight);
+            }
+
+            function stopResizing() {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', stopResizing);
+            }
+
+            resizer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                window.addEventListener('mousemove', handleMouseMove);
+                window.addEventListener('mouseup', stopResizing);
+            });
+
+            const savedHeight = localStorage.getItem('sidebarSplitHeight');
+            if (savedHeight) {
+                const totalHeight = document.querySelector('.sidebar-content').offsetHeight;
+                 const resizerHeight = resizer.offsetHeight;
+                sessionsFrame.style.flex = `0 1 ${savedHeight}px`;
+                memoriesFrame.style.flex = `1 1 ${totalHeight - savedHeight - resizerHeight}px`;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
