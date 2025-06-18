@@ -10,6 +10,11 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Google Fonts for Thai Language -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;700&family=Mitr:wght@400;700&family=Noto+Sans+Thai:wght@400;700&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+
 
     <style>
         :root {
@@ -26,13 +31,17 @@
             --white-alpha-50: rgba(247, 250, 252, 0.5);
             --shadow-light: rgba(102, 126, 234, 0.1);
             --shadow-dark: rgba(0, 0, 0, 0.1);
+            /* Dynamic Font Variables */
+            --main-font-family: 'Sarabun', sans-serif;
+            --main-font-size: 16px;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: var(--main-font-family);
+            font-size: var(--main-font-size);
         }
 
         body {
@@ -86,7 +95,7 @@
         }
 
         .sidebar-title {
-            font-size: 20px;
+            font-size: 1.25rem;
             font-weight: 600;
             margin-right: auto;
         }
@@ -131,7 +140,7 @@
             height: 100vh;
             background: var(--white-alpha-50);
         }
-
+        
         /* --- Settings Panel --- */
         #settings-panel {
             position: fixed;
@@ -160,7 +169,7 @@
             align-items: center;
         }
         
-        .settings-header h2 { font-size: 22px; }
+        .settings-header h2 { font-size: 1.4rem; }
 
         .close-settings-btn {
             font-size: 28px;
@@ -187,11 +196,14 @@
         .section-box h3 {
             margin-top: 0;
             margin-bottom: 15px;
-            font-size: 16px;
+            font-size: 1.1rem;
             font-weight: 600;
             color: #4a5568;
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .form-group { margin-bottom: 15px; }
@@ -200,7 +212,6 @@
             display: block;
             margin-bottom: 8px;
             font-weight: 500;
-            font-size: 14px;
         }
 
         input[type="text"], input[type="password"], input[type="number"], select, textarea {
@@ -208,7 +219,6 @@
             padding: 10px 12px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            font-size: 14px;
             transition: all 0.2s ease;
         }
 
@@ -240,12 +250,35 @@
             box-shadow: 0 4px 15px var(--shadow-light);
         }
         
-        .btn-small { padding: 6px 12px; font-size: 12px; }
+        .btn-small { padding: 6px 12px; font-size: 0.8rem; }
         .btn-secondary { background: #cbd5e0; color: var(--text-dark); }
         .btn-danger { background: var(--error-color); }
         
         .flex-group { display: flex; gap: 10px; align-items: center; }
         .flex-group > select { flex-grow: 1; }
+        
+        /* --- Dropdown Menu for Memories --- */
+        .dropdown { position: relative; display: inline-block; }
+        .dropdown-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: white;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+        .dropdown-content a:hover { background-color: #f1f1f1; }
+        .dropdown:hover .dropdown-content { display: block; }
         
         /* --- Improved List Styles --- */
         .item-list > .item {
@@ -282,7 +315,7 @@
         .collapsible-section summary {
             cursor: pointer;
             font-weight: 500;
-            padding: 5px;
+            padding: 5px 0;
             border-radius: 5px;
             transition: background 0.2s;
         }
@@ -312,12 +345,12 @@
             justify-content: space-between;
             align-items: center;
         }
-        .chat-title { font-size: 24px; font-weight: 700; flex-grow: 1; }
+        .chat-title { font-size: 1.5rem; font-weight: 700; flex-grow: 1; }
         
         .chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 20px 25px;
             display: flex;
             flex-direction: column;
             gap: 20px;
@@ -397,10 +430,16 @@
             margin-top: 10px;
         }
 
-        .chat-input-area {
-            padding: 15px 25px;
-            border-top: 1px solid var(--border-color);
+        .chat-input-wrapper {
             background: rgba(255, 255, 255, 0.8);
+            padding: 15px 25px 5px 25px;
+            border-top: 1px solid var(--border-color);
+        }
+        .input-disclaimer {
+            font-size: 12px;
+            text-align: center;
+            color: #a0aec0;
+            padding-top: 10px;
         }
 
         .input-container { display: flex; gap: 10px; align-items: flex-end; }
@@ -409,25 +448,38 @@
             padding: 12px 18px; border: 1px solid var(--border-color);
             border-radius: 24px; resize: none;
         }
-        .send-btn, .stop-btn, #upload-image-btn {
+        .send-btn, .stop-btn, #upload-file-btn {
             width: 48px; height: 48px; border-radius: 50%;
             flex-shrink: 0;
         }
-        #upload-image-btn { background: #e2e8f0; color: var(--text-dark); }
+        #upload-file-btn { background: #e2e8f0; color: var(--text-dark); }
         .stop-btn { background: var(--error-color); display: none; }
         
-        #image-preview-container {
+        #file-preview-container {
             display: none;
             position: relative;
             margin-bottom: 10px;
-            max-width: 200px;
+            max-width: 250px;
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 8px;
         }
-        #image-preview {
+        #file-preview {
             max-width: 100%;
             border-radius: 8px;
             border: 1px solid var(--border-color);
         }
-        #remove-image-btn {
+         #file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #file-info span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #remove-file-btn {
             position: absolute;
             top: -10px;
             right: -10px;
@@ -443,7 +495,7 @@
         
         /* --- Status Panel --- */
         #status-panel {
-            padding: 8px 25px; font-size: 13px; color: #4a5568;
+            padding: 8px 25px;
             border-top: 1px solid var(--border-color);
             background: var(--text-light); display: flex;
             align-items: center; gap: 10px;
@@ -483,6 +535,11 @@
             margin-top: 20px; display: flex;
             justify-content: flex-end; gap: 10px;
         }
+        .modal-warning {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -507,6 +564,26 @@
                         <input type="text" id="newPresetName" placeholder="เช่น 'Creative Writing Setup'">
                     </div>
                     <button id="saveOrUpdatePresetBtn" class="btn" onclick="handleSaveOrUpdatePreset()">บันทึกเป็น Preset ใหม่</button>
+                </div>
+                <div class="section-box">
+                    <h3>🎨 การแสดงผล</h3>
+                    <div class="form-group">
+                        <label for="fontFamilySelect">ฟอนต์</label>
+                        <select id="fontFamilySelect">
+                            <option value="'Sarabun', sans-serif">สารบรรณ (Sarabun)</option>
+                            <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
+                            <option value="'IBM Plex Sans Thai', sans-serif">IBM Plex Sans Thai</option>
+                            <option value="'Mitr', sans-serif">มิตร (Mitr)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>ขนาดตัวอักษร</label>
+                        <div class="flex-group" style="justify-content: center;">
+                            <button class="btn btn-small" id="decrease-font-size">-</button>
+                            <span id="current-font-size-display" style="font-size: 1rem; margin: 0 15px; width: 50px; text-align: center;">16px</span>
+                            <button class="btn btn-small" id="increase-font-size">+</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="section-box">
                     <h3>🔧 API Settings</h3>
@@ -571,7 +648,10 @@
             <div class="sidebar-content">
                 <div class="sessions-frame">
                     <div class="section-box">
-                        <h3>📂 Chat Sessions</h3>
+                        <h3>
+                            <span>📂 Chat Sessions</span>
+                            <button class="btn btn-small" onclick="createNewChatSession()">+ สร้างใหม่</button>
+                        </h3>
                         <div id="sessionListContainer" class="item-list">
                         </div>
                         <div class="collapsible-section" id="olderSessionsSection" style="display:none;">
@@ -580,37 +660,45 @@
                                 <div id="olderSessionList" class="item-list"></div>
                             </details>
                         </div>
-                        <button class="btn btn-small" onclick="createNewChatSession()" style="margin-top:15px;">+ สร้าง Chat ใหม่</button>
                     </div>
                 </div>
                 <div class="sidebar-resizer"></div>
                 <div class="memories-frame">
                     <div class="section-box">
-                        <h3>🧠 Command Memories</h3>
-                         <div class="form-group">
+                        <h3>
+                            <span>🧠 Command Memories</span>
+                            <button class="btn btn-small" onclick="showMemoryEditor()">+ เพิ่มใหม่</button>
+                        </h3>
+                        <div class="form-group">
                             <label>Memory Presets</label>
                             <div class="flex-group">
                                  <select id="memoryPresetSelect" onchange="loadMemoryPreset()"></select>
                                  <button class="btn btn-small btn-danger" onclick="deleteMemoryPreset()">ลบ</button>
                             </div>
                         </div>
-                        <button class="btn btn-small" onclick="saveMemoryPreset()">บันทึก Preset</button>
+                        <button class="btn btn-small" onclick="saveMemoryPreset()" title="บันทึกชุดของ Memory ที่กำลัง 'Active' อยู่ในขณะนี้ให้เป็น Preset สำหรับเรียกใช้ในอนาคต">บันทึกสถานะเปิด/ปิด เป็น Preset</button>
+                        <div class="dropdown" style="float: right;">
+                            <button class="dropdown-btn">...</button>
+                            <div class="dropdown-content">
+                                <a href="#" onclick="event.preventDefault(); saveMemoryPackage();">Save Package</a>
+                                <a href="#" onclick="event.preventDefault(); document.getElementById('importPackageFile').click();">Load Package</a>
+                            </div>
+                        </div>
+                        <input type="file" id="importPackageFile" accept=".json" style="display: none;" onchange="loadMemoryPackage(event)">
                         <hr style="margin: 15px 0; border-color: var(--border-color); border-style: solid;">
                         
-                        <div id="activeMemoriesList" class="item-list"></div>
+                        <div class="collapsible-section">
+                             <details id="active-memories-details" open>
+                                 <summary>Active Memories</summary>
+                                 <div id="activeMemoriesList" class="item-list"></div>
+                            </details>
+                        </div>
+                       
                         <div class="collapsible-section" id="inactiveMemoriesSection" style="display:none;">
                             <details>
                                 <summary>Inactive Memories</summary>
                                 <div id="inactiveMemoriesList" class="item-list"></div>
                             </details>
-                        </div>
-
-                        <button class="btn btn-small" onclick="showMemoryEditor()" style="margin-top: 15px;">+ เพิ่ม Memory</button>
-                        <hr style="margin: 15px 0; border-color: var(--border-color); border-style: solid;">
-                         <div class="flex-group">
-                            <button class="btn btn-small" onclick="exportMemories()">Export Memories</button>
-                            <input type="file" id="importMemoriesFile" accept=".json" style="display: none;" onchange="importMemories(event)">
-                            <button class="btn btn-small" onclick="document.getElementById('importMemoriesFile').click()">Import Memories</button>
                         </div>
                     </div>
                 </div>
@@ -629,17 +717,17 @@
                  <div class="status-dot" id="statusDot"></div>
                  <span id="statusText">Disconnected</span>
             </div>
-            <div class="chat-input-area">
-                <div id="image-preview-container">
-                    <img id="image-preview" src="" alt="Image preview">
-                    <button id="remove-image-btn" onclick="removeAttachedImage()">&times;</button>
+            <div class="chat-input-wrapper">
+                <div id="file-preview-container">
+                    <!-- Preview will be generated here by JS -->
                 </div>
                 <div class="input-container">
-                    <button class="btn" id="upload-image-btn" onclick="showImageUploadModal()">+</button>
+                    <button class="btn" id="upload-file-btn" onclick="showImageUploadModal()">+</button>
                     <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
                     <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
                     <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">&#9724;</button>
                 </div>
+                 <p class="input-disclaimer">AI อาจทำผิดพลาดได้ ดังนั้นโปรดตรวจสอบคำตอบอีกครั้ง</p>
             </div>
         </div>
     </div>
@@ -660,16 +748,17 @@
 
     <div id="image-upload-modal" class="modal-overlay">
         <div class="modal-box">
-            <h3>เพิ่มรูปภาพ</h3>
+            <h3>เพิ่มไฟล์</h3>
             <div class="form-group">
                 <label for="image-url-input">วาง Image URL</label>
                 <input type="text" id="image-url-input" placeholder="https://example.com/image.png">
+                <p class="modal-warning">ระบบอาจยังไม่รองรับการค้นภาพจากเว็บไซต์</p>
             </div>
             <button class="btn" onclick="handleImageUrlConfirm()">ยืนยัน URL</button>
             <hr style="margin: 20px 0;">
             <p style="text-align: center; margin-bottom: 10px;">หรือ</p>
-            <button class="btn" onclick="document.getElementById('image-file-input').click()">อัปโหลดจากเครื่อง</button>
-            <input type="file" id="image-file-input" accept="image/*" style="display: none;" onchange="handleImageFileUpload(event)">
+            <button class="btn" onclick="document.getElementById('file-input').click()">อัปโหลดจากเครื่อง</button>
+            <input type="file" id="file-input" accept=".pdf,.txt,.docx,.csv,.xls,.xlsx,.jpg,.jpeg,.png" style="display: none;" onchange="handleFileUpload(event)">
              <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="hideImageUploadModal()">ยกเลิก</button>
             </div>
@@ -733,7 +822,7 @@
         let allSessions = [];
         let abortController = null;
         let memorySortable = null;
-        let attachedImage = null;
+        let attachedFile = null;
 
         // --- Default Data ---
         const defaultMemories = [
@@ -746,7 +835,9 @@
             systemPrompt: 'You are a master storyteller...',
             temperature: 1.1, topP: 0.9, topK: 40, presence_penalty: 0.2,
             frequency_penalty: 0.2, max_tokens: 4096, seed: -1, stop_sequences: '',
-            useMarkdown: true
+            useMarkdown: true,
+            fontFamilySelect: "'Sarabun', sans-serif",
+            fontSize: 16
         };
 
         // --- Core Initialization ---
@@ -802,7 +893,7 @@
                  const element = document.getElementById(id);
                  if (element) {
                     element.addEventListener('change', saveCurrentSettingsToLocalStorage);
-                    if(!['modelSelect', 'apiProvider', 'useMarkdown'].includes(id)) { 
+                    if(!['modelSelect', 'apiProvider', 'useMarkdown', 'fontFamilySelect'].includes(id)) { 
                         element.addEventListener('input', saveCurrentSettingsToLocalStorage);
                     }
                  }
@@ -812,6 +903,13 @@
                  toggleApiSettingsVisibility();
                  await loadModels();
             });
+
+            document.getElementById('active-memories-details').addEventListener('toggle', (event) => {
+                localStorage.setItem('activeMemoriesOpen', event.target.open);
+            });
+            
+            document.getElementById('increase-font-size').addEventListener('click', () => adjustFontSize(1));
+            document.getElementById('decrease-font-size').addEventListener('click', () => adjustFontSize(-1));
         }
         
         // --- UI Toggles & Handlers ---
@@ -831,14 +929,20 @@
         function hideImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'none'; }
         
         // --- Settings & Presets Management ---
-        const ALL_SETTINGS_IDS = ['apiProvider', 'apiKey', 'ollamaBaseUrl', 'modelSelect', 'systemPrompt', 'temperature', 'topP', 'topK', 'presence_penalty', 'frequency_penalty', 'max_tokens', 'seed', 'stop_sequences', 'useMarkdown'];
+        const ALL_SETTINGS_IDS = ['apiProvider', 'apiKey', 'ollamaBaseUrl', 'modelSelect', 'systemPrompt', 'temperature', 'topP', 'topK', 'presence_penalty', 'frequency_penalty', 'max_tokens', 'seed', 'stop_sequences', 'useMarkdown', 'fontFamilySelect', 'fontSize'];
         
         function getCurrentSettingsFromForm() {
             const settings = {};
             ALL_SETTINGS_IDS.forEach(id => {
                 const element = document.getElementById(id);
                 if (element) {
-                    settings[id] = element.type === 'checkbox' ? element.checked : element.value;
+                    if (element.type === 'checkbox') {
+                        settings[id] = element.checked;
+                    } else if (id === 'fontSize') {
+                        settings[id] = parseInt(document.getElementById('current-font-size-display').textContent);
+                    } else {
+                        settings[id] = element.value;
+                    }
                 }
             });
             return settings;
@@ -847,6 +951,7 @@
         function saveCurrentSettingsToLocalStorage() {
             const settings = getCurrentSettingsFromForm();
             localStorage.setItem('currentChatSettings', JSON.stringify(settings));
+            applyFontSettings();
             updateStatus();
         }
 
@@ -858,11 +963,13 @@
                 if (element) {
                     if (element.type === 'checkbox') {
                         element.checked = settings[id] !== false; 
-                    } else if (id !== 'modelSelect') {
+                    } else if (id !== 'fontSize' && id !== 'modelSelect') {
                         element.value = settings[id] || '';
                     }
                 }
             });
+
+            document.getElementById('current-font-size-display').textContent = `${settings.fontSize || 16}px`;
 
             toggleApiSettingsVisibility();
             await loadModels(); 
@@ -871,6 +978,24 @@
             if (settings.modelSelect && Array.from(modelSelect.options).some(opt => opt.value === settings.modelSelect)) {
                 modelSelect.value = settings.modelSelect;
             }
+            applyFontSettings();
+        }
+
+        function applyFontSettings() {
+            const settings = getCurrentSettingsFromForm();
+            document.documentElement.style.setProperty('--main-font-family', settings.fontFamilySelect);
+            document.documentElement.style.setProperty('--main-font-size', `${settings.fontSize}px`);
+            document.getElementById('current-font-size-display').textContent = `${settings.fontSize}px`;
+        }
+
+        function adjustFontSize(amount) {
+            const currentSizeSpan = document.getElementById('current-font-size-display');
+            let currentSize = parseInt(currentSizeSpan.textContent);
+            currentSize += amount;
+            if (currentSize < 10) currentSize = 10;
+            if (currentSize > 24) currentSize = 24;
+            currentSizeSpan.textContent = `${currentSize}px`;
+            saveCurrentSettingsToLocalStorage();
         }
         
         function getSettingsPresets() { return JSON.parse(localStorage.getItem('settingsPresets')) || {}; }
@@ -1044,6 +1169,12 @@
                 const itemDiv = createMemoryElement(memory);
                 inactiveList.appendChild(itemDiv);
             });
+            
+            const activeDetails = document.getElementById('active-memories-details');
+            if (activeDetails) {
+                const isOpen = localStorage.getItem('activeMemoriesOpen') !== 'false';
+                activeDetails.open = isOpen;
+            }
 
             document.getElementById('inactiveMemoriesSection').style.display = inactiveMemories.length > 0 ? 'block' : 'none';
             
@@ -1153,33 +1284,65 @@
         function loadMemoryPresets() {
              const presets = getMemoryPresets();
              const select = document.getElementById('memoryPresetSelect');
-             select.innerHTML = '<option value="">เลือก Preset...</option>';
-             Object.keys(presets).forEach(name => select.add(new Option(name, name)));
+             select.innerHTML = '<option value="__new__">- สร้าง Preset ใหม่ -</option>';
+             select.add(new Option('เปิดทุก Memory', '__active_all__'));
+             select.add(new Option('ปิดทุก Memory', '__inactive_all__'));
+
+             const userPresets = Object.keys(presets);
+             if (userPresets.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = 'My Presets';
+                userPresets.forEach(name => optgroup.appendChild(new Option(name, name)));
+                select.appendChild(optgroup);
+             }
+
              const lastActive = localStorage.getItem('lastActiveMemoryPreset');
              if (lastActive && presets[lastActive]) {
                  select.value = lastActive;
+             } else {
+                 select.value = '__new__';
              }
         }
 
         function loadMemoryPreset() {
-            const name = document.getElementById('memoryPresetSelect').value;
-            localStorage.setItem('lastActiveMemoryPreset', name);
-            const presets = getMemoryPresets();
-            if (!name || !presets[name]) {
-                loadAndRenderMemories();
+            const select = document.getElementById('memoryPresetSelect');
+            const name = select.value;
+            let isAction = false;
+            
+            if (name === '__active_all__') {
+                isAction = true;
+                memories.forEach(m => m.active = true);
+            } else if (name === '__inactive_all__') {
+                isAction = true;
+                memories.forEach(m => m.active = false);
+            } else if (name === '__new__') {
+                localStorage.removeItem('lastActiveMemoryPreset');
+                document.getElementById('active-memories-details').open = true;
+                document.getElementById('inactiveMemoriesSection').querySelector('details').open = true;
                 return;
+            } else {
+                localStorage.setItem('lastActiveMemoryPreset', name);
+                const presets = getMemoryPresets();
+                if (presets[name]) {
+                    const activeNamesInPreset = presets[name];
+                    memories.forEach(m => {
+                        m.active = activeNamesInPreset.includes(m.name);
+                    });
+                }
             }
-            const activeNamesInPreset = presets[name];
-            memories.forEach(m => {
-                m.active = activeNamesInPreset.includes(m.name);
-            });
+            
             saveMemoriesToStorage();
             loadAndRenderMemories();
+
+            if (isAction) {
+                select.value = localStorage.getItem('lastActiveMemoryPreset') || '__new__';
+            }
         }
         
         function deleteMemoryPreset() { 
             const name = document.getElementById('memoryPresetSelect').value; 
-            if(!name||!confirm(`ลบ Preset '${name}'?`))return; 
+            if(!name || name.startsWith('__') || !confirm(`ลบ Preset '${name}'?`))return; 
+            
             const p=getMemoryPresets(); 
             delete p[name]; 
             localStorage.setItem('memoryPresets',JSON.stringify(p));
@@ -1262,7 +1425,6 @@
 
             const useMarkdown = document.getElementById('useMarkdown').checked;
             
-            // Handle both string and array content
             const contentArray = Array.isArray(content) ? content : [{ type: 'text', text: content }];
             
             contentArray.forEach(part => {
@@ -1301,9 +1463,7 @@
             editBtn.onclick = () => editMessage(index);
 
             actionsDiv.appendChild(copyBtn);
-            if (role === 'user') { // Only allow editing user messages for now
-                actionsDiv.appendChild(editBtn);
-            }
+            actionsDiv.appendChild(editBtn);
 
             msgDiv.appendChild(contentDiv);
             if (role !== 'system') {
@@ -1321,7 +1481,6 @@
             if (typeof content === 'string') {
                 textToCopy = content;
             } else if (Array.isArray(content)) {
-                // Find the text part to copy
                 const textPart = content.find(part => part.type === 'text');
                 if (textPart) {
                     textToCopy = textPart.text;
@@ -1329,21 +1488,40 @@
             }
 
             if (!textToCopy) return;
-
-            const textArea = document.createElement("textarea");
-            textArea.value = textToCopy;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                const btn = event.currentTarget;
-                btn.innerHTML = '&#10003;'; // Checkmark
-                setTimeout(() => { btn.innerHTML = '&#128203;'; }, 1500);
-            } catch (err) {
-                console.error('Fallback: Oops, unable to copy', err);
-                alert('Failed to copy text.');
+            
+            const useMarkdown = document.getElementById('useMarkdown').checked;
+            if (useMarkdown && navigator.clipboard && navigator.clipboard.write) {
+                 const html = marked.parse(textToCopy);
+                 const richText = new Blob([html], { type: 'text/html' });
+                 const plainText = new Blob([textToCopy], { type: 'text/plain' });
+                 navigator.clipboard.write([
+                    new ClipboardItem({
+                        'text/html': richText,
+                        'text/plain': plainText,
+                    })
+                 ]).then(() => {
+                    const btn = event.currentTarget;
+                    btn.innerHTML = '&#10003;'; // Checkmark
+                    setTimeout(() => { btn.innerHTML = '&#128203;'; }, 1500);
+                 }).catch(err => {
+                    console.error('Async clipboard write failed:', err);
+                 });
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    const btn = event.currentTarget;
+                    btn.innerHTML = '&#10003;';
+                    setTimeout(() => { btn.innerHTML = '&#128203;'; }, 1500);
+                } catch (err) {
+                    console.error('Fallback: Oops, unable to copy', err);
+                    alert('Failed to copy text.');
+                }
+                document.body.removeChild(textArea);
             }
-            document.body.removeChild(textArea);
         }
         
         function editMessage(index){const msg=currentChatHistory[index];if(msg.role==='user'){const newContent=prompt('แก้ไข:',msg.content);if(newContent&&newContent.trim()!==msg.content){currentChatHistory=currentChatHistory.slice(0,index);renderChatMessages();document.getElementById('chatInput').value=newContent;sendMessage();}}else if(msg.role==='assistant'){const div=document.querySelector(`.message[data-index='${index}'] .message-content`);const isEditing=div.isContentEditable;if(isEditing){div.contentEditable=false;currentChatHistory[index].content=div.textContent;saveCurrentChatHistory();div.style.border='none';}else{div.contentEditable=true;div.style.border='1px solid var(--primary-color)';div.focus();}}}
@@ -1361,7 +1539,6 @@
                         const imagePart = msg.content.find(p => p.type === 'image_url');
                         if (textPart) apiMessage.content = textPart.text;
                         if (imagePart) {
-                             // Assuming base64 for now
                             apiMessage.images = [imagePart.url.split(',')[1]];
                         }
                     } else {
@@ -1382,7 +1559,7 @@
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
-            if ((!message && !attachedImage) || isLoading) return;
+            if ((!message && !attachedFile) || isLoading) return;
 
             const settings = getCurrentSettingsFromForm();
             if (!settings.modelSelect) {
@@ -1396,8 +1573,12 @@
             if (message) {
                 userMessageContent.push({ type: 'text', text: message });
             }
-            if (attachedImage) {
-                userMessageContent.push({ type: 'image_url', url: attachedImage });
+            if (attachedFile) {
+                 if (attachedFile.type.startsWith('image/')) {
+                    userMessageContent.push({ type: 'image_url', url: attachedFile.data });
+                 } else {
+                    userMessageContent.push({type: 'text', text: `[File Attached: ${attachedFile.name}]`})
+                 }
             }
             if (userMessageContent.length === 1 && userMessageContent[0].type === 'text') {
                 userMessageContent = userMessageContent[0].text;
@@ -1405,7 +1586,7 @@
 
             input.value = '';
             input.style.height = 'auto';
-            removeAttachedImage();
+            removeAttachedFile();
             
             currentChatHistory.push({ role: 'user', content: userMessageContent });
             renderChatMessages();
@@ -1628,77 +1809,116 @@
             URL.revokeObjectURL(url);
         }
 
-        function exportMemories() {
+        function saveMemoryPackage() {
             try {
-                const dataStr = JSON.stringify(memories, null, 2);
+                const packageData = {
+                    memories: memories,
+                    memoryPresets: getMemoryPresets()
+                };
+                const dataStr = JSON.stringify(packageData, null, 2);
                 const blob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 a.href = url;
-                a.download = `promptprim_memories_${new Date().toISOString().slice(0, 10)}.json`;
+                a.download = `promptprim_memory_package_${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
                 a.click();
+                document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             } catch (e) {
-                alert('Error exporting memories.');
+                alert('Error saving memory package.');
                 console.error(e);
             }
         }
 
-        function importMemories(event) {
+        function loadMemoryPackage(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const importedData = JSON.parse(e.target.result);
-                    if (Array.isArray(importedData) && importedData.every(item => 'name' in item && 'content' in item && 'active' in item)) {
-                        memories = importedData;
+                    const data = JSON.parse(e.target.result);
+                    if (data && Array.isArray(data.memories) && typeof data.memoryPresets === 'object') {
+                        memories = data.memories;
                         saveMemoriesToStorage();
+                        localStorage.setItem('memoryPresets', JSON.stringify(data.memoryPresets));
                         loadAndRenderMemories();
-                        alert('Memories imported successfully!');
+                        loadMemoryPresets();
+                        alert('Memory package loaded successfully!');
                     } else {
-                        throw new Error('Invalid JSON format for memories.');
+                        throw new Error('Invalid JSON format for memory package.');
                     }
                 } catch (error) {
-                    alert(`Error importing memories: ${error.message}`);
-                    console.error('Error importing memories:', error);
+                    alert(`Error loading memory package: ${error.message}`);
+                    console.error('Error loading memory package:', error);
                 }
             };
             reader.readAsText(file);
             event.target.value = '';
         }
         
-        function handleImageFileUpload(event) {
+        function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            const reader = new FileReader();
-            reader.onload = e => {
-                showImagePreview(e.target.result);
-            };
-            reader.readAsDataURL(file);
+
+            if (file.size > 100 * 1024 * 1024) {
+                 alert('File size exceeds the 100MB limit.');
+                 return;
+            }
+
+            attachedFile = { name: file.name, type: file.type, data: null };
+
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    attachedFile.data = e.target.result;
+                    showFilePreview();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                 showFilePreview();
+            }
             hideImageUploadModal();
-            event.target.value = ''; // Reset for same-file upload
+            event.target.value = '';
         }
 
         function handleImageUrlConfirm() {
             const url = document.getElementById('image-url-input').value.trim();
             if (url) {
-                showImagePreview(url);
+                attachedFile = { name: url.split('/').pop(), type: 'image/url', data: url };
+                showFilePreview();
             }
              hideImageUploadModal();
         }
 
-        function showImagePreview(imageData) {
-            attachedImage = imageData;
-            document.getElementById('image-preview').src = imageData;
-            document.getElementById('image-preview-container').style.display = 'block';
+        function showFilePreview() {
+            if (!attachedFile) return;
+            const container = document.getElementById('file-preview-container');
+            container.innerHTML = ''; // Clear previous preview
+            
+            if (attachedFile.type.startsWith('image/')) {
+                 const img = document.createElement('img');
+                 img.src = attachedFile.data;
+                 img.id = 'image-preview';
+                 container.appendChild(img);
+            } else {
+                 container.innerHTML = `<div id="file-info"><span>📄</span><span>${attachedFile.name}</span></div>`;
+            }
+
+            const removeBtn = document.createElement('button');
+            removeBtn.id = 'remove-file-btn';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.onclick = removeAttachedFile;
+
+            container.appendChild(removeBtn);
+            container.style.display = 'block';
         }
 
-        function removeAttachedImage() {
-            attachedImage = null;
-            document.getElementById('image-preview').src = '';
-            document.getElementById('image-preview-container').style.display = 'none';
+        function removeAttachedFile() {
+            attachedFile = null;
+            document.getElementById('file-preview-container').style.display = 'none';
         }
 
         function makeSidebarResizable() {
