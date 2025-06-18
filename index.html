@@ -60,8 +60,8 @@
         }
 
         .sidebar {
-            width: 380px;
-            min-width: 380px;
+            width: 320px; /* MODIFIED: Reduced width */
+            min-width: 320px; /* MODIFIED: Reduced width */
             background: var(--white-alpha-95);
             backdrop-filter: blur(10px);
             display: flex;
@@ -73,7 +73,7 @@
         }
         
         .app-wrapper.sidebar-collapsed .sidebar {
-            margin-left: -380px;
+            margin-left: -320px; /* MODIFIED: Adjusted for new width */
         }
         
         .sidebar-header {
@@ -119,7 +119,6 @@
             line-height: 1;
         }
         
-        /* NEW: Hamburger menu for mobile */
         #hamburger-btn {
             display: none; /* Hidden by default */
             font-size: 28px;
@@ -171,7 +170,7 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 450px;
+            width: 320px; /* MODIFIED: Matched sidebar width */
             max-width: 90vw;
             height: 100%;
             background: white;
@@ -519,7 +518,7 @@
             background: var(--text-light); 
             display: flex;
             align-items: center; 
-            justify-content: space-between; /* NEW */
+            justify-content: space-between;
             gap: 10px;
         }
         .status-left {
@@ -584,7 +583,6 @@
             color: #718096;
             margin-top: 5px;
         }
-        /* NEW: Context Inspector Modal Styles */
         #context-inspector-modal pre {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -606,7 +604,6 @@
             font-weight: 600;
         }
 
-        /* NEW: Responsive Styles */
         .mobile-overlay {
             position: fixed;
             top: 0;
@@ -629,6 +626,9 @@
                 position: fixed;
                 left: 0;
                 top: 0;
+                width: 320px;
+                max-width: 85vw; 
+                min-width: unset;
                 transform: translateX(-100%);
                 transition: transform 0.3s ease-in-out;
                 box-shadow: 4px 0 15px rgba(0,0,0,0.1);
@@ -647,6 +647,10 @@
             }
             #hamburger-btn {
                 display: block;
+            }
+            #settings-panel {
+                width: 320px; /* MODIFIED: Consistent mobile width */
+                max-width: 85vw; /* MODIFIED: Consistent mobile width */
             }
             #status-panel {
                 flex-direction: column;
@@ -738,7 +742,6 @@
                 </div>
                 <div class="sidebar-resizer"></div>
                 <div class="memories-frame">
-                    <!-- Agent Presets Section -->
                     <div class="section-box">
                         <h3>
                             <span>🤖 Agent Presets</span>
@@ -755,7 +758,6 @@
                              <select id="agentPresetSelect" onchange="loadAgentPreset()"></select>
                         </div>
                     </div>
-                    <!-- Memories Section -->
                     <div class="section-box">
                         <h3>
                             <span>🧠 Command Memories</span>
@@ -1904,7 +1906,6 @@
         }
 
         function estimateTokens(text) {
-            // A very rough approximation: 1 token ~ 4 chars for English, might be closer to 1-2 for Thai. We'll use 3 as a general guess.
             return Math.ceil((text || "").length / 3);
         }
         
@@ -1925,11 +1926,9 @@
 
             const totalTokens = systemTokens + historyTokens + inputTokens;
             
-            // Update status bar
             document.getElementById('active-agent-status').textContent = `Agent: ${currentProject.activeAgent}`;
             document.getElementById('token-count-status').textContent = `~${totalTokens.toLocaleString()} Tokens`;
 
-            // Update modal if it's being opened
             if (isModal) {
                 document.getElementById('inspector-agent-name').textContent = currentProject.activeAgent;
                 document.getElementById('inspector-agent-model').textContent = agent.model || 'Not Selected';
