@@ -1427,7 +1427,12 @@
             
             renderSessionList();
             if (currentProject.chatSessions.length > 0) {
-                 await loadChatSession(currentProject.chatSessions.sort((a,b) => b.updatedAt - a.updatedAt)[0].id);
+                 const sortedSessions = [...currentProject.chatSessions].filter(s => !s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
+                 if (sortedSessions.length > 0) {
+                    await loadChatSession(sortedSessions[0].id);
+                 } else {
+                    await createNewChatSession();
+                 }
             } else {
                  await createNewChatSession();
             }
@@ -1483,6 +1488,22 @@
             reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
+
+                    // *** NEW: MIGRATION LOGIC FOR OLDER PROJECT FILES ***
+                    // Check if the project is an old version (sessions lack 'linkedAgentName')
+                    if (data.chatSessions && data.chatSessions.length > 0 && !data.chatSessions[0].hasOwnProperty('linkedAgentName')) {
+                        console.log("Old project format detected. Upgrading chat sessions...");
+                        // Get the project's default agent, with a fallback.
+                        const defaultAgent = data.activeAgent || Object.keys(data.agentPresets)[0];
+                        if (defaultAgent) {
+                            // Assign the default agent to all sessions in the old project.
+                            data.chatSessions.forEach(session => {
+                                session.linkedAgentName = defaultAgent;
+                            });
+                        }
+                    }
+                    // *** END OF MIGRATION LOGIC ***
+
                     if (data && data.id && data.name && data.agentPresets) {
                         await loadProjectData(data, true);
                         alert(`Project '${currentProject.name}' loaded successfully!`);
@@ -1604,13 +1625,13 @@
                 
                 title.textContent = `Edit Agent: ${editingAgentName}`;
                 nameInput.value = editingAgentName;
-                nameInput.disabled = true;
+                nameInput.disabled = false; // MODIFIED: Allow renaming
                 
                 Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
                     const key = ALL_AGENT_SETTINGS_IDS[elId];
                     const element = document.getElementById(elId);
                     const value = agent[key];
-                    if(element) {
+                    if(element && key !== 'name') { // Don't overwrite name input again
                         if (element.type === 'checkbox') element.checked = value;
                         else element.value = value;
                     }
@@ -1640,19 +1661,17 @@
 
         function saveAgentPreset() {
             const nameInput = document.getElementById('agent-name-input');
-            const agentName = editingAgentName || nameInput.value.trim();
-            if (!agentName) {
+            const newName = nameInput.value.trim();
+            const oldName = editingAgentName; // This is the original name before editing
+
+            if (!newName) {
                 alert("Please enter a name for the agent.");
                 return;
             }
 
-            if (!editingAgentName && currentProject.agentPresets[agentName]) {
-                alert("An agent with this name already exists.");
-                return;
-            }
-
+            // Collect all settings from the form
             const newAgentSettings = {};
-             Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
+            Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
                 const key = ALL_AGENT_SETTINGS_IDS[elId];
                 if (key === 'name') return;
                 const element = document.getElementById(elId);
@@ -1662,19 +1681,49 @@
                 else value = element.value;
                 newAgentSettings[key] = value;
             });
-            
-            if (!editingAgentName) {
+
+            if (oldName && oldName !== newName) { // --- RENAMING LOGIC ---
+                // 1. Check for name conflict
+                if (currentProject.agentPresets[newName]) {
+                    alert(`An agent named '${newName}' already exists. Please choose a different name.`);
+                    return;
+                }
+
+                // 2. Get old agent data and delete the old preset
+                const agentData = currentProject.agentPresets[oldName];
+                delete currentProject.agentPresets[oldName];
+                
+                // 3. Create the new agent preset with updated settings
+                currentProject.agentPresets[newName] = { ...agentData, ...newAgentSettings };
+
+                // 4. Update all chat sessions linked to the old name
+                currentProject.chatSessions.forEach(session => {
+                    if (session.linkedAgentName === oldName) {
+                        session.linkedAgentName = newName;
+                    }
+                });
+
+                // 5. Update the global active agent if it was the one being renamed
+                if (currentProject.activeAgent === oldName) {
+                    currentProject.activeAgent = newName;
+                }
+                
+            } else if (oldName && oldName === newName) { // --- EDITING WITHOUT RENAMING ---
+                const existingAgent = currentProject.agentPresets[oldName];
+                currentProject.agentPresets[oldName] = { ...existingAgent, ...newAgentSettings };
+            } else { // --- CREATING NEW AGENT ---
+                if (currentProject.agentPresets[newName]) {
+                    alert("An agent with this name already exists.");
+                    return;
+                }
                 newAgentSettings.activeMemories = [];
-                currentProject.agentPresets[agentName] = newAgentSettings;
-                currentProject.activeAgent = agentName;
-            } else {
-                const existingAgent = currentProject.agentPresets[agentName];
-                currentProject.agentPresets[agentName] = { ...existingAgent, ...newAgentSettings };
+                currentProject.agentPresets[newName] = newAgentSettings;
+                currentProject.activeAgent = newName;
             }
 
-            loadAgentPresets();
-            updateAndPersistState();
-            hideAgentEditor();
+            loadAgentPresets(); // Refresh UI
+            updateAndPersistState(); // Save all changes to DB
+            hideAgentEditor(); // Close modal
         }
 
         function loadAgentPresets() {
@@ -1690,15 +1739,34 @@
                 currentProject.activeAgent = Object.keys(presets)[0];
                 select.value = currentProject.activeAgent;
             }
-            loadAgentPreset();
+            
+            // This part is now handled in its own function call to avoid loops
+            const agentName = select.value;
+            if (agentName) {
+                currentProject.activeAgent = agentName;
+                document.getElementById('active-agent-status').textContent = `Agent: ${agentName}`;
+                loadAndRenderMemories();
+                updateContextInspector();
+            }
         }
 
-        function loadAgentPreset() {
-            const agentName = document.getElementById('agentPresetSelect').value;
-            if (!agentName) return;
-            currentProject.activeAgent = agentName;
+        async function loadAgentPreset() {
+            const newAgentName = document.getElementById('agentPresetSelect').value;
+            if (!newAgentName) return;
+
+            currentProject.activeAgent = newAgentName;
+
+            // Find the active chat session and link the new agent to it
+            const activeSession = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+            if (activeSession && activeSession.linkedAgentName !== newAgentName) {
+                activeSession.linkedAgentName = newAgentName;
+                // Persist this specific change to the session
+                await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', activeSession);
+            }
+
+            // Refresh UI elements related to the agent
             loadAndRenderMemories();
-            updateAndPersistState();
+            updateAndPersistState(); // This calls updateContextInspector internally
         }
 
         function deleteAgentPreset() {
@@ -1707,9 +1775,19 @@
                 alert("Cannot delete the last agent.");
                 return;
             }
-            if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Agent '${agentName}'?`)) {
+            if (confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ Agent '${agentName}'? การกระทำนี้ไม่สามารถย้อนกลับได้ และแชทที่ลิงก์กับ Agent นี้จะเสียการเชื่อมต่อ`)) {
                 delete currentProject.agentPresets[agentName];
+                
+                // Set active agent to the first one available
                 currentProject.activeAgent = Object.keys(currentProject.agentPresets)[0];
+
+                // Update any chat sessions that were linked to the deleted agent
+                 currentProject.chatSessions.forEach(session => {
+                    if (session.linkedAgentName === agentName) {
+                        session.linkedAgentName = null; // Or set to default: currentProject.activeAgent
+                    }
+                });
+                
                 loadAgentPresets();
                 updateAndPersistState();
             }
@@ -1877,7 +1955,9 @@
             item.className = `item session-item ${session.id === currentProject.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
             item.dataset.sessionId = session.id;
             item.onclick = () => {
-                loadChatSession(session.id);
+                if (currentProject.activeSessionId !== session.id) {
+                    loadChatSession(session.id);
+                }
                 if (window.innerWidth <= 1024) {
                     toggleMobileSidebar();
                 }
@@ -1891,7 +1971,7 @@
                             <a href="#" onclick="togglePinSession(${session.id}, event)">${session.pinned ? 'Unpin' : 'Pin'}</a>
                             <a href="#" onclick="renameChatSession(${session.id}, event)">Rename</a>
                             <a href="#" onclick="cloneSession(${session.id}, event)">Clone</a>
-                            <a href="#" onclick="archiveSession(${session.id}, event)">Archive</a>
+                            <a href="#" onclick="archiveSession(${session.id}, event)">${session.archived ? 'Unarchive' : 'Archive'}</a>
                             <a href="#" onclick="downloadSession(${session.id}, event)">Download</a>
                             <hr>
                             <a href="#" onclick="deleteChatSession(${session.id}, event)">Delete</a>
@@ -1902,7 +1982,15 @@
         }
 
         async function createNewChatSession() {
-            const newSession = { name: 'New Chat', history: [], createdAt: Date.now(), updatedAt: Date.now(), pinned: false, archived: false };
+            const newSession = { 
+                name: 'New Chat', 
+                history: [], 
+                createdAt: Date.now(), 
+                updatedAt: Date.now(), 
+                pinned: false, 
+                archived: false,
+                linkedAgentName: currentProject.activeAgent // MODIFIED: Link agent on creation
+            };
             try {
                 const id = await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
                 newSession.id = id;
@@ -1916,7 +2004,30 @@
             }
         }
         
-        async function loadChatSession(id){if(isLoading)return; const session = currentProject.chatSessions.find(s => s.id === id); if(session){currentProject.activeSessionId=id;document.getElementById('chat-title').textContent=session.name;renderChatMessages();renderSessionList();} else { const sessionFromDB = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'get', id); if(sessionFromDB){ currentProject.activeSessionId = id; document.getElementById('chat-title').textContent = sessionFromDB.name; renderChatMessages(); renderSessionList(); } }}
+        async function loadChatSession(id) {
+            if (isLoading) return;
+            const session = currentProject.chatSessions.find(s => s.id === id);
+            
+            if (session) {
+                currentProject.activeSessionId = id;
+
+                // MODIFIED: Load the agent linked to this session
+                if (session.linkedAgentName && currentProject.agentPresets[session.linkedAgentName]) {
+                    currentProject.activeAgent = session.linkedAgentName;
+                } else {
+                    // Fallback to the first available agent if the linked one is missing
+                    currentProject.activeAgent = Object.keys(currentProject.agentPresets)[0];
+                    session.linkedAgentName = currentProject.activeAgent; // Relink to a valid agent
+                }
+                
+                document.getElementById('chat-title').textContent = session.name;
+                
+                // Refresh UI based on the newly loaded session and agent
+                loadAgentPresets(); // This will set the dropdown and call loadAndRenderMemories
+                renderChatMessages();
+                renderSessionList(); // To highlight the active session
+            }
+        }
         
         async function renameChatSession(id, e, newNamePrompt = null) {
             if (e) e.stopPropagation();
@@ -1953,9 +2064,9 @@
 
             if (currentProject.activeSessionId === id) {
                 currentProject.activeSessionId = null;
-                if (currentProject.chatSessions.length > 0) {
-                    currentProject.chatSessions.sort((a,b) => b.updatedAt - a.updatedAt);
-                    await loadChatSession(currentProject.chatSessions[0].id);
+                const nextSession = currentProject.chatSessions.find(s => !s.archived) || currentProject.chatSessions[0];
+                if (nextSession) {
+                    await loadChatSession(nextSession.id);
                 } else {
                     await createNewChatSession();
                 }
@@ -2004,14 +2115,16 @@
             const session = currentProject.chatSessions.find(s => s.id === id);
             if (!session) return;
 
-            session.archived = true;
-            session.pinned = false; // Cannot be pinned and archived
+            session.archived = !session.archived; // Toggle archive state
+            if (session.archived) {
+                session.pinned = false; // Cannot be pinned and archived
+            }
             session.updatedAt = Date.now();
             
             dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).then(() => {
                 renderSessionList();
                 updateAndPersistState();
-                 if (currentProject.activeSessionId === id) {
+                 if (currentProject.activeSessionId === id && session.archived) {
                     currentProject.activeSessionId = null;
                     const nextSession = currentProject.chatSessions.find(s => !s.archived);
                     if (nextSession) {
