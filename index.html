@@ -281,6 +281,29 @@
         .btn-secondary { background: #cbd5e0; color: var(--text-dark); }
         .btn-danger { background: var(--error-color); }
         
+        .btn-icon {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #a0aec0;
+            transition: all 0.2s ease;
+        }
+        .btn-icon:hover {
+            background: #e2e8f0;
+            color: var(--text-dark);
+        }
+        .btn-icon.danger:hover {
+            background: var(--error-color);
+            color: white;
+        }
+        
         .flex-group { display: flex; gap: 10px; align-items: center; }
         .flex-group > select { flex-grow: 1; }
         
@@ -290,9 +313,9 @@
             display: none;
             position: absolute;
             background-color: white;
-            min-width: 160px;
+            min-width: max-content; 
             box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
+            z-index: 100;
             border-radius: 8px;
             overflow: hidden;
         }
@@ -303,8 +326,14 @@
             padding: 12px 16px;
             text-decoration: none;
             display: block;
+            font-size: 0.9rem;
         }
         .dropdown-content a:hover { background-color: #f1f1f1; }
+        .dropdown-content hr {
+            margin: 5px 10px;
+            border: none;
+            border-top: 1px solid var(--border-color);
+        }
         .dropdown:hover .dropdown-content { display: block; }
         
         .item-list > .item {
@@ -330,13 +359,15 @@
             cursor: pointer;
             flex-grow: 1;
             padding-right: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .memory-item .item-name { cursor: grab; }
         .memory-item .item-name:active { cursor: grabbing; }
 
         .item-actions { display: flex; gap: 5px; align-items: center; }
-        .item-actions .btn-small { padding: 4px 8px; }
-
+        
         .collapsible-section summary {
             cursor: pointer;
             font-weight: 500;
@@ -361,14 +392,14 @@
         .memory-toggle.active::after { transform: translateX(20px); }
 
         .chat-header {
-            padding: 20px 25px;
+            padding: 10px 25px; 
             border-bottom: 1px solid var(--border-color);
             background: var(--white-alpha-95);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .chat-title { font-size: 1.5rem; font-weight: 700; flex-grow: 1; }
+        .chat-title { font-size: 1.15rem; font-weight: 600; flex-grow: 1; }
         
         .chat-messages {
             flex: 1;
@@ -391,9 +422,10 @@
             border-bottom-right-radius: 5px;
         }
         .message.assistant {
-            background: white; align-self: flex-start;
+            background: white; 
             border: 1px solid var(--border-color);
             border-bottom-left-radius: 5px;
+            max-width: 100%;
         }
         .message-actions {
             position: absolute;
@@ -541,6 +573,7 @@
             overflow: hidden;
             text-overflow: ellipsis;
             min-width: 0;
+            margin-left: auto;
         }
         #context-inspector-trigger-btn {
             background: none;
@@ -549,11 +582,10 @@
             padding: 2px 5px;
             font-size: 16px;
             line-height: 1;
-            color: #718096;
-            display: none; /* Hidden by default */
+            color: var(--primary-color);
         }
         #context-inspector-trigger-btn:hover {
-            color: var(--primary-color);
+            opacity: 0.7;
         }
         .status-dot {
             width: 10px; height: 10px; border-radius: 50%;
@@ -673,15 +705,6 @@
             .main-chat-area {
                 width: 100%;
             }
-            #status-panel {
-                padding: 8px 15px;
-            }
-            .status-right {
-                flex: 1; /* Allow it to shrink */
-            }
-            #context-inspector-trigger-btn {
-                display: inline-block;
-            }
         }
     </style>
 </head>
@@ -695,6 +718,10 @@
                 <button class="close-settings-btn" onclick="toggleSettingsPanel()">&times;</button>
             </div>
             <div class="settings-content">
+                <div class="section-box">
+                    <h3>About PromptPrim Studio</h3>
+                    <p>Version: v.01a</p>
+                </div>
                 <div class="section-box">
                     <h3>🎨 การแสดงผล</h3>
                     <div class="form-group">
@@ -737,6 +764,8 @@
                             <a href="#" onclick="event.preventDefault(); document.getElementById('load-project-input').click()">Open...</a>
                             <a href="#" onclick="event.preventDefault(); saveProject(false)">Save</a>
                             <a href="#" onclick="event.preventDefault(); saveProject(true)">Save As...</a>
+                            <hr>
+                            <a href="#" onclick="event.preventDefault(); exportChat()">Export Chat...</a>
                         </div>
                     </div>
                     <input type="file" id="load-project-input" accept=".json" style="display: none;" onchange="handleFileSelectedForOpen(event)">
@@ -748,7 +777,7 @@
                     <div class="section-box">
                         <h3>
                             <span>📂 Chat Sessions</span>
-                            <button class="btn btn-small" onclick="createNewChatSession()">+ สร้างใหม่</button>
+                            <button class="btn-icon" onclick="createNewChatSession()" title="สร้าง Chat ใหม่">+</button>
                         </h3>
                         <div id="sessionListContainer" class="item-list">
                         </div>
@@ -781,7 +810,7 @@
                     <div class="section-box">
                         <h3>
                             <span>🧠 Command Memories</span>
-                            <button class="btn btn-small" onclick="showMemoryEditor()">+ เพิ่มใหม่</button>
+                            <button class="btn-icon" onclick="showMemoryEditor()" title="เพิ่ม Memory ใหม่">+</button>
                         </h3>
                         <div class="collapsible-section">
                              <details id="active-memories-details" open>
@@ -805,7 +834,6 @@
                 <button id="hamburger-btn" class="menu-toggle-btn" onclick="toggleMobileSidebar()">&#9776;</button>
                 <button id="collapse-sidebar-btn" class="menu-toggle-btn" onclick="toggleSidebarCollapse()">&laquo;</button>
                 <h1 id="chat-title" class="chat-title">AI Assistant</h1>
-                 <button class="btn btn-small" onclick="exportChat()">Export Chat</button>
             </div>
             <div class="chat-messages" id="chatMessages"></div>
              
@@ -943,7 +971,6 @@
         </div>
     </div>
 
-    <!-- NEW: Context Inspector Modal -->
     <div id="context-inspector-modal" class="modal-overlay">
         <div class="modal-box">
             <h3>Context Inspector</h3>
@@ -1058,13 +1085,19 @@
         }
         
         async function dbRequest(storeName, mode, action, data) {
-            return new Promise((resolve, reject) => {
+             return new Promise((resolve, reject) => {
                 if (!db) return reject("Database is not open.");
                 try {
                     const transaction = db.transaction(storeName, mode);
                     const store = transaction.objectStore(storeName);
                     const request = store[action](data);
-                    request.onsuccess = e => resolve(e.target.result || null); 
+                    request.onsuccess = e => {
+                        if (action === 'getAll') {
+                            resolve(e.target.result || []);
+                        } else {
+                            resolve(e.target.result || null);
+                        }
+                    }; 
                     request.onerror = e => reject(e.target.error);
                 } catch (error) { reject(error); }
             });
@@ -1122,6 +1155,12 @@
                  applyFontSettings();
                  updateAndPersistState();
              });
+             window.addEventListener('beforeunload', (event) => {
+                if (isDirty) {
+                    event.preventDefault();
+                    event.returnValue = '';
+                }
+            });
         }
         
         // --- UI Toggles & Handlers ---
@@ -1627,8 +1666,13 @@
                     <span class="item-name">${memory.name}</span>
                     <div class="item-actions">
                         <div class="memory-toggle ${isActive ? 'active' : ''}" onclick="toggleMemory('${memory.name}', event)"></div>
-                        <button class="btn btn-small" onclick="showMemoryEditor(${memoryIndex}, event)">แก้ไข</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteMemory(${memoryIndex}, event)">ลบ</button>
+                        <div class="dropdown align-right">
+                            <button class="btn-icon"> &#8942; </button>
+                            <div class="dropdown-content">
+                                <a href="#" onclick="event.stopPropagation(); showMemoryEditor(${memoryIndex}, event)">Edit</a>
+                                <a href="#" onclick="event.stopPropagation(); deleteMemory(${memoryIndex}, event)">Delete</a>
+                            </div>
+                        </div>
                     </div>
                 </div>`;
             return itemDiv;
@@ -1745,9 +1789,12 @@
             item.innerHTML = `
                 <div class="item-header">
                     <span class="item-name">${session.name}</span>
-                    <div class="item-actions">
-                        <button class="btn btn-small" onclick="renameChatSession(${session.id}, event)">เปลี่ยนชื่อ</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteChatSession(${session.id}, event)">ลบ</button>
+                     <div class="item-actions dropdown align-right">
+                        <button class="btn-icon"> &#8942; </button>
+                        <div class="dropdown-content">
+                            <a href="#" onclick="renameChatSession(${session.id}, event)">Rename</a>
+                            <a href="#" onclick="deleteChatSession(${session.id}, event)">Delete</a>
+                        </div>
                     </div>
                 </div>`;
             return item;
@@ -1790,7 +1837,7 @@
         }
         
         async function deleteChatSession(id, e) {
-            e.stopPropagation();
+            if (e) e.stopPropagation();
             if (!confirm("ลบ Chat?")) return;
             const sessionIndex = currentProject.chatSessions.findIndex(s => s.id === id);
             if (sessionIndex === -1) return;
