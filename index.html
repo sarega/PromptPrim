@@ -44,24 +44,28 @@
             font-size: var(--main-font-size);
         }
 
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
         body {
             background: var(--background-gradient);
             color: var(--text-dark);
-            overflow: hidden;
         }
         
         /* --- Main Layout --- */
         .app-wrapper {
             display: flex;
-            height: 100vh;
+            height: 100dvh; 
             width: 100vw;
             position: relative;
             transition: all 0.3s ease-in-out;
         }
 
         .sidebar {
-            width: 320px; /* MODIFIED: Reduced width */
-            min-width: 320px; /* MODIFIED: Reduced width */
+            width: 380px;
+            min-width: 380px;
             background: var(--white-alpha-95);
             backdrop-filter: blur(10px);
             display: flex;
@@ -73,7 +77,7 @@
         }
         
         .app-wrapper.sidebar-collapsed .sidebar {
-            margin-left: -320px; /* MODIFIED: Adjusted for new width */
+            margin-left: -380px;
         }
         
         .sidebar-header {
@@ -83,7 +87,7 @@
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            gap: 10px; /* Space between the two rows */
+            gap: 10px;
         }
         
         .sidebar-top-row, .sidebar-bottom-row {
@@ -120,7 +124,7 @@
         }
         
         #hamburger-btn {
-            display: none; /* Hidden by default */
+            display: none;
             font-size: 28px;
             margin-right: 15px;
         }
@@ -162,7 +166,6 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            height: 100vh;
             background: var(--white-alpha-50);
         }
         
@@ -170,8 +173,8 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 320px; /* MODIFIED: Matched sidebar width */
-            max-width: 90vw;
+            width: 380px;
+            max-width: 85vw;
             height: 100%;
             background: white;
             z-index: 1200;
@@ -513,13 +516,14 @@
         }
         
         #status-panel {
-            padding: 8px 25px;
+            padding: 8px 15px;
             border-top: 1px solid var(--border-color);
             background: var(--text-light); 
             display: flex;
             align-items: center; 
             justify-content: space-between;
             gap: 10px;
+            flex-shrink: 0;
         }
         .status-left {
             display: flex;
@@ -527,12 +531,28 @@
             gap: 10px;
         }
         .status-right {
-            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
             font-size: 12px;
             color: #718096;
             text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
-        .status-right:hover {
+        #context-inspector-trigger-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 5px;
+            font-size: 16px;
+            line-height: 1;
+            color: #718096;
+            display: none; /* Hidden by default */
+        }
+        #context-inspector-trigger-btn:hover {
             color: var(--primary-color);
         }
         .status-dot {
@@ -622,13 +642,15 @@
         }
 
         @media (max-width: 768px) {
+            .sidebar, #settings-panel {
+                width: 320px;
+                max-width: 85vw; 
+                min-width: unset;
+            }
             .sidebar {
                 position: fixed;
                 left: 0;
                 top: 0;
-                width: 320px;
-                max-width: 85vw; 
-                min-width: unset;
                 transform: translateX(-100%);
                 transition: transform 0.3s ease-in-out;
                 box-shadow: 4px 0 15px rgba(0,0,0,0.1);
@@ -648,19 +670,17 @@
             #hamburger-btn {
                 display: block;
             }
-            #settings-panel {
-                width: 320px; /* MODIFIED: Consistent mobile width */
-                max-width: 85vw; /* MODIFIED: Consistent mobile width */
+            .main-chat-area {
+                width: 100%;
             }
             #status-panel {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 5px;
                 padding: 8px 15px;
             }
             .status-right {
-                width: 100%;
-                text-align: left;
+                flex: 1; /* Allow it to shrink */
+            }
+            #context-inspector-trigger-btn {
+                display: inline-block;
             }
         }
     </style>
@@ -788,16 +808,7 @@
                  <button class="btn btn-small" onclick="exportChat()">Export Chat</button>
             </div>
             <div class="chat-messages" id="chatMessages"></div>
-            <div id="status-panel">
-                 <div class="status-left">
-                    <div class="status-dot" id="statusDot"></div>
-                    <span id="statusText">Disconnected</span>
-                 </div>
-                 <div class="status-right" id="context-inspector-trigger" onclick="showContextInspector()">
-                    <span id="active-agent-status"></span> &nbsp;
-                    <span id="token-count-status"></span>
-                 </div>
-            </div>
+             
             <div class="chat-input-wrapper">
                 <div id="file-preview-container">
                     </div>
@@ -808,6 +819,17 @@
                     <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">&#9724;</button>
                 </div>
                  <p class="input-disclaimer">AI อาจทำผิดพลาดได้ ดังนั้นโปรดตรวจสอบคำตอบอีกครั้ง</p>
+            </div>
+            <div id="status-panel">
+                 <div class="status-left">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Disconnected</span>
+                 </div>
+                 <div class="status-right">
+                    <span id="active-agent-status"></span> &nbsp;
+                    <span id="token-count-status"></span>
+                 </div>
+                 <button id="context-inspector-trigger-btn" onclick="showContextInspector()">&#8505;</button>
             </div>
         </div>
     </div>
@@ -989,6 +1011,7 @@
         let isDirty = false;
         let pendingFileToOpen = null;
         let pendingActionAfterSave = null; 
+        let editingAgentName = null;
         
         // --- Dirty Flag & State Persistence ---
         function markAsDirty() {
@@ -1118,7 +1141,7 @@
         }
 
         function showContextInspector() {
-            updateContextInspector(true); // Force update before showing
+            updateContextInspector(true);
             document.getElementById('context-inspector-modal').style.display = 'flex';
         }
 
@@ -1373,7 +1396,7 @@
                  finalStatus = { message: `โหลด ${allProviderModels.length} models เรียบร้อยแล้ว`, state: 'connected' };
             }
             
-            if (finalStatus.state !== 'error') {
+            if (finalStatus.state !== 'error' || allProviderModels.length > 0) {
                  updateStatus(finalStatus.message, finalStatus.state);
             } else {
                 updateStatus(finalStatus.message, finalStatus.state);
@@ -1434,12 +1457,12 @@
             if (ollamaGroup.childElementCount > 0) modelSelect.appendChild(ollamaGroup);
 
             if (isEditing) {
-                const agentName = currentProject.activeAgent;
-                const agent = currentProject.agentPresets[agentName];
+                editingAgentName = currentProject.activeAgent;
+                const agent = currentProject.agentPresets[editingAgentName];
                 if (!agent) { alert("No active agent to edit."); return; }
                 
-                title.textContent = `Edit Agent: ${agentName}`;
-                nameInput.value = agentName;
+                title.textContent = `Edit Agent: ${editingAgentName}`;
+                nameInput.value = editingAgentName;
                 nameInput.disabled = true;
                 
                 Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
@@ -1452,6 +1475,7 @@
                     }
                 });
             } else {
+                editingAgentName = null;
                 title.textContent = "Create New Agent";
                 nameInput.value = "";
                 nameInput.disabled = false;
@@ -1470,18 +1494,18 @@
 
         function hideAgentEditor() {
             document.getElementById('agent-editor-modal').style.display = 'none';
+            editingAgentName = null;
         }
 
         function saveAgentPreset() {
             const nameInput = document.getElementById('agent-name-input');
-            const agentName = nameInput.value.trim();
+            const agentName = editingAgentName || nameInput.value.trim();
             if (!agentName) {
                 alert("Please enter a name for the agent.");
                 return;
             }
 
-            const isEditing = nameInput.disabled;
-            if (!isEditing && currentProject.agentPresets[agentName]) {
+            if (!editingAgentName && currentProject.agentPresets[agentName]) {
                 alert("An agent with this name already exists.");
                 return;
             }
@@ -1498,7 +1522,7 @@
                 newAgentSettings[key] = value;
             });
             
-            if (!isEditing) {
+            if (!editingAgentName) {
                 newAgentSettings.activeMemories = [];
                 currentProject.agentPresets[agentName] = newAgentSettings;
                 currentProject.activeAgent = agentName;
@@ -2307,10 +2331,14 @@
             const sessionsFrame = document.querySelector('.sessions-frame');
             const memoriesFrame = document.querySelector('.memories-frame');
             
-            function handleMouseMove(e) {
+            let isResizing = false;
+
+            const moveHandler = (e) => {
+                if (!isResizing) return;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
                 const sidebarContent = document.querySelector('.sidebar-content');
                 const sidebarRect = sidebarContent.getBoundingClientRect();
-                let newHeight = e.clientY - sidebarRect.top;
+                let newHeight = clientY - sidebarRect.top;
                 const totalHeight = sidebarContent.offsetHeight;
 
                 if (newHeight < 100) newHeight = 100;
@@ -2324,18 +2352,32 @@
                 memoriesFrame.style.flex = `1 1 ${memoriesHeight}px`;
 
                 localStorage.setItem('sidebarSplitHeight', sessionsHeight);
-            }
+            };
 
-            function stopResizing() {
-                window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', stopResizing);
-            }
-
-            resizer.addEventListener('mousedown', (e) => {
+            const startResizing = (e) => {
                 e.preventDefault();
-                window.addEventListener('mousemove', handleMouseMove);
+                isResizing = true;
+                document.body.style.cursor = 'ns-resize';
+                document.body.style.userSelect = 'none';
+                window.addEventListener('mousemove', moveHandler);
+                window.addEventListener('touchmove', moveHandler, { passive: false });
                 window.addEventListener('mouseup', stopResizing);
-            });
+                window.addEventListener('touchend', stopResizing);
+            };
+            
+            const stopResizing = () => {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                window.removeEventListener('mousemove', moveHandler);
+                window.removeEventListener('touchmove', moveHandler);
+                window.removeEventListener('mouseup', stopResizing);
+                window.removeEventListener('touchend', stopResizing);
+            };
+
+            resizer.addEventListener('mousedown', startResizing);
+            resizer.addEventListener('touchstart', startResizing, { passive: false });
+
 
             const savedHeight = localStorage.getItem('sidebarSplitHeight');
             if (savedHeight) {
