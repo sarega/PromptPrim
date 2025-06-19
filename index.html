@@ -64,20 +64,21 @@
         }
 
         .sidebar {
-            width: 380px;
-            min-width: 380px;
+            width: 340px; 
+            min-width: 250px;
+            max-width: 600px;
             background: var(--white-alpha-95);
             backdrop-filter: blur(10px);
             display: flex;
             flex-direction: column;
             height: 100%;
-            border-right: 1px solid var(--border-color);
             transition: margin-left 0.3s ease-in-out;
             z-index: 1100;
+            position: relative;
         }
         
         .app-wrapper.sidebar-collapsed .sidebar {
-            margin-left: -380px;
+            margin-left: -340px; 
         }
         
         .sidebar-header {
@@ -134,13 +135,13 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            padding: 15px;
         }
         
         .sessions-frame {
             flex: 1 1 55%;
             min-height: 100px;
             overflow-y: auto;
-            padding: 20px;
         }
 
         .sidebar-resizer {
@@ -155,11 +156,25 @@
             opacity: 0.3;
         }
         
+        .sidebar-horizontal-resizer {
+            width: 8px;
+            cursor: ew-resize;
+            background: transparent;
+            position: absolute;
+            top: 0;
+            right: -4px;
+            height: 100%;
+            z-index: 1101;
+            transition: background .2s ease;
+        }
+        .sidebar-horizontal-resizer:hover {
+            background: var(--primary-color);
+        }
+
         .memories-frame {
             flex: 1 1 45%;
             min-height: 100px;
             overflow-y: auto;
-            padding: 20px;
         }
 
         .main-chat-area {
@@ -167,6 +182,8 @@
             display: flex;
             flex-direction: column;
             background: var(--white-alpha-50);
+            transition: width 0.3s ease-in-out;
+            width: calc(100% - 340px);
         }
         
         #settings-panel {
@@ -213,21 +230,20 @@
         }
         
         .section-box {
-            background: var(--text-light);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
+            background: transparent;
+            border: none;
+            padding: 0;
             margin-bottom: 25px;
         }
 
         .section-box h3 {
             margin-top: 0;
-            margin-bottom: 15px;
-            font-size: 1.1rem;
+            margin-bottom: 10px;
+            font-size: 1rem;
             font-weight: 600;
             color: #4a5568;
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
+            padding-bottom: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -319,13 +335,23 @@
             border-radius: 8px;
             overflow: hidden;
         }
+        .dropdown.open .dropdown-content {
+            display: block;
+        }
         .dropdown.align-left .dropdown-content { left: 0; right: auto; }
-        .dropdown.align-right .dropdown-content { right: 0; left: auto; }
+        .dropdown.align-right .dropdown-content { 
+            right: 0; 
+            left: auto; 
+            top: 100%;
+            margin-top: 4px;
+        }
         .dropdown-content a {
             color: black;
             padding: 12px 16px;
             text-decoration: none;
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 8px;
             font-size: 0.9rem;
         }
         .dropdown-content a:hover { background-color: #f1f1f1; }
@@ -334,14 +360,13 @@
             border: none;
             border-top: 1px solid var(--border-color);
         }
-        .dropdown:hover .dropdown-content { display: block; }
         
         .item-list > .item {
             background: white;
             border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 12px 15px;
-            margin-bottom: 10px;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
             transition: all 0.2s ease;
             position: relative;
         }
@@ -349,13 +374,18 @@
             border-color: var(--success-color);
             box-shadow: 0 0 8px rgba(72, 187, 120, 0.2);
         }
+        .item-list > .item.pinned {
+            background-color: #f0e6ff;
+        }
+
         .item-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .item-name {
-            font-weight: 600;
+            font-weight: 500;
+            font-size: 0.9rem;
             cursor: pointer;
             flex-grow: 1;
             padding-right: 10px;
@@ -414,6 +444,7 @@
             max-width: 85%; padding: 12px 18px; border-radius: 18px;
             position: relative; white-space: pre-wrap;
             line-height: 1.6; word-wrap: break-word;
+            padding-bottom: 38px; 
         }
         .message-content { outline: none; }
         .message-content p { margin: 0.5em 0; }
@@ -430,27 +461,47 @@
         }
         .message-actions {
             position: absolute;
-            top: -12px;
-            right: 0px;
+            bottom: 4px;
+            left: 4px;
             display: none;
             gap: 5px;
+            border-radius: 20px;
+            padding: 2px;
+        }
+        .message.user .message-actions {
+            left: auto;
+            right: 4px;
+        }
+        .message.assistant .message-actions {
+            background: rgba(237, 242, 247, 0.8);
+            backdrop-filter: blur(2px);
+        }
+        .message.user .message-actions {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(2px);
         }
          .message:hover .message-actions {
             display: flex;
         }
 
         .message-actions button {
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: #718096;
             width: 28px;
             height: 28px;
-            font-size: 14px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 16px;
+        }
+        .message.user .message-actions button {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .message-actions button:hover {
+            background: #e2e8f0;
+            color: var(--text-dark);
+        }
+        .message.user .message-actions button:hover {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
         }
         
         .message-content pre {
@@ -674,7 +725,7 @@
             opacity: 1;
         }
 
-        @media (max-width: 1024px) { /* MODIFIED: Breakpoint adjusted for tablets */
+        @media (max-width: 1024px) { 
             .sidebar {
                 position: fixed;
                 left: 0;
@@ -689,7 +740,7 @@
             .sidebar.open {
                 transform: translateX(0);
             }
-            .sidebar-resizer {
+            .sidebar-resizer, .sidebar-horizontal-resizer {
                 display: none;
             }
             .sidebar-content {
@@ -704,6 +755,21 @@
             .main-chat-area {
                 width: 100%;
             }
+        }
+        body.focus-mode .sidebar,
+        body.focus-mode #hamburger-btn,
+        body.focus-mode .sidebar-horizontal-resizer {
+            display: none !important;
+        }
+        body.focus-mode .main-chat-area {
+            width: 100%;
+        }
+        body.focus-mode .chat-input-wrapper {
+            padding: 20px 30px;
+        }
+        body.focus-mode #chatInput {
+            min-height: 80px;
+            font-size: 1.1rem;
         }
     </style>
 </head>
@@ -757,7 +823,7 @@
                 </div>
                 <div class="sidebar-bottom-row">
                     <div class="dropdown align-left">
-                        <button class="btn btn-small">Project</button>
+                        <button class="btn btn-small" onclick="toggleDropdown(event)">Project</button>
                         <div class="dropdown-content">
                             <a href="#" onclick="event.preventDefault(); createNewProject()">New...</a>
                             <a href="#" onclick="event.preventDefault(); document.getElementById('load-project-input').click()">Open...</a>
@@ -778,12 +844,12 @@
                             <span>📂 Chat Sessions</span>
                             <button class="btn-icon" onclick="createNewChatSession()" title="สร้าง Chat ใหม่">+</button>
                         </h3>
-                        <div id="sessionListContainer" class="item-list">
-                        </div>
-                        <div class="collapsible-section" id="olderSessionsSection" style="display:none;">
+                         <div id="pinnedSessionList" class="item-list"></div>
+                        <div id="sessionListContainer" class="item-list"></div>
+                        <div class="collapsible-section" id="archivedSessionsSection" style="display:none;">
                             <details>
-                                <summary>Older Sessions</summary>
-                                <div id="olderSessionList" class="item-list"></div>
+                                <summary>Archived Sessions</summary>
+                                <div id="archivedSessionList" class="item-list"></div>
                             </details>
                         </div>
                     </div>
@@ -794,7 +860,7 @@
                         <h3>
                             <span>🤖 Agent Presets</span>
                              <div class="dropdown align-right">
-                                <button class="btn btn-small btn-secondary">จัดการ</button>
+                                <button class="btn-icon" onclick="toggleDropdown(event)" title="Manage Agents">&#8942;</button>
                                 <div class="dropdown-content">
                                     <a href="#" onclick="event.preventDefault(); showAgentEditor(false)">สร้าง Agent ใหม่</a>
                                     <a href="#" onclick="event.preventDefault(); showAgentEditor(true)">แก้ไข Agent ปัจจุบัน</a>
@@ -826,13 +892,15 @@
                     </div>
                 </div>
             </div>
+             <div class="sidebar-horizontal-resizer"></div>
         </div>
-
+        
         <div class="main-chat-area">
             <div class="chat-header">
                 <button id="hamburger-btn" class="menu-toggle-btn" onclick="toggleMobileSidebar()">&#9776;</button>
                 <button id="collapse-sidebar-btn" class="menu-toggle-btn" onclick="toggleSidebarCollapse()">&laquo;</button>
                 <h1 id="chat-title" class="chat-title">AI Assistant</h1>
+                 <button class="btn-icon" id="focus-mode-btn" onclick="toggleFocusMode()" title="Focus Mode">&#x2922;</button>
             </div>
             <div class="chat-messages" id="chatMessages"></div>
              
@@ -1160,6 +1228,13 @@
                     event.returnValue = '';
                 }
             });
+            document.addEventListener('click', (event) => {
+                if (!event.target.closest('.dropdown')) {
+                    document.querySelectorAll('.dropdown.open').forEach(d => {
+                        d.classList.remove('open');
+                    });
+                }
+            });
         }
         
         // --- UI Toggles & Handlers ---
@@ -1178,6 +1253,19 @@
             document.querySelector('.app-wrapper').classList.toggle('sidebar-collapsed');
         }
 
+        function toggleFocusMode() {
+            const body = document.body;
+            body.classList.toggle('focus-mode');
+            const btn = document.getElementById('focus-mode-btn');
+            if (body.classList.contains('focus-mode')) {
+                btn.innerHTML = '&#x2921;'; // Collapse icon
+                btn.title = 'Exit Focus Mode';
+            } else {
+                btn.innerHTML = '&#x2922;'; // Expand icon
+                btn.title = 'Focus Mode';
+            }
+        }
+
         function showContextInspector() {
             updateContextInspector(true);
             document.getElementById('context-inspector-modal').style.display = 'flex';
@@ -1186,6 +1274,21 @@
         function hideContextInspector() {
             document.getElementById('context-inspector-modal').style.display = 'none';
         }
+        
+        function toggleDropdown(event) {
+            event.stopPropagation();
+            const dropdown = event.currentTarget.closest('.dropdown');
+            const wasOpen = dropdown.classList.contains('open');
+            
+            // Close all other open dropdowns
+            document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+
+            // If it wasn't open, open it
+            if (!wasOpen) {
+                dropdown.classList.add('open');
+            }
+        }
+
 
         // --- Project Management ---
         function showUnsavedChangesModal(nextAction) {
@@ -1666,10 +1769,10 @@
                     <div class="item-actions">
                         <div class="memory-toggle ${isActive ? 'active' : ''}" onclick="toggleMemory('${memory.name}', event)"></div>
                         <div class="dropdown align-right">
-                            <button class="btn-icon"> &#8942; </button>
+                            <button class="btn-icon" onclick="toggleDropdown(event)"> &#8942; </button>
                             <div class="dropdown-content">
-                                <a href="#" onclick="event.stopPropagation(); showMemoryEditor(${memoryIndex}, event)">Edit</a>
-                                <a href="#" onclick="event.stopPropagation(); deleteMemory(${memoryIndex}, event)">Delete</a>
+                                <a href="#" onclick="event.stopPropagation(); showMemoryEditor(${memoryIndex}, event)">&#9998; Edit</a>
+                                <a href="#" onclick="event.stopPropagation(); deleteMemory(${memoryIndex}, event)">&#128465; Delete</a>
                             </div>
                         </div>
                     </div>
@@ -1748,50 +1851,49 @@
         
         // --- Chat Session Management ---
         function renderSessionList() {
+            const pinnedContainer = document.getElementById('pinnedSessionList');
             const recentContainer = document.getElementById('sessionListContainer');
-            const olderList = document.getElementById('olderSessionList');
-            const olderSection = document.getElementById('olderSessionsSection');
+            const archivedList = document.getElementById('archivedSessionList');
+            const archivedSection = document.getElementById('archivedSessionsSection');
             
+            pinnedContainer.innerHTML = '';
             recentContainer.innerHTML = '';
-            olderList.innerHTML = '';
+            archivedList.innerHTML = '';
 
-            const RECENT_COUNT = 5;
-            const recentSessions = (currentProject.chatSessions || []).slice(0, RECENT_COUNT);
-            const olderSessions = (currentProject.chatSessions || []).slice(RECENT_COUNT);
-
-            recentSessions.forEach(session => {
-                const item = createSessionElement(session);
-                recentContainer.appendChild(item);
-            });
-
-            if (olderSessions.length > 0) {
-                olderSection.style.display = 'block';
-                olderSessions.forEach(session => {
-                    const item = createSessionElement(session);
-                    olderList.appendChild(item);
-                });
-            } else {
-                olderSection.style.display = 'none';
-            }
+            const allSessions = currentProject.chatSessions || [];
+            const pinnedSessions = allSessions.filter(s => s.pinned && !s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
+            const archivedSessions = allSessions.filter(s => s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
+            const recentSessions = allSessions.filter(s => !s.pinned && !s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
+            
+            pinnedSessions.forEach(session => pinnedContainer.appendChild(createSessionElement(session)));
+            recentSessions.forEach(session => recentContainer.appendChild(createSessionElement(session)));
+            archivedSessions.forEach(session => archivedList.appendChild(createSessionElement(session)));
+            
+            archivedSection.style.display = archivedSessions.length > 0 ? 'block' : 'none';
         }
         
         function createSessionElement(session) {
             const item = document.createElement('div');
-            item.className = `item session-item ${session.id === currentProject.activeSessionId ? 'active' : ''}`;
+            item.className = `item session-item ${session.id === currentProject.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
             item.dataset.sessionId = session.id;
             item.onclick = () => {
                 loadChatSession(session.id);
-                if (window.innerWidth <= 768) {
+                if (window.innerWidth <= 1024) {
                     toggleMobileSidebar();
                 }
             };
             item.innerHTML = `
                 <div class="item-header">
-                    <span class="item-name">${session.name}</span>
+                    <span class="item-name">${session.pinned ? '📌 ' : ''}${session.name}</span>
                      <div class="item-actions dropdown align-right">
-                        <button class="btn-icon"> &#8942; </button>
+                        <button class="btn-icon" onclick="toggleDropdown(event)"> &#8942; </button>
                         <div class="dropdown-content">
+                            <a href="#" onclick="togglePinSession(${session.id}, event)">${session.pinned ? 'Unpin' : 'Pin'}</a>
                             <a href="#" onclick="renameChatSession(${session.id}, event)">Rename</a>
+                            <a href="#" onclick="cloneSession(${session.id}, event)">Clone</a>
+                            <a href="#" onclick="archiveSession(${session.id}, event)">Archive</a>
+                            <a href="#" onclick="downloadSession(${session.id}, event)">Download</a>
+                            <hr>
                             <a href="#" onclick="deleteChatSession(${session.id}, event)">Delete</a>
                         </div>
                     </div>
@@ -1800,7 +1902,7 @@
         }
 
         async function createNewChatSession() {
-            const newSession = { name: 'New Chat', history: [], createdAt: Date.now(), updatedAt: Date.now() };
+            const newSession = { name: 'New Chat', history: [], createdAt: Date.now(), updatedAt: Date.now(), pinned: false, archived: false };
             try {
                 const id = await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
                 newSession.id = id;
@@ -1826,11 +1928,11 @@
                 session.updatedAt = Date.now();
                 
                 const sessionElement = document.querySelector(`.session-item[data-session-id='${id}'] .item-name`);
-                if(sessionElement) sessionElement.textContent = session.name;
+                if(sessionElement) sessionElement.textContent = newName;
                 if (id === currentProject.activeSessionId) document.getElementById('chat-title').textContent = newName;
                 updateAndPersistState();
                 dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).catch(err => {
-                    loadAllChatSessions();
+                    renderSessionList();
                 });
             }
         }
@@ -1858,6 +1960,73 @@
                     await createNewChatSession();
                 }
             }
+        }
+        
+        async function togglePinSession(id, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const session = currentProject.chatSessions.find(s => s.id === id);
+            if (!session) return;
+            session.pinned = !session.pinned;
+            session.updatedAt = Date.now();
+            dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).then(() => {
+                renderSessionList();
+                updateAndPersistState();
+            });
+        }
+        
+        async function cloneSession(id, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const sessionToClone = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'get', id);
+            if (!sessionToClone) return;
+
+            const newSession = {
+                ...sessionToClone,
+                name: `${sessionToClone.name} (Copy)`,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                pinned: false,
+                archived: false,
+            };
+            delete newSession.id;
+
+            const newId = await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
+            newSession.id = newId;
+            currentProject.chatSessions.unshift(newSession);
+            renderSessionList();
+            await loadChatSession(newId);
+        }
+
+        async function archiveSession(id, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const session = currentProject.chatSessions.find(s => s.id === id);
+            if (!session) return;
+
+            session.archived = true;
+            session.pinned = false; // Cannot be pinned and archived
+            session.updatedAt = Date.now();
+            
+            dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).then(() => {
+                renderSessionList();
+                updateAndPersistState();
+                 if (currentProject.activeSessionId === id) {
+                    currentProject.activeSessionId = null;
+                    const nextSession = currentProject.chatSessions.find(s => !s.archived);
+                    if (nextSession) {
+                        loadChatSession(nextSession.id);
+                    } else {
+                        createNewChatSession();
+                    }
+                }
+            });
+        }
+
+        function downloadSession(id, event) {
+            event.preventDefault();
+            event.stopPropagation();
+            exportChat(id);
         }
 
         async function saveCurrentChatHistory(history) {
@@ -1908,23 +2077,37 @@
                 hljs.highlightElement(block);
             });
 
+            msgDiv.appendChild(contentDiv);
+
             const actionsDiv = document.createElement('div');
             actionsDiv.className = 'message-actions';
-            
-            const copyBtn = document.createElement('button');
-            copyBtn.innerHTML = '&#128203;';
-            copyBtn.title = 'Copy';
-            copyBtn.onclick = (e) => copyMessageToClipboard(e, index);
             
             const editBtn = document.createElement('button');
             editBtn.innerHTML = '&#9998;';
             editBtn.title = 'Edit';
             editBtn.onclick = () => editMessage(index);
-
-            actionsDiv.appendChild(copyBtn);
             actionsDiv.appendChild(editBtn);
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.innerHTML = '&#128203;';
+            copyBtn.title = 'Copy';
+            copyBtn.onclick = (e) => copyMessageToClipboard(e, index);
+            actionsDiv.appendChild(copyBtn);
 
-            msgDiv.appendChild(contentDiv);
+            if (role === 'assistant') {
+                const regenBtn = document.createElement('button');
+                regenBtn.innerHTML = '&#x21bb;';
+                regenBtn.title = 'Regenerate';
+                regenBtn.onclick = () => regenerateMessage(index);
+                actionsDiv.appendChild(regenBtn);
+            } else if (role === 'user') {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '&#128465;';
+                deleteBtn.title = 'Delete';
+                deleteBtn.onclick = () => deleteMessage(index);
+                actionsDiv.appendChild(deleteBtn);
+            }
+
             if (role !== 'system') {
                 msgDiv.appendChild(actionsDiv);
             }
@@ -1956,8 +2139,26 @@
         
         function editMessage(index){ const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId); if(!session) return; const msg=session.history[index]; if(msg.role==='user'){const newContent=prompt('แก้ไข:',msg.content);if(newContent&&newContent.trim()!==msg.content){session.history=session.history.slice(0,index);renderChatMessages();document.getElementById('chatInput').value=newContent;sendMessage();}}else if(msg.role==='assistant'){const div=document.querySelector(`.message[data-index='${index}'] .message-content`);const isEditing=div.isContentEditable;if(isEditing){div.contentEditable=false;session.history[index].content=div.textContent;saveCurrentChatHistory(session.history);div.style.border='none';}else{div.contentEditable=true;div.style.border='1px solid var(--primary-color)';div.focus();}}}
         
+        function regenerateMessage(index) {
+            const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+            if (!session || index === 0 || session.history[index - 1].role !== 'user') return;
+            session.history = session.history.slice(0, index);
+            renderChatMessages();
+            sendMessage(true); 
+        }
+
+        function deleteMessage(index) {
+            if (!confirm("Are you sure? This will delete this message and all subsequent messages in this chat.")) return;
+            const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+            if (!session) return;
+            session.history = session.history.slice(0, index);
+            renderChatMessages();
+            saveCurrentChatHistory(session.history);
+        }
+        
         // --- Context Inspector & Tokenizer ---
         function getFullSystemPrompt() {
+            if (!currentProject.agentPresets || !currentProject.activeAgent) return "";
             const agent = currentProject.agentPresets[currentProject.activeAgent];
             if (!agent) return "";
             
@@ -2042,11 +2243,37 @@
             return messages;
         }
         
-        async function sendMessage() {
+        async function sendMessage(isRegeneration = false) {
             const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            if ((!message && !attachedFile) || isLoading) return;
+            let userPromptHistory = [];
+            if (!isRegeneration) {
+                const message = input.value.trim();
+                if ((!message && !attachedFile)) return;
 
+                let userMessageContent = [];
+                if (message) userMessageContent.push({ type: 'text', text: message });
+                if (attachedFile) {
+                    if (attachedFile.type.startsWith('image/')) userMessageContent.push({ type: 'image_url', url: attachedFile.data });
+                    else userMessageContent.push({type: 'text', text: `[File Attached: ${attachedFile.name}]`});
+                }
+                if (userMessageContent.length === 1 && userMessageContent[0].type === 'text') {
+                    userMessageContent = userMessageContent[0].text;
+                }
+                userPromptHistory.push({ role: 'user', content: userMessageContent });
+
+                input.value = '';
+                input.style.height = 'auto';
+                removeAttachedFile();
+            } else {
+                const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+                if (session && session.history.length > 0) {
+                     const lastUserMessage = session.history[session.history.length - 1];
+                     if(lastUserMessage.role === 'user') {
+                         // No new message to add, we'll use the existing one
+                     }
+                }
+            }
+            
             const agentName = currentProject.activeAgent;
             const agent = currentProject.agentPresets[agentName];
             if (!agent || !agent.model) {
@@ -2057,23 +2284,12 @@
             const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
             if (!session) { alert("Active chat session not found."); return; }
 
-            const shouldRenameSession = session.name === 'New Chat' && session.history.length === 0;
+            const shouldRenameSession = session.name === 'New Chat' && session.history.length === 0 && !isRegeneration;
             
-            let userMessageContent = [];
-            if (message) userMessageContent.push({ type: 'text', text: message });
-            if (attachedFile) {
-                 if (attachedFile.type.startsWith('image/')) userMessageContent.push({ type: 'image_url', url: attachedFile.data });
-                 else userMessageContent.push({type: 'text', text: `[File Attached: ${attachedFile.name}]`});
+            if(userPromptHistory.length > 0) {
+                session.history.push(...userPromptHistory);
             }
-            if (userMessageContent.length === 1 && userMessageContent[0].type === 'text') {
-                userMessageContent = userMessageContent[0].text;
-            }
-
-            input.value = '';
-            input.style.height = 'auto';
-            removeAttachedFile();
             
-            session.history.push({ role: 'user', content: userMessageContent });
             renderChatMessages();
             await saveCurrentChatHistory(session.history);
             
@@ -2212,7 +2428,7 @@
                     return `${m.role}: ${contentText}`;
                 }).join('\n');
                 
-                const titlePrompt = `Based on the following conversation, create a concise title (3-5 words max). Do not answer the query. Do not add quotes. Just provide the raw title text.\n\nConversation:\n${conversation}\n\nTitle:`;
+                const titlePrompt = `Based on the conversation, generate a concise title (3-5 words) and a single relevant emoji. Respond with a JSON object like {"title": "your title", "emoji": "👍"}.`;
                 
                 const messages = [{ role: "user", content: titlePrompt }];
                 const body = { model: agent.model, messages: messages, stream: false, options: { temperature: 0.2, num_predict: 20 } };
@@ -2224,17 +2440,28 @@
                 if (provider === 'openrouter') {
                     url = 'https://openrouter.ai/api/v1/chat/completions';
                     headers = { 'Authorization': `Bearer ${currentProject.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
+                    body.response_format = { "type": "json_object" };
                 } else {
                     url = `${currentProject.globalSettings.ollamaBaseUrl}/api/chat`;
                     headers = { 'Content-Type': 'application/json' };
+                    body.format = "json";
                 }
 
                 const response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
                 if (!response.ok) return;
 
-                const data = await response.json();
-                const newTitle = (data.choices ? data.choices[0].message.content : data.message.content).trim().replace(/["']/g, "");
-
+                let data = await response.json();
+                let content = data.choices ? data.choices[0].message.content : data.message.content;
+                
+                let newTitleData = {};
+                try {
+                    newTitleData = JSON.parse(content);
+                } catch(e) {
+                    console.error("Failed to parse title JSON:", content);
+                    newTitleData = { title: content.substring(0, 30), emoji: '💬' };
+                }
+                
+                const newTitle = `${newTitleData.emoji || '💬'} ${newTitleData.title || 'Untitled'}`;
                 if (newTitle) await renameChatSession(currentProject.activeSessionId, null, newTitle);
             } catch(e) {
                 console.error("Auto-rename failed:", e);
@@ -2243,14 +2470,15 @@
         
         function stopGeneration(){if(abortController){abortController.abort();}}
         
-        function exportChat() {
-            if (!currentProject.activeSessionId) {
+        function exportChat(sessionId = null) {
+            const idToExport = sessionId || currentProject.activeSessionId;
+            if (!idToExport) {
                 alert('No active chat session to export.');
                 return;
             }
-            const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+            const session = currentProject.chatSessions.find(s => s.id === idToExport);
             if (!session) {
-                alert('Could not find active session data.');
+                alert('Could not find session data to export.');
                 return;
             }
             const sessionName = session.name || 'Untitled_Chat';
@@ -2372,15 +2600,18 @@
         }
         
         function makeSidebarResizable() {
-            const resizer = document.querySelector('.sidebar-resizer');
-            if (!resizer) return;
+            const verticalResizer = document.querySelector('.sidebar-resizer');
+            const horizontalResizer = document.querySelector('.sidebar-horizontal-resizer');
+            const sidebar = document.querySelector('.sidebar');
+            const mainChatArea = document.querySelector('.main-chat-area');
             const sessionsFrame = document.querySelector('.sessions-frame');
             const memoriesFrame = document.querySelector('.memories-frame');
-            
-            let isResizing = false;
 
-            const moveHandler = (e) => {
-                if (!isResizing) return;
+            let isVerticalResizing = false;
+            let isHorizontalResizing = false;
+
+            const verticalMoveHandler = (e) => {
+                if (!isVerticalResizing) return;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
                 const sidebarContent = document.querySelector('.sidebar-content');
                 const sidebarRect = sidebarContent.getBoundingClientRect();
@@ -2390,47 +2621,84 @@
                 if (newHeight < 100) newHeight = 100;
                 if (newHeight > totalHeight - 100) newHeight = totalHeight - 100;
                 
-                const resizerHeight = resizer.offsetHeight;
-                const sessionsHeight = newHeight;
-                const memoriesHeight = totalHeight - newHeight - resizerHeight;
-
-                sessionsFrame.style.flex = `0 1 ${sessionsHeight}px`;
-                memoriesFrame.style.flex = `1 1 ${memoriesHeight}px`;
-
-                localStorage.setItem('sidebarSplitHeight', sessionsHeight);
+                const resizerHeight = verticalResizer.offsetHeight;
+                sessionsFrame.style.flex = `0 1 ${newHeight}px`;
+                memoriesFrame.style.flex = `1 1 ${totalHeight - newHeight - resizerHeight}px`;
             };
 
-            const startResizing = (e) => {
+            const startVerticalResizing = (e) => {
                 e.preventDefault();
-                isResizing = true;
+                isVerticalResizing = true;
                 document.body.style.cursor = 'ns-resize';
                 document.body.style.userSelect = 'none';
-                window.addEventListener('mousemove', moveHandler);
-                window.addEventListener('touchmove', moveHandler, { passive: false });
-                window.addEventListener('mouseup', stopResizing);
-                window.addEventListener('touchend', stopResizing);
+                window.addEventListener('mousemove', verticalMoveHandler);
+                window.addEventListener('touchmove', verticalMoveHandler, { passive: false });
+                window.addEventListener('mouseup', stopVerticalResizing);
+                window.addEventListener('touchend', stopVerticalResizing);
             };
-            
-            const stopResizing = () => {
-                isResizing = false;
+
+            const stopVerticalResizing = () => {
+                if (!isVerticalResizing) return;
+                isVerticalResizing = false;
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
-                window.removeEventListener('mousemove', moveHandler);
-                window.removeEventListener('touchmove', moveHandler);
-                window.removeEventListener('mouseup', stopResizing);
-                window.removeEventListener('touchend', stopResizing);
+                window.removeEventListener('mousemove', verticalMoveHandler);
+                window.removeEventListener('touchmove', verticalMoveHandler);
+                window.removeEventListener('mouseup', stopVerticalResizing);
+                window.removeEventListener('touchend', stopVerticalResizing);
+                localStorage.setItem('sidebarSplitHeight', sessionsFrame.style.flex);
             };
 
-            resizer.addEventListener('mousedown', startResizing);
-            resizer.addEventListener('touchstart', startResizing, { passive: false });
+            verticalResizer.addEventListener('mousedown', startVerticalResizing);
+            verticalResizer.addEventListener('touchstart', startVerticalResizing, { passive: false });
+            
+            const horizontalMoveHandler = (e) => {
+                if (!isHorizontalResizing) return;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                let newWidth = clientX;
 
+                if (newWidth < 200) newWidth = 200; // Min width
+                if (newWidth > 600) newWidth = 600; // Max width
+                
+                sidebar.style.width = `${newWidth}px`;
+                mainChatArea.style.width = `calc(100% - ${newWidth}px)`;
+            };
 
+             const startHorizontalResizing = (e) => {
+                e.preventDefault();
+                isHorizontalResizing = true;
+                document.body.style.cursor = 'ew-resize';
+                document.body.style.userSelect = 'none';
+                window.addEventListener('mousemove', horizontalMoveHandler);
+                window.addEventListener('touchmove', horizontalMoveHandler, { passive: false });
+                window.addEventListener('mouseup', stopHorizontalResizing);
+                window.addEventListener('touchend', stopHorizontalResizing);
+            };
+            
+            const stopHorizontalResizing = () => {
+                if (!isHorizontalResizing) return;
+                isHorizontalResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                window.removeEventListener('mousemove', horizontalMoveHandler);
+                window.removeEventListener('touchmove', horizontalMoveHandler);
+                window.removeEventListener('mouseup', stopHorizontalResizing);
+                window.removeEventListener('touchend', stopHorizontalResizing);
+                localStorage.setItem('sidebarWidth', sidebar.style.width);
+            };
+
+            horizontalResizer.addEventListener('mousedown', startHorizontalResizing);
+            horizontalResizer.addEventListener('touchstart', startHorizontalResizing, { passive: false });
+
+            // Restore saved sizes
             const savedHeight = localStorage.getItem('sidebarSplitHeight');
             if (savedHeight) {
-                const totalHeight = document.querySelector('.sidebar-content').offsetHeight;
-                 const resizerHeight = resizer.offsetHeight;
-                sessionsFrame.style.flex = `0 1 ${savedHeight}px`;
-                memoriesFrame.style.flex = `1 1 ${totalHeight - savedHeight - resizerHeight}px`;
+                sessionsFrame.style.flex = savedHeight;
+            }
+            const savedWidth = localStorage.getItem('sidebarWidth');
+            if (savedWidth) {
+                sidebar.style.width = savedWidth;
+                mainChatArea.style.width = `calc(100% - ${savedWidth})`;
             }
         }
         init();
