@@ -6,9 +6,10 @@ async function init() {
                 const language = hljs.getLanguage(lang) ? lang : 'plaintext';
                 return hljs.highlight(code, { language }).value;
             },
-            gfm: true,
-            breaks: true,
+            gfm: true, breaks: true,
         });
+        
+        document.getElementById('app-version').textContent = APP_VERSION; // [MODIFIED]
         
         await loadLastActiveProject();
         setupEventListeners();
@@ -22,74 +23,63 @@ async function init() {
 
 function setupEventListeners() {
     document.getElementById('chatInput').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { 
-            e.preventDefault(); 
-            sendMessage(); 
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
-
     document.getElementById('chatInput').addEventListener('input', updateContextInspector);
 
+    // --- Global Settings Listeners ---
     document.getElementById('apiKey').addEventListener('change', () => {
          currentProject.globalSettings.apiKey = document.getElementById('apiKey').value;
          updateAndPersistState();
-     });
+    });
     document.getElementById('ollamaBaseUrl').addEventListener('change', () => {
          currentProject.globalSettings.ollamaBaseUrl = document.getElementById('ollamaBaseUrl').value;
          updateAndPersistState();
-     });
-
+    });
     document.getElementById('fontFamilySelect').addEventListener('change', () => {
          currentProject.globalSettings.fontFamilySelect = document.getElementById('fontFamilySelect').value;
          applyFontSettings();
          updateAndPersistState();
-     });
+    });
 
+    // [NEW] Listeners for System Utility Agent Settings
+    document.getElementById('system-utility-model-select').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
+    document.getElementById('system-utility-prompt').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
+    document.getElementById('system-utility-summary-prompt').addEventListener('change', (e) => saveSystemUtilityAgentSettings()); // [NEW]
+    document.getElementById('system-utility-temperature').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
+    document.getElementById('system-utility-topP').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
+    
     document.getElementById('entitySelector').addEventListener('change', loadSelectedEntity);
     
     document.getElementById('chat-actions-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.getElementById('chat-actions-menu').classList.toggle('active');
+        e.stopPropagation(); document.getElementById('chat-actions-menu').classList.toggle('active');
     });
 
     document.getElementById('manual-summarize-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        handleManualSummarize();
+        e.preventDefault(); handleManualSummarize();
         document.getElementById('chat-actions-menu').classList.remove('active');
     });
-
     document.getElementById('clear-summary-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        unloadSummaryFromActiveSession(e);
+        e.preventDefault(); unloadSummaryFromActiveSession(e);
+        document.getElementById('chat-actions-menu').classList.remove('active');
+    });
+    document.getElementById('menu-upload-file-btn').addEventListener('click', (e) => {
+        e.preventDefault(); showImageUploadModal();
         document.getElementById('chat-actions-menu').classList.remove('active');
     });
 
-    document.getElementById('menu-upload-file-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        showImageUploadModal();
-        document.getElementById('chat-actions-menu').classList.remove('active');
-    });
+    // [NEW] Listener for the new Generate Agent Profile button
+    document.getElementById('generate-agent-profile-btn').addEventListener('click', generateAgentProfile);
     
     window.addEventListener('beforeunload', (event) => {
-        if (isDirty) {
-            event.preventDefault();
-            event.returnValue = '';
-        }
+        if (isDirty) { event.preventDefault(); event.returnValue = ''; }
     });
 
-    // [MODIFIED] Global click listener to clean up everything
     document.addEventListener('click', (event) => {
-        // Close sidebar dropdowns if click is outside
         if (!event.target.closest('.dropdown')) {
-            document.querySelectorAll('.dropdown.open').forEach(d => {
-                d.classList.remove('open');
-            });
-            // CRITICAL FIX: Also remove the z-index class from any item
-            document.querySelectorAll('.item.z-index-front').forEach(i => {
-                i.classList.remove('z-index-front');
-            });
+            document.querySelectorAll('.dropdown.open').forEach(d => { d.classList.remove('open'); });
+            document.querySelectorAll('.item.z-index-front').forEach(i => { i.classList.remove('z-index-front'); });
         }
-        // Close chat actions menu if click is outside
         if (!event.target.closest('#chat-actions-container')) {
             document.getElementById('chat-actions-menu').classList.remove('active');
         }

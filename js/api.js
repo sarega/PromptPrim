@@ -1,5 +1,6 @@
 // --- API & LLM Communication ---
 
+// [REFACTORED] This function now calls populateModelSelectors after fetching.
 async function loadAllProviderModels() {
     updateStatus('กำลังโหลด models...', 'loading');
     const apiKey = document.getElementById('apiKey').value.trim();
@@ -22,6 +23,13 @@ async function loadAllProviderModels() {
     allProviderModels = results.flat().sort((a, b) => a.name.localeCompare(b.name));
     currentProject.globalSettings.allModels = allProviderModels;
     
+    // [NEW] Call the UI function to populate all model dropdowns with the new list.
+    populateModelSelectors();
+    
+    // After populating, make sure the correct value is set for the system utility agent
+    const sysAgent = currentProject.globalSettings.systemUtilityAgent;
+    document.getElementById('system-utility-model-select').value = sysAgent.model;
+
     if (allProviderModels.length > 0) {
          finalStatus = { message: `โหลด ${allProviderModels.length} models เรียบร้อยแล้ว`, state: 'connected' };
     }

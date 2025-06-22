@@ -188,26 +188,59 @@ function renderEntitySelector() {
 }
 
 // --- Editor Modals ---
-function showAgentEditor(isEditing = false, agentName = null) {
-    const modal = document.getElementById('agent-editor-modal');
-    const title = document.getElementById('agent-modal-title');
-    const nameInput = document.getElementById('agent-name-input');
-    const iconInput = document.getElementById('agent-icon-input'); 
-    const modelSelect = document.getElementById('agent-model-select');
-    
-    modelSelect.innerHTML = '<option value="">-- Select a Model --</option>';
+// [NEW] Add this new function to ui.js
+// This function will populate all model select dropdowns in the UI.
+function populateModelSelectors() {
+    const selectors = [
+        document.getElementById('agent-model-select'),
+        document.getElementById('system-utility-model-select')
+    ];
+
     const openrouterGroup = document.createElement('optgroup');
     openrouterGroup.label = 'OpenRouter';
     const ollamaGroup = document.createElement('optgroup');
     ollamaGroup.label = 'Ollama';
-    
+
     allProviderModels.forEach(model => {
         const option = new Option(model.name, model.id);
-        if (model.provider === 'openrouter') openrouterGroup.appendChild(option);
-        else ollamaGroup.appendChild(option);
+        if (model.provider === 'openrouter') {
+            openrouterGroup.appendChild(option);
+        } else {
+            ollamaGroup.appendChild(option);
+        }
     });
-    if (openrouterGroup.childElementCount > 0) modelSelect.appendChild(openrouterGroup);
-    if (ollamaGroup.childElementCount > 0) modelSelect.appendChild(ollamaGroup);
+
+    selectors.forEach(selector => {
+        if (!selector) return;
+        const currentValue = selector.value; // Save the current value
+        
+        selector.innerHTML = '<option value="">-- Select a Model --</option>'; // Clear existing options
+        
+        if (openrouterGroup.childElementCount > 0) {
+            selector.appendChild(openrouterGroup.cloneNode(true));
+        }
+        if (ollamaGroup.childElementCount > 0) {
+            selector.appendChild(ollamaGroup.cloneNode(true));
+        }
+
+        selector.value = currentValue; // Restore the saved value if it still exists in the new list
+    });
+}
+
+// [REFACTORED] Replace the old showAgentEditor function with this simplified version
+function showAgentEditor(isEditing = false, agentName = null) {
+    const modal = document.getElementById('agent-editor-modal');
+    const title = document.getElementById('agent-modal-title');
+    const nameInput = document.getElementById('agent-name-input');
+    const iconInput = document.getElementById('agent-icon-input');
+    
+    // The model selector is now populated globally, so we don't need to do it here anymore.
+    // We just need to set the correct value.
+
+    // [NEW] Set the name of the model powering the enhancer
+    const enhancerModelNameSpan = document.getElementById('enhancer-model-name');
+    const utilityAgent = currentProject.globalSettings.systemUtilityAgent;
+    enhancerModelNameSpan.textContent = allProviderModels.find(m => m.id === utilityAgent.model)?.name || utilityAgent.model || 'Not Configured';
 
     if (isEditing && agentName) {
         editingAgentName = agentName;
@@ -216,7 +249,6 @@ function showAgentEditor(isEditing = false, agentName = null) {
         
         title.textContent = `Edit Agent: ${editingAgentName}`;
         nameInput.value = editingAgentName;
-        nameInput.disabled = false;
         
         Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
             const key = ALL_AGENT_SETTINGS_IDS[elId];
@@ -232,7 +264,6 @@ function showAgentEditor(isEditing = false, agentName = null) {
         editingAgentName = null;
         title.textContent = "Create New Agent";
         nameInput.value = "";
-        nameInput.disabled = false;
         
          Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
             const key = ALL_AGENT_SETTINGS_IDS[elId];
@@ -243,10 +274,10 @@ function showAgentEditor(isEditing = false, agentName = null) {
             else element.value = value;
         });
         iconInput.value = '';
+        document.getElementById('enhancer-prompt-input').value = '';
     }
     modal.style.display = 'flex';
 }
-
 function hideAgentEditor() {
     document.getElementById('agent-editor-modal').style.display = 'none';
     editingAgentName = null;
@@ -431,11 +462,13 @@ function renderSessionList() {
     archivedSection.style.display = archivedSessions.length > 0 ? 'block' : 'none';
 }
 
-// [MODIFIED] Corrected onclick handlers to use quotes for string IDs
+// [REFACTORED] Replace the entire existing createSessionElement function with this one.
 function createSessionElement(session) {
     const item = document.createElement('div');
     item.className = `item session-item ${session.id === currentProject.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
     item.dataset.sessionId = session.id;
+
+    // Main item click handler
     item.onclick = () => {
         if (currentProject.activeSessionId !== session.id) {
             loadChatSession(session.id);
@@ -444,29 +477,64 @@ function createSessionElement(session) {
             toggleMobileSidebar();
         }
     };
-    
+
     let icon = '❔';
-    if(session.linkedEntity) {
+    if (session.linkedEntity) {
         const agentPreset = currentProject.agentPresets[session.linkedEntity.name];
         icon = session.linkedEntity?.type === 'group' ? '🤝' : (agentPreset?.icon || '🤖');
     }
 
-    item.innerHTML = `
-        <div class="item-header">
-            <span class="item-name"><span class="item-icon">${icon}</span>${session.pinned ? '📌 ' : ''}${session.name}</span>
-             <div class="item-actions dropdown align-right">
-                <button class="btn-icon" onclick="toggleDropdown(event)"> &#8942; </button>
-                <div class="dropdown-content">
-                    <a href="#" onclick="togglePinSession('${session.id}', event)">${session.pinned ? 'Unpin' : 'Pin'}</a>
-                    <a href="#" onclick="renameChatSession('${session.id}', event)">Rename</a>
-                    <a href="#" onclick="cloneSession('${session.id}', event)">Clone</a>
-                    <a href="#" onclick="archiveSession('${session.id}', event)">${session.archived ? 'Unarchive' : 'Archive'}</a>
-                    <a href="#" onclick="downloadSession('${session.id}', event)">Download</a>
-                    <hr>
-                    <a href="#" onclick="deleteChatSession('${session.id}', event)">Delete</a>
-                </div>
-            </div>
-        </div>`;
+    // --- Build elements programmatically to avoid inline event handler issues ---
+    
+    const itemHeader = document.createElement('div');
+    itemHeader.className = 'item-header';
+
+    const itemName = document.createElement('span');
+    itemName.className = 'item-name';
+    itemName.innerHTML = `<span class="item-icon">${icon}</span>${session.pinned ? '📌 ' : ''}${session.name}`;
+
+    const itemActions = document.createElement('div');
+    itemActions.className = 'item-actions dropdown align-right';
+
+    const menuButton = document.createElement('button');
+    menuButton.className = 'btn-icon';
+    menuButton.innerHTML = ' &#8942; ';
+    menuButton.onclick = toggleDropdown; // Assign function reference directly
+
+    const dropdownContent = document.createElement('div');
+    dropdownContent.className = 'dropdown-content';
+
+    // Helper function to create action links
+    const createActionLink = (text, handlerFunc) => {
+        const a = document.createElement('a');
+        a.href = '#';
+        a.textContent = text;
+        a.onclick = (event) => {
+            // This correctly captures the real event object
+            handlerFunc(session.id, event);
+        };
+        return a;
+    };
+    
+    // Create and append all action links
+    dropdownContent.appendChild(createActionLink(session.pinned ? 'Unpin' : 'Pin', togglePinSession));
+    dropdownContent.appendChild(createActionLink('Rename', renameChatSession));
+    dropdownContent.appendChild(createActionLink('Clone', cloneSession));
+    dropdownContent.appendChild(createActionLink(session.archived ? 'Unarchive' : 'Archive', archiveSession));
+    dropdownContent.appendChild(createActionLink('Download', downloadSession));
+
+    const hr = document.createElement('hr');
+    dropdownContent.appendChild(hr);
+
+    dropdownContent.appendChild(createActionLink('Delete', deleteChatSession));
+
+    // Assemble the element
+    itemActions.appendChild(menuButton);
+    itemActions.appendChild(dropdownContent);
+    itemHeader.appendChild(itemName);
+    itemHeader.appendChild(itemActions);
+    item.appendChild(itemHeader);
+
     return item;
 }
 
@@ -537,6 +605,49 @@ function renderChatMessages(){
         clearBtn.style.display = 'none';
     }
 }
+
+// [NEW] This function finds all code blocks and adds a copy button.
+function enhanceCodeBlocks(messageElement) {
+    const codeBlocks = messageElement.querySelectorAll('pre');
+
+    codeBlocks.forEach(pre => {
+        // Avoid adding a button if one already exists
+        if (pre.parentNode.classList.contains('code-block-wrapper')) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+
+        // Move the <pre> element inside the new wrapper
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-code-btn';
+        copyButton.textContent = 'Copy';
+        wrapper.appendChild(copyButton);
+
+        copyButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const code = pre.querySelector('code');
+            if (code) {
+                navigator.clipboard.writeText(code.textContent).then(() => {
+                    copyButton.textContent = 'Copied!';
+                    copyButton.classList.add('copied');
+                    setTimeout(() => {
+                        copyButton.textContent = 'Copy';
+                        copyButton.classList.remove('copied');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Failed to copy code: ', err);
+                    copyButton.textContent = 'Error';
+                });
+            }
+        });
+    });
+}
+
 function addMessageToUI(role, content, index, speakerName = null) {
     const container = document.getElementById('chatMessages');
     const msgDiv = document.createElement('div');
@@ -562,6 +673,8 @@ function addMessageToUI(role, content, index, speakerName = null) {
         if (part.type === 'text') {
             const textSpan = document.createElement('span');
             if (role === 'assistant' && useMarkdown) {
+                 // [REVERTED] No longer forcefully replacing newlines.
+                 // Let marked.js and CSS handle the display.
                  textSpan.innerHTML = marked.parse(part.text);
             } else {
                  textSpan.textContent = part.text;
@@ -577,6 +690,9 @@ function addMessageToUI(role, content, index, speakerName = null) {
     contentDiv.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block);
     });
+
+    enhanceCodeBlocks(contentDiv);
+
     msgDiv.appendChild(contentDiv);
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'message-actions';
@@ -610,6 +726,7 @@ function addMessageToUI(role, content, index, speakerName = null) {
     container.scrollTop = container.scrollHeight;
     return msgDiv;
 }
+
 function showFilePreview() {
     if (!attachedFile) return;
     const container = document.getElementById('file-preview-container');
@@ -763,5 +880,34 @@ function scrollToLinkedEntity(type, name) {
             behavior: 'smooth',
             block: 'center'
         });
+    }
+}
+
+function renderSummarizationPresetSelector() {
+    const selector = document.getElementById('system-utility-summary-preset-select');
+    if (!selector) return;
+
+    const presets = currentProject.globalSettings.summarizationPromptPresets || {};
+    const currentPromptText = document.getElementById('system-utility-summary-prompt').value;
+    let matchingPresetName = null;
+
+    selector.innerHTML = ''; // Clear old options
+
+    // Add presets from the project settings
+    for (const presetName in presets) {
+        selector.add(new Option(presetName, presetName));
+        if (presets[presetName].trim() === currentPromptText.trim()) {
+            matchingPresetName = presetName;
+        }
+    }
+
+    // Add a "Custom" option if the current text doesn't match any preset
+    if (!matchingPresetName) {
+        const customOption = new Option('--- Custom ---', 'custom', true, true);
+        customOption.disabled = true; // Make it not selectable by user click
+        selector.add(customOption);
+        selector.value = 'custom';
+    } else {
+        selector.value = matchingPresetName;
     }
 }
