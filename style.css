@@ -1406,3 +1406,17 @@ body.dark-mode .sidebar-resizer:hover {
     background: var(--primary-color);
     opacity: 0.6;
 }
+
+/* [FIX] Corrects the text color and ensures the bubble expands during editing in Dark Mode */
+
+/* 1. Correct Text Color in User Edit Textarea for Dark Mode */
+body.dark-mode .message.user .inline-edit-textarea {
+    background-color: rgba(0, 0, 0, 0.2); /* Slightly darker, transparent background */
+    color: #f7fafc; /* Force text to be light */
+    border-color: #7f9cf5; /* A light blue border to indicate editing */
+}
+
+/* 2. Ensure bubble expansion works correctly */
+.message.user.is-editing {
+    max-width: 95% !important; /* Use !important to ensure this rule wins */
+}
