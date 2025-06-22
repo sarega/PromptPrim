@@ -65,6 +65,7 @@ function initializeFirstProject() {
         agentGroups: {},
         memories: JSON.parse(JSON.stringify(defaultMemories)),
         chatSessions: [],
+        summaryLogs: [],
         globalSettings: {
             fontFamilySelect: "'Sarabun', sans-serif",
             apiKey: "",
@@ -82,43 +83,35 @@ async function loadProjectData(projectData, overwriteDb = false) {
     } else if (!db) {
         await openDb(projectData.id);
     }
-
     currentProject = projectData;
+    if (!currentProject.summaryLogs) currentProject.summaryLogs = [];
     localStorage.setItem('lastActiveProjectId', currentProject.id);
-
     if (Array.isArray(currentProject.chatSessions)) {
         currentProject.chatSessions.forEach(session => {
             if (!session.groupChatState) session.groupChatState = { isRunning: false };
-            if (!session.summaryState) session.summaryState = { lastSummary: null, summarizedUntilIndex: 0 };
+            if (!session.summaryState) session.summaryState = {};
         });
     }
-
     if (overwriteDb) {
         await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
         const transaction = db.transaction([SESSIONS_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
         const sessionStore = transaction.objectStore(SESSIONS_STORE_NAME);
         const metadataStore = transaction.objectStore(METADATA_STORE_NAME);
-
         for (const session of projectData.chatSessions) {
             sessionStore.put(session);
         }
         const metadata = { ...projectData };
         delete metadata.chatSessions;
         metadataStore.put({ id: METADATA_KEY, ...metadata });
-
         await new Promise((resolve, reject) => {
             transaction.oncomplete = resolve;
             transaction.onerror = reject;
         });
     }
-
     document.getElementById('project-title').textContent = currentProject.name;
     await loadGlobalSettings();
     await loadAllProviderModels();
-    renderAgentPresets();
-    renderAgentGroups();
-
-    renderSessionList();
+    renderAllSidebarLists();
     if (currentProject.chatSessions.length > 0) {
          const sortedSessions = [...currentProject.chatSessions].filter(s => !s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
          if (sortedSessions.length > 0) {
@@ -144,9 +137,7 @@ async function handleProjectSaveConfirm(projectNameFromDirectSave = null) {
         return false;
     }
     currentProject.name = newName;
-
     await updateAndPersistState();
-
     try {
         const dataStr = JSON.stringify(currentProject, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
@@ -172,23 +163,6 @@ async function _loadProjectFromFile(file) {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (data && data.chatSessions) {
-                data.chatSessions.forEach(session => {
-                    if (session.hasOwnProperty('linkedAgentName') && !session.hasOwnProperty('linkedEntity')) {
-                        session.linkedEntity = { type: 'agent', name: session.linkedAgentName };
-                        delete session.linkedAgentName;
-                    }
-                    if (!session.groupChatState) session.groupChatState = { isRunning: false };
-                    if (!session.summaryState) session.summaryState = { lastSummary: null, summarizedUntilIndex: 0 };
-                });
-                if(data.hasOwnProperty('activeAgent') && !data.hasOwnProperty('activeEntity')) {
-                   data.activeEntity = { type: 'agent', name: data.activeAgent };
-                   delete data.activeAgent;
-                }
-            }
-            if(!data.agentGroups) {
-                data.agentGroups = {};
-            }
             if (data && data.id && data.name && data.agentPresets) {
                 await loadProjectData(data, true);
                 alert(`Project '${currentProject.name}' loaded successfully!`);
@@ -216,49 +190,27 @@ async function loadSelectedEntity() {
     const selector = document.getElementById('entitySelector');
     const [type, ...nameParts] = selector.value.split(/_(.*)/s);
     const name = nameParts.join('_');
-    currentProject.activeEntity = { type, name };
-    const activeSession = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
-    if (activeSession) {
-        if (activeSession.groupChatState) {
-            activeSession.groupChatState.isRunning = false;
-        }
-        activeSession.linkedEntity = { ...currentProject.activeEntity };
-        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', activeSession);
-    }
-    loadAndRenderMemories();
-    renderSessionList();
-    updateAndPersistState();
+    await selectEntity(type, name);
 }
 
 async function selectEntity(type, name) {
-    // 1. อัปเดต Active Entity ของโปรเจกต์ (เหมือนเดิม)
     currentProject.activeEntity = { type, name };
-
-    // 2. [ส่วนที่เพิ่มเข้ามา] ค้นหา Session ที่กำลังเปิดอยู่
     const activeSession = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
-
-    // 3. [ส่วนที่เพิ่มเข้ามา] ถ้าเจอ Session ให้ผูก Entity ใหม่เข้าไป แล้วบันทึก
     if (activeSession) {
-        // หยุดการทำงานของ Group Chat ถ้ากำลังทำงานอยู่
         if (activeSession.groupChatState) {
             activeSession.groupChatState.isRunning = false;
         }
-        // ผูก Entity ใหม่เข้ากับ Session
         activeSession.linkedEntity = { ...currentProject.activeEntity };
-
-        // อัปเดตข้อมูล Session ในฐานข้อมูล
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', activeSession);
     }
-
-    // 4. อัปเดต UI ทั้งหมดให้สอดคล้องกัน
-    renderEntitySelector();     // อัปเดต Dropdown บน Header
-    loadAndRenderMemories();    // โหลด Memories ของ Agent ใหม่
-    updateAndPersistState();    // บันทึกสถานะโปรเจกต์
-
-    // [ส่วนที่เพิ่มเข้ามา] สั่งให้ re-render list ทั้งหมดเพื่อแสดง highlight ใหม่
-    renderSessionList();
-    renderAgentPresets();
-    renderAgentGroups();
+    renderEntitySelector();
+    updateAndPersistState();
+    renderAllSidebarLists();
+    if (currentProject.activeEntity.type === 'agent') {
+        scrollToLinkedEntity('agent', name);
+    } else if (currentProject.activeEntity.type === 'group') {
+        scrollToLinkedEntity('group', name);
+    }
 }
 
 function saveAgentPreset() {
@@ -266,17 +218,25 @@ function saveAgentPreset() {
     const newName = nameInput.value.trim();
     const oldName = editingAgentName;
     if (!newName) { alert("Please enter a name for the agent."); return; }
+    
     const newAgentSettings = {};
     Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
         const key = ALL_AGENT_SETTINGS_IDS[elId];
         if (key === 'name') return;
         const element = document.getElementById(elId);
+        if (!element) return;
+
         let value;
         if (element.type === 'checkbox') value = element.checked;
         else if (element.type === 'number') value = parseFloat(element.value) || 0;
-        else value = element.value;
+        else value = element.value.trim();
         newAgentSettings[key] = value;
     });
+
+    if (!newAgentSettings.icon) {
+        newAgentSettings.icon = '🤖';
+    }
+
     if (oldName && oldName !== newName) {
         if (currentProject.agentPresets[newName]) { alert(`An agent named '${newName}' already exists.`); return; }
         const agentData = currentProject.agentPresets[oldName];
@@ -301,11 +261,12 @@ function saveAgentPreset() {
     } else {
         if (currentProject.agentPresets[newName]) { alert("An agent with this name already exists."); return; }
         newAgentSettings.activeMemories = [];
+        newAgentSettings.icon = newAgentSettings.icon || RANDOMLY_ASSIGNED_ICONS[Math.floor(Math.random() * RANDOMLY_ASSIGNED_ICONS.length)];
         currentProject.agentPresets[newName] = newAgentSettings;
         currentProject.activeEntity = { type: 'agent', name: newName };
     }
-    renderAgentPresets();
-    renderAgentGroups();
+    
+    renderAllSidebarLists();
     renderEntitySelector();
     updateAndPersistState();
     hideAgentEditor();
@@ -329,8 +290,7 @@ function deleteAgentPreset(agentNameToDelete) {
         if (currentProject.activeEntity.type === 'agent' && currentProject.activeEntity.name === agentNameToDelete) {
             currentProject.activeEntity = {type: 'agent', name: Object.keys(currentProject.agentPresets)[0]};
         }
-        renderAgentPresets();
-        renderAgentGroups();
+        renderAllSidebarLists();
         renderEntitySelector();
         updateAndPersistState();
     }
@@ -342,19 +302,16 @@ function saveAgentGroup() {
     if (!newName) { alert("Please enter a name for the group."); return; }
     if (!oldName && currentProject.agentGroups[newName]) { alert("A group with this name already exists."); return; }
     if(oldName && newName !== oldName && currentProject.agentGroups[newName]) { alert("A group with this name already exists."); return; }
-
     const memberItems = document.querySelectorAll('#group-member-list .agent-sortable-item');
     const members = Array.from(memberItems)
         .filter(item => item.querySelector('input[type="checkbox"]').checked)
         .map(item => item.dataset.agentName);
-
     if (members.length === 0) { alert("A group must have at least one member."); return; }
     const moderatorAgent = document.getElementById('group-moderator-select').value;
     if (!moderatorAgent || !members.includes(moderatorAgent)) {
         alert("Please select a valid moderator from the group members.");
         return;
     }
-
     const newGroupData = {
         members: members,
         moderatorAgent: moderatorAgent,
@@ -362,7 +319,6 @@ function saveAgentGroup() {
         maxTurns: parseInt(document.getElementById('group-max-turns-input').value, 10) || 4,
         summarizationTokenThreshold: parseInt(document.getElementById('group-summarization-threshold-input').value, 10) ?? 3000
     };
-
     if (oldName && oldName !== newName) {
         delete currentProject.agentGroups[oldName];
         currentProject.chatSessions.forEach(session => {
@@ -375,12 +331,11 @@ function saveAgentGroup() {
         }
     }
     currentProject.agentGroups[newName] = newGroupData;
-    renderAgentGroups();
+    renderAllSidebarLists();
     renderEntitySelector();
     updateAndPersistState();
     hideAgentGroupEditor();
 }
-
 
 function deleteAgentGroup(groupName) {
      if (!groupName) return;
@@ -394,7 +349,7 @@ function deleteAgentGroup(groupName) {
          if (currentProject.activeEntity.type === 'group' && currentProject.activeEntity.name === groupName) {
              currentProject.activeEntity = {type: 'agent', name: Object.keys(currentProject.agentPresets)[0]};
          }
-         renderAgentGroups();
+         renderAllSidebarLists();
          renderEntitySelector();
          updateAndPersistState();
      }
@@ -412,7 +367,6 @@ function toggleMemory(name, event) {
     loadAndRenderMemories();
     updateAndPersistState();
 }
-
 function saveMemory() {
     const n=document.getElementById('memory-name-input').value.trim();
     const c=document.getElementById('memory-content-input').value.trim();
@@ -424,7 +378,6 @@ function saveMemory() {
     hideMemoryEditor();
     updateAndPersistState();
 }
-
 function deleteMemory(index, e) {
     e.stopPropagation();
     if(confirm(`ลบ '${currentProject.memories[index].name}'?`)){
@@ -442,6 +395,7 @@ function deleteMemory(index, e) {
 // --- Chat Session Handlers ---
 async function createNewChatSession() {
     const newSession = {
+        id: `sid_${Date.now()}`,
         name: 'New Chat',
         history: [],
         createdAt: Date.now(),
@@ -450,27 +404,24 @@ async function createNewChatSession() {
         archived: false,
         linkedEntity: { ...currentProject.activeEntity },
         groupChatState: { isRunning: false },
-        summaryState: { lastSummary: null, summarizedUntilIndex: 0 }
+        summaryState: { activeSummaryId: null, summarizedUntilIndex: 0 }
     };
     try {
-        const id = await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
-        newSession.id = id;
+        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
         currentProject.chatSessions.unshift(newSession);
-        renderSessionList();
-        await loadChatSession(id);
+        await loadChatSession(newSession.id);
         updateAndPersistState();
     } catch (error) {
         console.error("Failed to create new session in DB:", error);
         alert("เกิดข้อผิดพลาดในการสร้าง Chat ใหม่");
     }
 }
-
 async function loadChatSession(id) {
     if (isLoading) return;
     const session = currentProject.chatSessions.find(s => s.id === id);
     if (session) {
         if (!session.groupChatState) session.groupChatState = { isRunning: false };
-        if (!session.summaryState) session.summaryState = { lastSummary: null, summarizedUntilIndex: 0 };
+        if (!session.summaryState) session.summaryState = { activeSummaryId: null, summarizedUntilIndex: 0 };
         currentProject.activeSessionId = id;
         if (session.linkedEntity?.type === 'agent' && currentProject.agentPresets[session.linkedEntity.name]) {
             currentProject.activeEntity = { ...session.linkedEntity };
@@ -480,29 +431,15 @@ async function loadChatSession(id) {
             currentProject.activeEntity = { type: 'agent', name: Object.keys(currentProject.agentPresets)[0] };
             session.linkedEntity = { ...currentProject.activeEntity };
         }
-
-        // =================================================================
-        // [เพิ่มส่วนที่ 1] สั่งให้ Sidebar เลื่อนไปยัง Agent/Group ที่ผูกกันอยู่
-        // =================================================================
         if (currentProject.activeEntity) {
             scrollToLinkedEntity(currentProject.activeEntity.type, currentProject.activeEntity.name);
         }
-        
         document.getElementById('chat-title').textContent = session.name;
         renderEntitySelector();
-        loadAndRenderMemories();
         renderChatMessages();
-
-        // =================================================================
-        // [เพิ่มส่วนที่ 2] สั่งให้วาดรายการ Agent และ Group ใหม่เพื่ออัปเดต Highlight
-        // =================================================================
-        renderAgentPresets();
-        renderAgentGroups();
-
-        renderSessionList();
+        renderAllSidebarLists();
     }
 }
-
 async function renameChatSession(id, e, newNamePrompt = null) {
     if (e) e.stopPropagation();
     const session = currentProject.chatSessions.find(s => s.id === id);
@@ -511,54 +448,66 @@ async function renameChatSession(id, e, newNamePrompt = null) {
     if (newName && newName.trim()) {
         session.name = newName.trim();
         session.updatedAt = Date.now();
-        const sessionElement = document.querySelector(`.session-item[data-session-id='${id}'] .item-name`);
-        if(sessionElement) {
-            const icon = session.linkedEntity?.type === 'group' ? '🤝' : '🤖';
-            sessionElement.innerHTML = `<span class="item-icon">${icon}</span>${session.pinned ? '📌 ' : ''}${newName}`;
-        }
+        renderAllSidebarLists();
         if (id === currentProject.activeSessionId) document.getElementById('chat-title').textContent = newName;
         updateAndPersistState();
-        dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).catch(err => { renderSessionList(); });
+        dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
     }
 }
-
 async function deleteChatSession(id, e) {
     if (e) e.stopPropagation();
     if (!confirm("ลบ Chat?")) return;
     const sessionIndex = currentProject.chatSessions.findIndex(s => s.id === id);
     if (sessionIndex === -1) return;
     currentProject.chatSessions.splice(sessionIndex, 1);
-    renderSessionList();
-    updateAndPersistState();
-    dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'delete', id).catch(err => { loadAllChatSessions(); });
-    if (currentProject.activeSessionId === id) {
-        currentProject.activeSessionId = null;
-        const nextSession = currentProject.chatSessions.find(s => !s.archived) || currentProject.chatSessions[0];
-        if (nextSession) { await loadChatSession(nextSession.id); }
-        else { await createNewChatSession(); }
-    }
+    
+    dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'delete', id).then(async () => {
+        if (currentProject.activeSessionId === id) {
+            currentProject.activeSessionId = null;
+            const nextSession = currentProject.chatSessions.find(s => !s.archived) || currentProject.chatSessions[0];
+            if (nextSession) { await loadChatSession(nextSession.id); }
+            else { await createNewChatSession(); }
+        }
+        await updateAndPersistState();
+        renderAllSidebarLists();
+    });
 }
-
 async function togglePinSession(id, event) {
     event.preventDefault(); event.stopPropagation();
     const session = currentProject.chatSessions.find(s => s.id === id);
     if (!session) return;
     session.pinned = !session.pinned;
     session.updatedAt = Date.now();
-    dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).then(() => { renderSessionList(); updateAndPersistState(); });
+    dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).then(() => { renderAllSidebarLists(); updateAndPersistState(); });
 }
 
 async function cloneSession(id, event) {
-    event.preventDefault(); event.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
+
     const sessionToClone = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'get', id);
-    if (!sessionToClone) return;
-    const newSession = { ...sessionToClone, name: `${sessionToClone.name} (Copy)`, createdAt: Date.now(), updatedAt: Date.now(), pinned: false, archived: false, };
-    delete newSession.id;
-    const newId = await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
-    newSession.id = newId;
-    currentProject.chatSessions.unshift(newSession);
-    renderSessionList();
-    await loadChatSession(newId);
+    if (!sessionToClone) {
+        alert("Error: Could not find session to clone.");
+        return;
+    }
+
+    const newSession = JSON.parse(JSON.stringify(sessionToClone));
+    newSession.id = `sid_${Date.now()}`;
+    newSession.name = `${sessionToClone.name} (Copy)`;
+    newSession.createdAt = Date.now();
+    newSession.updatedAt = Date.now();
+    newSession.pinned = false;
+    newSession.archived = false;
+
+    try {
+        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
+        currentProject.chatSessions.unshift(newSession);
+        await loadChatSession(newSession.id);
+        await updateAndPersistState();
+    } catch (error) {
+        console.error("Failed to save cloned session:", error);
+        alert("An error occurred while cloning the session.");
+    }
 }
 
 async function archiveSession(id, event) {
@@ -569,7 +518,7 @@ async function archiveSession(id, event) {
     if (session.archived) { session.pinned = false; }
     session.updatedAt = Date.now();
     dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session).then(() => {
-        renderSessionList();
+        renderAllSidebarLists();
         updateAndPersistState();
          if (currentProject.activeSessionId === id && session.archived) {
             currentProject.activeSessionId = null;
@@ -579,9 +528,7 @@ async function archiveSession(id, event) {
         }
     });
 }
-
 function downloadSession(id, event) { event.preventDefault(); event.stopPropagation(); exportChat(id); }
-
 async function saveCurrentChatHistory(history) {
     if (!currentProject.activeSessionId) return;
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
@@ -607,26 +554,20 @@ function copyMessageToClipboard(event, index) {
         setTimeout(() => { btn.innerHTML = '&#128203;'; }, 1500);
     }).catch(err => console.error('Async clipboard write failed:', err));
 }
-
 function editMessage(index){ const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId); if(!session) return; const msg=session.history[index]; if(msg.role==='user'){const newContent=prompt('แก้ไข:',msg.content);if(newContent&&newContent.trim()!==msg.content){session.history=session.history.slice(0,index);renderChatMessages();document.getElementById('chatInput').value=newContent;sendMessage();}}else if(msg.role==='assistant'){const div=document.querySelector(`.message[data-index='${index}'] .message-content`);const isEditing=div.isContentEditable;if(isEditing){div.contentEditable=false;session.history[index].content=div.textContent;saveCurrentChatHistory(session.history);div.style.border='none';}else{div.contentEditable=true;div.style.border='1px solid var(--primary-color)';div.focus();}}}
-
 function regenerateMessage(index) {
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     if (!session || index >= session.history.length) return;
-
     stopGeneration();
-
     const targetMessage = session.history[index];
     const group = currentProject.agentGroups[currentProject.activeEntity.name];
-
     if (currentProject.activeEntity.type === 'group' && group && targetMessage.speaker) {
         const lastUserIndex = session.history.slice(0, index).findLastIndex(m => m.role === 'user');
         if (lastUserIndex === -1) return;
         session.history.splice(lastUserIndex + 1);
         renderChatMessages();
         sendMessage(false);
-
-    } else { // Single agent regeneration
+    } else { 
         let lastUserIndex = -1;
         for (let i = index; i >= 0; i--) {
             if (session.history[i].role === 'user') {
@@ -640,8 +581,6 @@ function regenerateMessage(index) {
         sendMessage(true);
     }
 }
-
-
 function deleteMessage(index) {
     if (!confirm("Are you sure? This will delete this message and all subsequent messages in this chat.")) return;
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
@@ -665,9 +604,7 @@ function getFullSystemPrompt(agentName) {
     }
     return finalSystemContent.trim();
 }
-
 function estimateTokens(text) { return Math.ceil((text || "").length / 3); }
-
 function calculateHistoryTokens(historyArray) {
     let totalTokens = 0;
     for (const msg of historyArray) {
@@ -676,9 +613,7 @@ function calculateHistoryTokens(historyArray) {
             textContent = msg.content;
         } else if (Array.isArray(msg.content)) {
             const textPart = msg.content.find(p => p.type === 'text');
-            if (textPart) {
-                textContent = textPart.text;
-            }
+            if (textPart) textContent = textPart.text;
         }
         if (msg.role !== 'system' || !textContent.startsWith('[ ระบบได้ทำการสรุป')) {
              totalTokens += estimateTokens(textContent);
@@ -686,33 +621,27 @@ function calculateHistoryTokens(historyArray) {
     }
     return totalTokens;
 }
-
 function buildPayloadMessages(history, targetAgentName, session) { 
     const messages = [];
     const finalSystemPrompt = getFullSystemPrompt(targetAgentName);
     if (finalSystemPrompt) { messages.push({ role: 'system', content: finalSystemPrompt }); }
-
     const agent = currentProject.agentPresets[targetAgentName];
     if (!agent) return messages;
-
-    let historyToSend = history;
-
-    if (session && session.summaryState && session.summaryState.lastSummary) {
-        historyToSend = [];
-        
-        const summaryMessage = {
-            role: "system",
-            content: `[This is a summary of the preceding conversation to preserve context: ${session.summaryState.lastSummary}]`
-        };
-        historyToSend.push(summaryMessage);
-
-        const remainingHistory = history.slice(session.summaryState.summarizedUntilIndex);
-        historyToSend.push(...remainingHistory);
+    let historyToSend = [...history];
+    if (session && session.summaryState && session.summaryState.activeSummaryId) {
+        const activeLog = currentProject.summaryLogs.find(log => log.id === session.summaryState.activeSummaryId);
+        if (activeLog) {
+            historyToSend = [];
+            const { metadata, content } = activeLog;
+            const summaryContext = `[This is a summary of a preceding conversation. METADATA - Origin: ${metadata.originType} ('${metadata.originName}'), Title: "${metadata.title}". SUMMARY CONTENT: ${content}]`;
+            const summaryMessage = { role: "system", content: summaryContext };
+            historyToSend.push(summaryMessage);
+            const remainingHistory = history.slice(session.summaryState.summarizedUntilIndex);
+            historyToSend.push(...remainingHistory);
+        }
     }
-
     const modelData = allProviderModels.find(m => m.id === agent.model);
     const provider = modelData ? modelData.provider : null;
-
     historyToSend.forEach(msg => {
         if(msg.role === 'system') return; 
         let apiMessage = { role: msg.role };
@@ -740,23 +669,19 @@ function buildPayloadMessages(history, targetAgentName, session) {
 async function sendMessage(isRegeneration = false) {
     const { type } = currentProject.activeEntity;
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
-
     if (session && session.groupChatState && session.groupChatState.isRunning) {
         stopGeneration();
     }
-
     if (type === 'group') {
         await runConversationTurn();
     } else {
         await sendSingleAgentMessage(isRegeneration);
     }
 }
-
 async function sendSingleAgentMessage(isRegeneration = false) {
     const input = document.getElementById('chatInput');
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     if (!session) { alert("Active chat session not found."); return; }
-
     if (!isRegeneration) {
         const message = input.value.trim();
         if (!message && !attachedFile) return;
@@ -774,31 +699,24 @@ async function sendSingleAgentMessage(isRegeneration = false) {
         removeAttachedFile();
         renderChatMessages();
     }
-
     const agentName = currentProject.activeEntity.name;
     const agent = currentProject.agentPresets[agentName];
     if (!agent || !agent.model) { alert('Please select an agent with a configured model.'); return; }
-
     const shouldRenameSession = session.name === 'New Chat' && session.history.length === 1 && !isRegeneration;
-
     isLoading = true;
     document.getElementById('sendBtn').style.display = 'none';
     document.getElementById('stopBtn').style.display = 'flex';
     updateStatus('กำลังรอการตอบกลับ...', 'loading');
-
     const assistantMsgIndex = session.history.length;
     const assistantMsgDiv = addMessageToUI('assistant', '', assistantMsgIndex);
     const contentDiv = assistantMsgDiv.querySelector('.message-content');
     contentDiv.innerHTML = '<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
     abortController = new AbortController();
-
     try {
         const messages = buildPayloadMessages(session.history, agentName, session);
         const finalResponseText = await streamLLMResponse(contentDiv, agent, messages);
-
         session.history.push({ role: 'assistant', content: finalResponseText });
         if (shouldRenameSession) await generateAndRenameSession(session.history);
-
     } catch (error) {
         if (error.name !== 'AbortError') {
             session.history.push({ role: 'assistant', content: `เกิดข้อผิดพลาด: ${error.message}` });
@@ -817,167 +735,156 @@ async function sendSingleAgentMessage(isRegeneration = false) {
     }
 }
 
-
-/**
- * =========================================================================
- * == REVISED: SEMINAR-STYLE GROUP CHAT LOGIC (MANUAL SUMMARIZE) ==
- * =========================================================================
- */
-
+// --- Summary Log Handlers ---
 async function handleManualSummarize() {
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
-    if (!session) {
-        alert("No active session found.");
+    if (!session) { alert("No active session found."); return; }
+    let summarizerAgentName = null;
+    const activeEntity = currentProject.activeEntity;
+    if (activeEntity.type === 'group') {
+        const group = currentProject.agentGroups[activeEntity.name];
+        if (group) summarizerAgentName = group.moderatorAgent;
+    } else {
+        summarizerAgentName = activeEntity.name;
+    }
+    if (!summarizerAgentName) {
+        alert("Could not determine an agent to perform the summarization.");
         return;
     }
-    if (currentProject.activeEntity.type !== 'group') {
-        alert("Summarization is only available for Agent Groups.");
-        return;
-    }
-    const group = currentProject.agentGroups[currentProject.activeEntity.name];
-    if (!group) {
-        alert("Active agent group not found.");
-        return;
-    }
-    
-    const lastSummarizedIndex = session.summaryState?.summarizedUntilIndex || 0;
-    if (lastSummarizedIndex === session.history.length) {
-        alert("The latest messages have already been summarized.");
-        return;
-    }
-
-    if (confirm("คุณต้องการสรุปบทสนทนาส่วนที่ยังไม่ได้สรุปหรือไม่?")) {
-        await summarizeHistoryAndUpdateSession(session, group);
+    if (confirm(`คุณต้องการให้ '${summarizerAgentName}' สรุปบทสนทนาส่วนที่ยังไม่ได้สรุปหรือไม่?`)) {
+        await summarizeHistoryAndCreateLog(session, summarizerAgentName);
     }
 }
-
-async function summarizeHistoryAndUpdateSession(session, group) {
-    console.log("Attempting to summarize history...");
-    updateStatus("Summarizing conversation to maintain context...", 'loading');
-
-    const moderatorAgentName = group.moderatorAgent;
-    const moderator = currentProject.agentPresets[moderatorAgentName];
-    if (!moderator) {
-        console.warn("Cannot summarize: Moderator agent not found.");
-        return; 
+async function summarizeHistoryAndCreateLog(session, summarizerAgentName) {
+    console.log(`Attempting to summarize history with agent: ${summarizerAgentName}...`);
+    updateStatus("Summarizing conversation...", 'loading');
+    const summarizerAgent = currentProject.agentPresets[summarizerAgentName];
+    if (!summarizerAgent) {
+        updateStatus(`Agent '${summarizerAgentName}' not found.`, 'error');
+        return;
     }
-
-    const currentSummaryState = session.summaryState || { lastSummary: null, summarizedUntilIndex: 0 };
-    const historyToSummarize = session.history.slice(currentSummaryState.summarizedUntilIndex);
-    
-    const summarizationPrompt = `Please provide a concise summary of the following conversation. Capture the key points, decisions made, and any unresolved questions. The summary will be used as a memory for the next stage of the conversation.
-Conversation to summarize:
----
-${historyToSummarize.map(m => `${m.speaker || m.role}: ${typeof m.content === 'string' ? m.content : '[multimodal content]'}`).join('\n')}
----
-End of conversation. Please provide the summary.`;
-
+    const historyToSummarize = session.history.slice((session.summaryState?.summarizedUntilIndex || 0));
+    if (historyToSummarize.length === 0) {
+        updateStatus('No new messages to summarize.', 'connected');
+        return;
+    }
     try {
-        const summary = await callLLM(moderator, [{ role: 'user', content: summarizationPrompt }]);
+        updateStatus("Generating title...", 'loading');
+        const titlePrompt = `Based on the following conversation, create a very short, descriptive title (about 5-7 words). Respond with ONLY the title text itself, without any quotation marks. Conversation:\n\n${historyToSummarize.map(m => typeof m.content === 'string' ? m.content : m.content.find(p => p.type==='text')?.text || '').join('\n').substring(0, 1500)}`;
+        const generatedTitle = await callLLM(summarizerAgent, [{ role: 'user', content: titlePrompt }]);
         
-        const newCombinedSummary = currentSummaryState.lastSummary 
-            ? `${currentSummaryState.lastSummary}\nThen, the conversation continued: ${summary}`
-            : summary;
-
+        updateStatus("Generating summary content...", 'loading');
+        const activeLogId = session.summaryState?.activeSummaryId;
+        const previousSummary = activeLogId ? (currentProject.summaryLogs.find(l => l.id === activeLogId)?.content || "") : "This is the beginning of the conversation.";
+        const summaryPrompt = `You are a summarization expert. Your task is to update and refine a running summary.\n\nHere is the summary of the conversation so far:\n--- PREVIOUS SUMMARY ---\n${previousSummary}\n--- END PREVIOUS SUMMARY ---\n\nNow, here are the new messages that have occurred since the last summary:\n--- NEW MESSAGES ---\n${historyToSummarize.map(m => `${m.speaker || m.role}: ${typeof m.content === 'string' ? m.content : '[multimodal content]'}`).join('\n')}\n--- END NEW MESSAGES ---\n\nPlease provide a new, single, cohesive summary that integrates the key points from the new messages into the previous summary. Refine the entire summary into a single, updated narrative. Respond with ONLY the new, complete summary.`;
+        const summaryContent = await callLLM(summarizerAgent, [{ role: 'user', content: summaryPrompt }]);
+        
+        const newLog = {
+            id: `sum_${Date.now()}`,
+            content: summaryContent,
+            metadata: {
+                title: generatedTitle.trim(),
+                originType: currentProject.activeEntity.type,
+                originName: currentProject.activeEntity.name,
+                originSession: { id: session.id, name: session.name },
+                createdAt: Date.now()
+            }
+        };
+        currentProject.summaryLogs.push(newLog);
         session.summaryState = {
-            lastSummary: newCombinedSummary,
+            activeSummaryId: newLog.id,
             summarizedUntilIndex: session.history.length
         };
-
+        
         const systemMessage = {
             role: 'system',
-            speaker: 'System',
-            content: `[ ระบบได้ทำการสรุปบทสนทนาถึงจุดนี้เพื่อรักษาบริบท ]`
+            content: `[ ระบบได้ทำการสรุปบทสนทนาในหัวข้อ: "${newLog.metadata.title}" และบันทึกลงในคลังแล้ว ]`
         };
         session.history.push(systemMessage);
-        renderChatMessages();
-
+        
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-        await updateAndPersistState(); 
-        console.log("Summarization successful and session saved.");
+        await updateAndPersistState();
+        renderChatMessages();
+        renderSummaryLogList();
         updateStatus("Summarization complete.", 'connected');
-
     } catch (error) {
         console.error("Failed to summarize history:", error);
         updateStatus("Failed to summarize.", 'error');
     }
 }
-
-async function createModeratorDefinedPlan(group, contextHistory, session) {
-    const moderatorAgentName = group.moderatorAgent;
-    const moderator = currentProject.agentPresets[moderatorAgentName];
-    if (!moderator) {
-        console.warn(`Moderator agent '${moderatorAgentName}' not found. Falling back to Round Robin.`);
-        return createRoundRobinPlan(group);
-    }
-
-    updateStatus(`Moderator (${moderatorAgentName}) is planning the conversation...`, 'loading');
-
-    const availableMembers = group.members.filter(name => name !== moderatorAgentName);
-
-    const userPrompt = contextHistory.findLast(m => m.role === 'user')?.content || "";
-    const agentDescriptions = availableMembers
-        .map(name => `- ${name}: ${currentProject.agentPresets[name]?.systemPrompt.substring(0, 150)}...`)
-        .join('\n');
-
-    const metaPrompt = `You are a master of ceremonies and a conversation moderator for a team of expert AI agents.
-The user's request is: "${typeof userPrompt === 'string' ? userPrompt : userPrompt.find(p=>p.type==='text')?.text || '[multimodal content]'}"
-
-Here is your team of available agents (excluding yourself) and their specializations:
-${agentDescriptions}
-
-Your task is to create a step-by-step plan for which agent should speak and in what order to best answer the user's request.
-The total number of speaking turns should be around ${group.maxTurns || availableMembers.length}.
-Do NOT include yourself (${moderatorAgentName}) in the plan.
-You MUST respond with ONLY a JSON object containing a single key "plan", which is an array of strings representing the speaking order. Do not include any other text, explanations, or markdown.
-
-Example: {"plan": ["Agent_Coder", "Agent_Tester", "Agent_Coder", "Agent_Reviewer"]}`;
+async function loadSummaryToActiveSession(summaryId, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+    const summaryLog = currentProject.summaryLogs.find(l => l.id === summaryId);
+    if (!session || !summaryLog) return;
     
-    const moderatorMessages = buildPayloadMessages(contextHistory, moderatorAgentName, session);
-    moderatorMessages.push({ role: 'user', content: metaPrompt });
-
-    try {
-        const responseText = await callLLM(moderator, moderatorMessages);
-        const jsonMatch = responseText.match(/{.*}/s);
-        if (!jsonMatch) {
-            throw new Error("No valid JSON object found in the moderator's response.");
-        }
-        
-        const jsonString = jsonMatch[0];
-        const parsed = JSON.parse(jsonString);
-        
-        if (parsed.plan && Array.isArray(parsed.plan)) {
-            const validPlan = parsed.plan.filter(name => availableMembers.includes(name));
-            if (validPlan.length > 0) {
-                updateStatus('Moderator has created a plan. Starting conversation...', 'loading');
-                return validPlan;
+    session.summaryState = {
+        activeSummaryId: summaryId,
+        summarizedUntilIndex: session.history.length
+    };
+    
+    const systemMessage = {
+        role: 'system',
+        content: `[ ระบบได้โหลดบริบทจากบทสรุป: "${summaryLog.metadata.title}" ]`
+    };
+    session.history.push(systemMessage);
+    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
+    await updateAndPersistState();
+    renderChatMessages();
+    renderSummaryLogList();
+}
+async function unloadSummaryFromActiveSession(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById('chat-actions-menu').classList.remove('active');
+    const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+    if (!session || !session.summaryState?.activeSummaryId) return;
+    session.summaryState = {
+        activeSummaryId: null,
+        summarizedUntilIndex: session.history.length
+    };
+    const systemMessage = {
+        role: 'system',
+        content: `[ ระบบได้ล้างบริบทจากบทสรุปแล้ว การสนทนาจะใช้ประวัติล่าสุดตามปกติ ]`
+    };
+    session.history.push(systemMessage);
+    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
+    await updateAndPersistState();
+    renderChatMessages();
+    renderSummaryLogList();
+}
+function viewSummary(summaryId, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const summaryLog = currentProject.summaryLogs.find(l => l.id === summaryId);
+    if (!summaryLog) return;
+    document.getElementById('view-summary-title').textContent = summaryLog.metadata.title;
+    document.getElementById('view-summary-content').textContent = summaryLog.content;
+    showViewSummaryModal();
+}
+async function deleteSummary(summaryId, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!confirm("Are you sure you want to permanently delete this summary log?")) return;
+    const logIndex = currentProject.summaryLogs.findIndex(l => l.id === summaryId);
+    if (logIndex > -1) {
+        currentProject.summaryLogs.splice(logIndex, 1);
+        currentProject.chatSessions.forEach(session => {
+            if (session.summaryState?.activeSummaryId === summaryId) {
+                session.summaryState.activeSummaryId = null;
             }
-        }
-        throw new Error("Invalid plan format from moderator.");
-    } catch (error) {
-        console.error("Moderator failed to create a plan:", error, "Falling back to Round Robin.");
-        updateStatus('Moderator plan failed. Falling back to simple sequence...', 'warning');
-        return createRoundRobinPlan(group);
+        });
+        await updateAndPersistState();
+        renderAllSidebarLists();
     }
 }
 
-function createRoundRobinPlan(group) {
-    const members = group.members.filter(name => name !== group.moderatorAgent);
-    const maxTurns = group.maxTurns || members.length;
-    const plan = [];
-    if (!members || members.length === 0) return [];
-    for (let i = 0; i < maxTurns; i++) {
-        plan.push(members[i % members.length]);
-    }
-    return plan;
-}
-
-
+// --- Group Chat Logic ---
 async function runConversationTurn() {
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     if (!session) { alert("Active chat session not found."); return; }
     if (isLoading) { console.log("A turn is already in progress."); return; }
-
     const input = document.getElementById('chatInput');
     const message = input.value.trim();
     if (!message && !attachedFile) return;
@@ -999,16 +906,13 @@ async function runConversationTurn() {
     input.value = ''; input.style.height = 'auto';
     removeAttachedFile();
     renderChatMessages();
-
     const group = currentProject.agentGroups[currentProject.activeEntity.name];
     if (!group || !group.members || group.members.length === 0) { return; }
-
     session.groupChatState.isRunning = true;
     isLoading = true;
     document.getElementById('sendBtn').style.display = 'none';
     document.getElementById('stopBtn').style.display = 'flex';
     abortController = new AbortController();
-
     try {
         let conversationPlan;
         if (group.flowType === 'auto-moderator') {
@@ -1016,41 +920,32 @@ async function runConversationTurn() {
         } else {
             conversationPlan = createRoundRobinPlan(group);
         }
-
         if (!conversationPlan || conversationPlan.length === 0) {
             throw new Error("Failed to create a valid conversation plan.");
         }
-
         for (const speakerName of conversationPlan) {
             try {
                 if (!session.groupChatState.isRunning) { break; }
                 const speakerAgent = currentProject.agentPresets[speakerName];
                 if (!speakerAgent) { console.warn(`Agent '${speakerName}' not found. Skipping.`); continue; }
-
                 updateStatus(`${speakerName} is typing...`, 'loading');
-
                 const assistantMsgIndex = session.history.length;
                 const assistantMsgDiv = addMessageToUI('assistant', '', assistantMsgIndex, speakerName);
                 const contentDiv = assistantMsgDiv.querySelector('.message-content');
-                contentDiv.innerHTML = `<span class="speaker-label">${speakerName}:</span> <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div></div>`;
-                
+                contentDiv.innerHTML = `<span class="speaker-label">${speakerAgent.icon || '🤖'} ${speakerName}:</span> <div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div></div>`;
                 const messagesForSpeaker = buildPayloadMessages(session.history, speakerName, session);
                 const responseText = await streamLLMResponse(contentDiv, speakerAgent, messagesForSpeaker, speakerName);
-
                 session.history.push({ role: 'assistant', content: responseText, speaker: speakerName });
                 assistantMsgDiv.remove();
                 addMessageToUI('assistant', responseText, assistantMsgIndex, speakerName);
-
             } catch(agentError) {
                 console.error(`Agent '${speakerName}' failed to respond:`, agentError);
                 const errorMessage = `[Agent '${speakerName}' failed to respond. Error: ${agentError.message}]`;
                 session.history.push({ role: 'assistant', content: errorMessage, speaker: "System"});
                 renderChatMessages();
             }
-
             if (session.groupChatState.isRunning) { await new Promise(resolve => setTimeout(resolve, 500)); }
         }
-        
     } catch (error) {
         console.error("A critical error occurred in the conversation flow:", error);
         updateStatus(`Critical Error: ${error.message}`, 'error');
@@ -1060,8 +955,55 @@ async function runConversationTurn() {
         console.log("Group conversation turn finished.");
     }
 }
-
-
+async function createModeratorDefinedPlan(group, contextHistory, session) {
+    const moderatorAgentName = group.moderatorAgent;
+    const moderator = currentProject.agentPresets[moderatorAgentName];
+    if (!moderator) {
+        console.warn(`Moderator agent '${moderatorAgentName}' not found. Falling back to Round Robin.`);
+        return createRoundRobinPlan(group);
+    }
+    updateStatus(`Moderator (${moderatorAgentName}) is planning the conversation...`, 'loading');
+    const availableMembers = group.members.filter(name => name !== moderatorAgentName);
+    const userPrompt = contextHistory.findLast(m => m.role === 'user')?.content || "";
+    const agentDescriptions = availableMembers
+        .map(name => {
+            const agent = currentProject.agentPresets[name];
+            return `- ${agent.icon || '🤖'} ${name}: ${agent?.systemPrompt.substring(0, 150)}...`;
+        })
+        .join('\n');
+    const metaPrompt = `You are a master of ceremonies...`; // Same as before
+    const moderatorMessages = buildPayloadMessages(contextHistory, moderatorAgentName, session);
+    moderatorMessages.push({ role: 'user', content: metaPrompt });
+    try {
+        const responseText = await callLLM(moderator, moderatorMessages);
+        const jsonMatch = responseText.match(/{.*}/s);
+        if (!jsonMatch) { throw new Error("No valid JSON object found."); }
+        const jsonString = jsonMatch[0];
+        const parsed = JSON.parse(jsonString);
+        if (parsed.plan && Array.isArray(parsed.plan)) {
+            const validPlan = parsed.plan.filter(name => availableMembers.includes(name));
+            if (validPlan.length > 0) {
+                updateStatus('Moderator has created a plan. Starting conversation...', 'loading');
+                return validPlan;
+            }
+        }
+        throw new Error("Invalid plan format from moderator.");
+    } catch (error) {
+        console.error("Moderator failed to create a plan:", error, "Falling back to Round Robin.");
+        updateStatus('Moderator plan failed. Falling back to simple sequence...', 'warning');
+        return createRoundRobinPlan(group);
+    }
+}
+function createRoundRobinPlan(group) {
+    const members = group.members.filter(name => name !== group.moderatorAgent);
+    const maxTurns = group.maxTurns || members.length;
+    const plan = [];
+    if (!members || members.length === 0) return [];
+    for (let i = 0; i < maxTurns; i++) {
+        plan.push(members[i % members.length]);
+    }
+    return plan;
+}
 function stopGeneration(){
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     if (session && session.groupChatState) {
@@ -1076,7 +1018,6 @@ function stopGeneration(){
     abortController = null;
     updateStatus('Ready', 'connected');
 }
-
 function exportChat(sessionId = null) {
     const idToExport = sessionId || currentProject.activeSessionId;
     if (!idToExport) { alert('No active chat session to export.'); return; }
@@ -1099,7 +1040,6 @@ function exportChat(sessionId = null) {
     a.click();
     URL.revokeObjectURL(url);
 }
-
 function saveMemoryPackage() {
     try {
         const packageData = { memories: currentProject.memories, agentPresets: currentProject.agentPresets };
@@ -1119,7 +1059,6 @@ function saveMemoryPackage() {
         console.error(e);
     }
 }
-
 function loadMemoryPackage(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1130,8 +1069,7 @@ function loadMemoryPackage(event) {
             if (data && Array.isArray(data.memories) && typeof data.agentPresets === 'object') {
                 currentProject.memories = [...currentProject.memories, ...data.memories.filter(newMem => !currentProject.memories.find(oldMem => oldMem.name === newMem.name))];
                 Object.assign(currentProject.agentPresets, data.agentPresets);
-                loadAndRenderMemories();
-                renderAgentPresets();
+                renderAllSidebarLists();
                 alert('Agent package loaded successfully!');
                 updateAndPersistState();
             } else {
@@ -1144,8 +1082,6 @@ function loadMemoryPackage(event) {
     reader.readAsText(file);
     event.target.value = '';
 }
-
-
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1159,7 +1095,6 @@ function handleFileUpload(event) {
     hideImageUploadModal();
     event.target.value = '';
 }
-
 function handleImageUrlConfirm() {
     const url = document.getElementById('image-url-input').value.trim();
     if (url) { attachedFile = { name: url.split('/').pop(), type: 'image/url', data: url }; showFilePreview(); }
