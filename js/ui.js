@@ -1,11 +1,13 @@
 // --- UI Toggles, Rendering & Interaction ---
 
-// This variable needs to be accessible globally for the sortable instance
 var groupSortable = null;
 
 function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
 function showImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'flex'; }
 function hideImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'none'; }
+function showViewSummaryModal() { document.getElementById('view-summary-modal').style.display = 'flex'; }
+function hideViewSummaryModal() { document.getElementById('view-summary-modal').style.display = 'none'; }
+
 
 function toggleMobileSidebar() {
     const sidebar = document.querySelector('.sidebar');
@@ -43,16 +45,24 @@ function hideContextInspector() {
 function toggleDropdown(event) {
     event.stopPropagation();
     const dropdown = event.currentTarget.closest('.dropdown');
+    const parentItem = event.currentTarget.closest('.item'); 
     const wasOpen = dropdown.classList.contains('open');
-    
-    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+
+    document.querySelectorAll('.dropdown.open').forEach(d => {
+        d.classList.remove('open');
+    });
+    document.querySelectorAll('.item.z-index-front').forEach(i => {
+        i.classList.remove('z-index-front');
+    });
 
     if (!wasOpen) {
         dropdown.classList.add('open');
+        if (parentItem) {
+            parentItem.classList.add('z-index-front');
+        }
     }
 }
 
-// NEW FUNCTION to show/hide max turns input
 function toggleMaxTurnsInput() {
     const flowSelect = document.getElementById('group-flow-select');
     const maxTurnsGroup = document.getElementById('max-turns-group');
@@ -95,31 +105,33 @@ function updateStatus(message, state = 'disconnected') {
     else if (state === 'error') dot.classList.add('error');
 }
 
-// --- Agent & Group Rendering ---
+function renderAllSidebarLists() {
+    renderSessionList();
+    renderAgentPresets();
+    renderAgentGroups();
+    loadAndRenderMemories();
+    renderSummaryLogList();
+}
 
-// [UPDATED] ฟังก์ชันนี้ถูกอัปเดตให้เพิ่ม highlight
+
+// --- Agent & Group Rendering ---
 function renderAgentPresets() {
     const container = document.getElementById('agentPresetList');
     container.innerHTML = '';
     const presets = currentProject.agentPresets || {};
-
-    // หา entity ที่ผูกกับ active session
     const activeSession = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     const linkedEntity = activeSession ? activeSession.linkedEntity : null;
-
     for (const name in presets) {
+        const preset = presets[name];
         const item = document.createElement('div');
         item.className = 'item';
-        item.dataset.agentName = name; // <-- เพิ่มบรรทัดนี้
-
-        // เพิ่มคลาส active ถ้าตรงกัน
+        item.dataset.agentName = name;
         if (linkedEntity && linkedEntity.type === 'agent' && linkedEntity.name === name) {
             item.classList.add('active');
         }
-
         item.innerHTML = `
         <div class="item-header">
-            <span class="item-name" onclick="selectEntity('agent', '${name}')"><span class="item-icon">🤖</span> ${name}</span>
+            <span class="item-name" onclick="selectEntity('agent', '${name}')"><span class="item-icon">${preset.icon || '🤖'}</span> ${name}</span>
             <div class="item-actions">
                  <button class="btn-icon" onclick="showAgentEditor(true, '${name}')" title="Edit Agent">&#9998;</button>
                  <button class="btn-icon danger" onclick="deleteAgentPreset('${name}')" title="Delete Agent">&#128465;</button>
@@ -129,26 +141,19 @@ function renderAgentPresets() {
     }
 }
 
-// [UPDATED] ฟังก์ชันนี้ถูกอัปเดตให้เพิ่ม highlight
 function renderAgentGroups() {
     const container = document.getElementById('agentGroupList');
     container.innerHTML = '';
     const groups = currentProject.agentGroups || {};
-
-    // หา entity ที่ผูกกับ active session
     const activeSession = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     const linkedEntity = activeSession ? activeSession.linkedEntity : null;
-
     for (const name in groups) {
         const item = document.createElement('div');
         item.className = 'item';
-        item.dataset.groupName = name; // <-- เพิ่มบรรทัดนี้
-
-        // เพิ่มคลาส active ถ้าตรงกัน
+        item.dataset.groupName = name;
         if (linkedEntity && linkedEntity.type === 'group' && linkedEntity.name === name) {
             item.classList.add('active');
         }
-
         item.innerHTML = `
         <div class="item-header">
             <span class="item-name" onclick="selectEntity('group', '${name}')"><span class="item-icon">🤝</span> ${name}</span>
@@ -164,23 +169,22 @@ function renderAgentGroups() {
 function renderEntitySelector() {
     const selector = document.getElementById('entitySelector');
     selector.innerHTML = '';
-
     const agentGroup = document.createElement('optgroup');
     agentGroup.label = 'Agent Presets';
     Object.keys(currentProject.agentPresets || {}).forEach(name => {
         agentGroup.appendChild(new Option(name, `agent_${name}`));
     });
     selector.appendChild(agentGroup);
-
     const groupGroup = document.createElement('optgroup');
     groupGroup.label = 'Agent Groups';
     Object.keys(currentProject.agentGroups || {}).forEach(name => {
         groupGroup.appendChild(new Option(name, `group_${name}`));
     });
     selector.appendChild(groupGroup);
-    
-    const {type, name} = currentProject.activeEntity;
-    selector.value = `${type}_${name}`;
+    if (currentProject.activeEntity) {
+        const {type, name} = currentProject.activeEntity;
+        selector.value = `${type}_${name}`;
+    }
 }
 
 // --- Editor Modals ---
@@ -188,6 +192,7 @@ function showAgentEditor(isEditing = false, agentName = null) {
     const modal = document.getElementById('agent-editor-modal');
     const title = document.getElementById('agent-modal-title');
     const nameInput = document.getElementById('agent-name-input');
+    const iconInput = document.getElementById('agent-icon-input'); 
     const modelSelect = document.getElementById('agent-model-select');
     
     modelSelect.innerHTML = '<option value="">-- Select a Model --</option>';
@@ -222,6 +227,7 @@ function showAgentEditor(isEditing = false, agentName = null) {
                 else element.value = value;
             }
         });
+        iconInput.value = agent.icon || '🤖';
     } else {
         editingAgentName = null;
         title.textContent = "Create New Agent";
@@ -236,6 +242,7 @@ function showAgentEditor(isEditing = false, agentName = null) {
             if (element.type === 'checkbox') element.checked = value;
             else element.value = value;
         });
+        iconInput.value = '';
     }
     modal.style.display = 'flex';
 }
@@ -244,21 +251,16 @@ function hideAgentEditor() {
     document.getElementById('agent-editor-modal').style.display = 'none';
     editingAgentName = null;
 }
-
 function showAgentGroupEditor(isEditing = false, groupName = null) {
     const modal = document.getElementById('agent-group-editor-modal');
     const title = document.getElementById('agent-group-modal-title');
     const nameInput = document.getElementById('group-name-input');
-    
     editingGroupName = isEditing ? groupName : null;
     const group = isEditing ? currentProject.agentGroups[groupName] : null;
-
     title.textContent = isEditing ? `Edit Group: ${groupName}` : "Create New Agent Group";
     nameInput.value = isEditing ? groupName : "";
-    
     const memberList = document.getElementById('group-member-list');
     memberList.innerHTML = '';
-
     const currentMembers = group ? group.members : [];
     const allAgents = Object.keys(currentProject.agentPresets);
     const sortedAgents = [...currentMembers];
@@ -267,7 +269,6 @@ function showAgentGroupEditor(isEditing = false, groupName = null) {
             sortedAgents.push(agentName);
         }
     });
-
     sortedAgents.forEach(agentName => {
         const isChecked = currentMembers.includes(agentName);
         const item = document.createElement('div');
@@ -281,7 +282,6 @@ function showAgentGroupEditor(isEditing = false, groupName = null) {
         `;
         memberList.appendChild(item);
     });
-    
     if (window.groupSortable) {
         window.groupSortable.destroy();
     }
@@ -289,20 +289,13 @@ function showAgentGroupEditor(isEditing = false, groupName = null) {
         animation: 150,
         handle: '.drag-handle',
     });
-
     updateModeratorDropdown(group?.moderatorAgent);
-
     document.getElementById('group-flow-select').value = group?.flowType || 'moderator-choice';
     document.getElementById('group-max-turns-input').value = group?.maxTurns || 4;
-    // [EDITED] Set the value for the summarization TOKEN threshold input
     document.getElementById('group-summarization-threshold-input').value = group?.summarizationTokenThreshold ?? 3000;
-    
     toggleMaxTurnsInput();
-    
     modal.style.display = 'flex';
 }
-
-
 function hideAgentGroupEditor() {
     if (window.groupSortable) {
         window.groupSortable.destroy();
@@ -311,29 +304,23 @@ function hideAgentGroupEditor() {
     document.getElementById('agent-group-editor-modal').style.display = 'none';
     editingGroupName = null;
 }
-
 function updateModeratorDropdown(selectedModerator = null) {
     const moderatorSelect = document.getElementById('group-moderator-select');
     const memberItems = document.querySelectorAll('#group-member-list .agent-sortable-item');
-    
     const selectedMembers = Array.from(memberItems)
         .filter(item => item.querySelector('input[type="checkbox"]').checked)
         .map(item => item.dataset.agentName);
-    
     const currentModerator = moderatorSelect.value;
     moderatorSelect.innerHTML = '';
-    
     selectedMembers.forEach(name => {
         moderatorSelect.add(new Option(name, name));
     });
-
     if (selectedModerator && selectedMembers.includes(selectedModerator)) {
         moderatorSelect.value = selectedModerator;
     } else if (selectedMembers.includes(currentModerator)) {
         moderatorSelect.value = currentModerator;
     }
 }
-
 function showMemoryEditor(index = null, event) {
     if(event)event.stopPropagation();
     const modal=document.getElementById('memory-editor-modal');
@@ -355,7 +342,6 @@ function showMemoryEditor(index = null, event) {
     }
     modal.style.display='flex';
 }
-
 function hideMemoryEditor() { document.getElementById('memory-editor-modal').style.display = 'none'; }
 
 // --- Memory & Session & Chat Rendering ---
@@ -364,10 +350,8 @@ function loadAndRenderMemories() {
     const activeList = document.getElementById('activeMemoriesList');
     const inactiveList = document.getElementById('inactiveMemoriesList');
     const inactiveSection = document.getElementById('inactiveMemoriesSection');
-
     activeList.innerHTML = '';
     inactiveList.innerHTML = '';
-    
     let activeAgentPreset = null;
     if(currentProject.activeEntity?.type === 'agent') {
         container.style.display = 'block';
@@ -376,29 +360,23 @@ function loadAndRenderMemories() {
         container.style.display = 'none';
         return;
     }
-    
     if (!activeAgentPreset) {
         container.style.display = 'none';
         return;
     }
-
     const activeMemoryNames = activeAgentPreset.activeMemories || [];
     const allMemoryNames = currentProject.memories.map(m => m.name);
     const activeMemories = activeMemoryNames.filter(name => allMemoryNames.includes(name));
     const inactiveMemories = allMemoryNames.filter(name => !activeMemoryNames.includes(name));
-
     activeMemories.forEach(name => {
         const memory = currentProject.memories.find(m => m.name === name);
         if (memory) activeList.appendChild(createMemoryElement(memory, true));
     });
-    
     inactiveMemories.forEach(name => {
         const memory = currentProject.memories.find(m => m.name === name);
         if(memory) inactiveList.appendChild(createMemoryElement(memory, false));
     });
-    
     inactiveSection.style.display = inactiveMemories.length > 0 ? 'block' : 'none';
-    
     if (memorySortable) memorySortable.destroy();
     memorySortable = new Sortable(activeList, {
         animation: 150,
@@ -414,18 +392,16 @@ function loadAndRenderMemories() {
         }
     });
 }
-
 function createMemoryElement(memory, isActive) {
     const itemDiv = document.createElement('div');
-    itemDiv.className = `item memory-item ${isActive ? 'active' : ''}`;
+    itemDiv.className = `item memory-item`;
     itemDiv.dataset.name = memory.name;
     const memoryIndex = currentProject.memories.findIndex(m => m.name === memory.name);
-
     itemDiv.innerHTML = `
         <div class="item-header">
+            <div class="memory-toggle ${isActive ? 'active' : ''}" onclick="toggleMemory('${memory.name}', event)"></div>
             <span class="item-name">${memory.name}</span>
             <div class="item-actions">
-                <div class="memory-toggle ${isActive ? 'active' : ''}" onclick="toggleMemory('${memory.name}', event)"></div>
                 <div class="dropdown align-right">
                     <button class="btn-icon" onclick="toggleDropdown(event)"> &#8942; </button>
                     <div class="dropdown-content">
@@ -437,29 +413,25 @@ function createMemoryElement(memory, isActive) {
         </div>`;
     return itemDiv;
 }
-
 function renderSessionList() {
     const pinnedContainer = document.getElementById('pinnedSessionList');
     const recentContainer = document.getElementById('sessionListContainer');
     const archivedList = document.getElementById('archivedSessionList');
     const archivedSection = document.getElementById('archivedSessionsSection');
-    
     pinnedContainer.innerHTML = '';
     recentContainer.innerHTML = '';
     archivedList.innerHTML = '';
-
     const allSessions = currentProject.chatSessions || [];
     const pinnedSessions = allSessions.filter(s => s.pinned && !s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
     const archivedSessions = allSessions.filter(s => s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
     const recentSessions = allSessions.filter(s => !s.pinned && !s.archived).sort((a,b) => b.updatedAt - a.updatedAt);
-    
     pinnedSessions.forEach(session => pinnedContainer.appendChild(createSessionElement(session)));
     recentSessions.forEach(session => recentContainer.appendChild(createSessionElement(session)));
     archivedSessions.forEach(session => archivedList.appendChild(createSessionElement(session)));
-    
     archivedSection.style.display = archivedSessions.length > 0 ? 'block' : 'none';
 }
 
+// [MODIFIED] Corrected onclick handlers to use quotes for string IDs
 function createSessionElement(session) {
     const item = document.createElement('div');
     item.className = `item session-item ${session.id === currentProject.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
@@ -472,8 +444,12 @@ function createSessionElement(session) {
             toggleMobileSidebar();
         }
     };
-
-    const icon = session.linkedEntity?.type === 'group' ? '🤝' : '🤖';
+    
+    let icon = '❔';
+    if(session.linkedEntity) {
+        const agentPreset = currentProject.agentPresets[session.linkedEntity.name];
+        icon = session.linkedEntity?.type === 'group' ? '🤝' : (agentPreset?.icon || '🤖');
+    }
 
     item.innerHTML = `
         <div class="item-header">
@@ -481,55 +457,116 @@ function createSessionElement(session) {
              <div class="item-actions dropdown align-right">
                 <button class="btn-icon" onclick="toggleDropdown(event)"> &#8942; </button>
                 <div class="dropdown-content">
-                    <a href="#" onclick="togglePinSession(${session.id}, event)">${session.pinned ? 'Unpin' : 'Pin'}</a>
-                    <a href="#" onclick="renameChatSession(${session.id}, event)">Rename</a>
-                    <a href="#" onclick="cloneSession(${session.id}, event)">Clone</a>
-                    <a href="#" onclick="archiveSession(${session.id}, event)">${session.archived ? 'Unarchive' : 'Archive'}</a>
-                    <a href="#" onclick="downloadSession(${session.id}, event)">Download</a>
+                    <a href="#" onclick="togglePinSession('${session.id}', event)">${session.pinned ? 'Unpin' : 'Pin'}</a>
+                    <a href="#" onclick="renameChatSession('${session.id}', event)">Rename</a>
+                    <a href="#" onclick="cloneSession('${session.id}', event)">Clone</a>
+                    <a href="#" onclick="archiveSession('${session.id}', event)">${session.archived ? 'Unarchive' : 'Archive'}</a>
+                    <a href="#" onclick="downloadSession('${session.id}', event)">Download</a>
                     <hr>
-                    <a href="#" onclick="deleteChatSession(${session.id}, event)">Delete</a>
+                    <a href="#" onclick="deleteChatSession('${session.id}', event)">Delete</a>
                 </div>
             </div>
         </div>`;
     return item;
 }
 
-function renderChatMessages(){const c=document.getElementById('chatMessages');c.innerHTML=''; const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId); if(session) session.history.forEach((m,i)=>addMessageToUI(m.role,m.content,i, m.speaker));c.scrollTop=c.scrollHeight; updateContextInspector();}
-
+function renderSummaryLogList() {
+    const container = document.getElementById('summaryLogList');
+    container.innerHTML = '';
+    const summaryLogs = currentProject.summaryLogs || [];
+    if (summaryLogs.length === 0) {
+        container.innerHTML = `<p style="font-size: 0.8rem; color: #64748b; text-align: center; padding: 10px 0;">No summary logs yet.</p>`;
+        return;
+    }
+    const activeSession = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
+    const activeSummaryId = activeSession?.summaryState?.activeSummaryId;
+    const groupedLogs = summaryLogs.reduce((acc, log) => {
+        const key = log.metadata.originSession.id;
+        if (!acc[key]) {
+            acc[key] = {
+                name: log.metadata.originSession.name,
+                logs: []
+            };
+        }
+        acc[key].logs.push(log);
+        return acc;
+    }, {});
+    for (const sessionId in groupedLogs) {
+        const group = groupedLogs[sessionId];
+        const groupDetails = document.createElement('details');
+        groupDetails.className = 'summary-group';
+        const groupSummary = document.createElement('summary');
+        groupSummary.textContent = `From: ${group.name}`;
+        groupDetails.appendChild(groupSummary);
+        group.logs.sort((a,b) => b.metadata.createdAt - a.metadata.createdAt).forEach(log => {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'summary-log-item';
+            if (log.id === activeSummaryId) {
+                itemDiv.classList.add('active');
+                groupDetails.open = true;
+            }
+            const date = new Date(log.metadata.createdAt).toLocaleDateString('th-TH', { day: '2-digit', month: 'short'});
+            itemDiv.innerHTML = `
+                <div class="summary-log-item-header">
+                    <span class="summary-log-item-title" title="${log.metadata.title} (${date})">${log.metadata.title}</span>
+                    <div class="summary-log-item-actions">
+                        <button class="btn-icon" onclick="loadSummaryToActiveSession('${log.id}', event)" title="Use this summary">▶️</button>
+                        <button class="btn-icon" onclick="viewSummary('${log.id}', event)" title="View content">👁️</button>
+                        <button class="btn-icon danger" onclick="deleteSummary('${log.id}', event)" title="Delete summary">&#128465;</button>
+                    </div>
+                </div>
+            `;
+            groupDetails.appendChild(itemDiv);
+        });
+        container.appendChild(groupDetails);
+    }
+}
+function renderChatMessages(){
+    const c=document.getElementById('chatMessages');
+    c.innerHTML=''; 
+    const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId); 
+    if(session) {
+        session.history.forEach((m,i)=>addMessageToUI(m.role,m.content,i, m.speaker));
+    }
+    c.scrollTop=c.scrollHeight; 
+    updateContextInspector();
+    const clearBtn = document.getElementById('clear-summary-btn');
+    if (session && session.summaryState && session.summaryState.activeSummaryId) {
+        clearBtn.style.display = 'block';
+    } else {
+        clearBtn.style.display = 'none';
+    }
+}
 function addMessageToUI(role, content, index, speakerName = null) {
     const container = document.getElementById('chatMessages');
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
     msgDiv.dataset.index = index;
-    
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-
     if (role === 'assistant' && speakerName) {
+        const speakerAgent = currentProject.agentPresets[speakerName];
+        const speakerIcon = speakerAgent ? speakerAgent.icon : '🤖';
         const speakerLabel = document.createElement('span');
         speakerLabel.className = 'speaker-label';
-        speakerLabel.textContent = `${speakerName}:`;
+        speakerLabel.innerHTML = `${speakerIcon} ${speakerName}:`;
         contentDiv.appendChild(speakerLabel);
     }
-    
     let agentForMarkdown = currentProject.agentPresets[currentProject.activeEntity.name];
     if (currentProject.activeEntity.type === 'group') {
         agentForMarkdown = currentProject.agentPresets[speakerName] || {};
     }
     const useMarkdown = agentForMarkdown?.useMarkdown !== false;
-    
     const contentArray = Array.isArray(content) ? content : [{ type: 'text', text: content }];
-    
     contentArray.forEach(part => {
         if (part.type === 'text') {
+            const textSpan = document.createElement('span');
             if (role === 'assistant' && useMarkdown) {
-                 const textSpan = document.createElement('span');
                  textSpan.innerHTML = marked.parse(part.text);
-                 contentDiv.appendChild(textSpan);
             } else {
-                 const textNode = document.createTextNode(part.text);
-                 contentDiv.appendChild(textNode);
+                 textSpan.textContent = part.text;
             }
+            contentDiv.appendChild(textSpan);
         } else if (part.type === 'image_url') {
             const img = document.createElement('img');
             img.src = part.url;
@@ -537,28 +574,22 @@ function addMessageToUI(role, content, index, speakerName = null) {
             contentDiv.appendChild(img);
         }
     });
-    
     contentDiv.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block);
     });
-
     msgDiv.appendChild(contentDiv);
-
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'message-actions';
-    
     const editBtn = document.createElement('button');
     editBtn.innerHTML = '&#9998;';
     editBtn.title = 'Edit';
     editBtn.onclick = () => editMessage(index);
     actionsDiv.appendChild(editBtn);
-    
     const copyBtn = document.createElement('button');
     copyBtn.innerHTML = '&#128203;';
     copyBtn.title = 'Copy';
     copyBtn.onclick = (e) => copyMessageToClipboard(e, index);
     actionsDiv.appendChild(copyBtn);
-
     if (role === 'assistant') {
         const regenBtn = document.createElement('button');
         regenBtn.innerHTML = '&#x21bb;';
@@ -572,7 +603,6 @@ function addMessageToUI(role, content, index, speakerName = null) {
         deleteBtn.onclick = () => deleteMessage(index);
         actionsDiv.appendChild(deleteBtn);
     }
-
     if (role !== 'system') {
         msgDiv.appendChild(actionsDiv);
     }
@@ -580,7 +610,6 @@ function addMessageToUI(role, content, index, speakerName = null) {
     container.scrollTop = container.scrollHeight;
     return msgDiv;
 }
-
 function showFilePreview() {
     if (!attachedFile) return;
     const container = document.getElementById('file-preview-container');
@@ -600,44 +629,34 @@ function showFilePreview() {
     container.appendChild(removeBtn);
     container.style.display = 'block';
 }
-
 function removeAttachedFile() {
     attachedFile = null;
     document.getElementById('file-preview-container').style.display = 'none';
 }
-
 function updateContextInspector(isModal = false) {
     const { type, name } = currentProject.activeEntity || {};
     if(!type || !name) return;
-
     let agent, agentNameForDisplay;
-
     if (type === 'agent') {
         agentNameForDisplay = name;
         agent = currentProject.agentPresets[name];
     } else if (type === 'group') {
         agentNameForDisplay = name + ' (Group)';
         const group = currentProject.agentGroups[name];
-        // For groups, show the moderator's model as representative
         agent = currentProject.agentPresets[group?.moderatorAgent] || {};
     }
      if (!agent) return;
-
     const finalSystemPrompt = getFullSystemPrompt(type === 'agent' ? name : currentProject.agentGroups[name]?.moderatorAgent);
     const systemTokens = estimateTokens(finalSystemPrompt);
-    
     const session = currentProject.chatSessions.find(s => s.id === currentProject.activeSessionId);
     let historyTokens = 0;
     if (session) {
         historyTokens = estimateTokens(JSON.stringify(session.history));
     }
     const inputTokens = estimateTokens(document.getElementById('chatInput').value);
-
     const totalTokens = systemTokens + historyTokens + inputTokens;
-    
-    document.getElementById('active-agent-status').textContent = `Active: ${agentNameForDisplay}`;
+    document.getElementById('active-agent-status').textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
     document.getElementById('token-count-status').textContent = `~${totalTokens.toLocaleString()} Tokens`;
-
     if (isModal) {
         document.getElementById('inspector-agent-name').textContent = agentNameForDisplay;
         document.getElementById('inspector-agent-model').textContent = agent.model || 'N/A';
@@ -645,7 +664,6 @@ function updateContextInspector(isModal = false) {
         document.getElementById('inspector-system-prompt').textContent = finalSystemPrompt || '(No system prompt or memories active)';
     }
 }
-
 function makeSidebarResizable() {
     const verticalResizer = document.querySelector('.sidebar-resizer');
     const horizontalResizer = document.querySelector('.sidebar-horizontal-resizer');
@@ -653,10 +671,8 @@ function makeSidebarResizable() {
     const mainChatArea = document.querySelector('.main-chat-area');
     const sessionsFrame = document.querySelector('.sessions-frame');
     const memoriesFrame = document.querySelector('.memories-frame');
-
     let isVerticalResizing = false;
     let isHorizontalResizing = false;
-
     const verticalMoveHandler = (e) => {
         if (!isVerticalResizing) return;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -664,15 +680,12 @@ function makeSidebarResizable() {
         const sidebarRect = sidebarContent.getBoundingClientRect();
         let newHeight = clientY - sidebarRect.top;
         const totalHeight = sidebarContent.offsetHeight;
-
         if (newHeight < 100) newHeight = 100;
         if (newHeight > totalHeight - 100) newHeight = totalHeight - 100;
-        
         const resizerHeight = verticalResizer.offsetHeight;
         sessionsFrame.style.flex = `0 1 ${newHeight}px`;
         memoriesFrame.style.flex = `1 1 ${totalHeight - newHeight - resizerHeight}px`;
     };
-
     const startVerticalResizing = (e) => {
         e.preventDefault();
         isVerticalResizing = true;
@@ -683,7 +696,6 @@ function makeSidebarResizable() {
         window.addEventListener('mouseup', stopVerticalResizing);
         window.addEventListener('touchend', stopVerticalResizing);
     };
-
     const stopVerticalResizing = () => {
         if (!isVerticalResizing) return;
         isVerticalResizing = false;
@@ -695,22 +707,17 @@ function makeSidebarResizable() {
         window.removeEventListener('touchend', stopVerticalResizing);
         localStorage.setItem('sidebarSplitHeight', sessionsFrame.style.flex);
     };
-
     verticalResizer.addEventListener('mousedown', startVerticalResizing);
     verticalResizer.addEventListener('touchstart', startVerticalResizing, { passive: false });
-    
     const horizontalMoveHandler = (e) => {
         if (!isHorizontalResizing) return;
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         let newWidth = clientX;
-
-        if (newWidth < 200) newWidth = 200; // Min width
-        if (newWidth > 600) newWidth = 600; // Max width
-        
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 600) newWidth = 600;
         sidebar.style.width = `${newWidth}px`;
         mainChatArea.style.width = `calc(100% - ${newWidth}px)`;
     };
-
      const startHorizontalResizing = (e) => {
         e.preventDefault();
         isHorizontalResizing = true;
@@ -721,7 +728,6 @@ function makeSidebarResizable() {
         window.addEventListener('mouseup', stopHorizontalResizing);
         window.addEventListener('touchend', stopHorizontalResizing);
     };
-    
     const stopHorizontalResizing = () => {
         if (!isHorizontalResizing) return;
         isHorizontalResizing = false;
@@ -733,11 +739,8 @@ function makeSidebarResizable() {
         window.removeEventListener('touchend', stopHorizontalResizing);
         localStorage.setItem('sidebarWidth', sidebar.style.width);
     };
-
     horizontalResizer.addEventListener('mousedown', startHorizontalResizing);
     horizontalResizer.addEventListener('touchstart', startHorizontalResizing, { passive: false });
-
-    // Restore saved sizes
     const savedHeight = localStorage.getItem('sidebarSplitHeight');
     if (savedHeight) {
         sessionsFrame.style.flex = savedHeight;
@@ -748,8 +751,6 @@ function makeSidebarResizable() {
         mainChatArea.style.width = `calc(100% - ${savedWidth})`;
     }
 }
-
-// เพิ่มฟังก์ชันนี้ที่ท้ายไฟล์ ui.js
 function scrollToLinkedEntity(type, name) {
     let element;
     if (type === 'agent') {
@@ -757,9 +758,7 @@ function scrollToLinkedEntity(type, name) {
     } else if (type === 'group') {
         element = document.querySelector(`.item[data-group-name="${name}"]`);
     }
-
     if (element) {
-        // สั่งให้เลื่อนไปที่ element นั้นๆ แบบนุ่มนวลและจัดให้อยู่กลางจอ
         element.scrollIntoView({
             behavior: 'smooth',
             block: 'center'

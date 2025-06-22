@@ -156,7 +156,10 @@ body {
     flex: 1 1 45%;
     min-height: 100px;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
+
 
 .main-chat-area {
     flex-grow: 1;
@@ -214,20 +217,27 @@ body {
     background: transparent;
     border: none;
     padding: 0;
-    margin-bottom: 25px;
+    margin-bottom: 5px;
+    position: relative;
 }
 
-.section-box h3 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #4a5568;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 8px;
+/* [MODIFIED] Styling for collapsible section headers */
+.section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
+}
+.section-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #4a5568;
+    flex-grow: 1;
+}
+.section-header .btn-icon {
+    color: #718096; /* Darker icon color */
+    font-weight: bold;
 }
 
 .form-group { margin-bottom: 15px; }
@@ -326,9 +336,10 @@ textarea { resize: vertical; min-height: 100px; }
     top: 100%;
     margin-top: 4px;
 }
+/* [MODIFIED] Compact dropdown items */
 .dropdown-content a {
     color: black;
-    padding: 12px 16px;
+    padding: 8px 14px;
     text-decoration: none;
     display: flex;
     align-items: center;
@@ -337,23 +348,25 @@ textarea { resize: vertical; min-height: 100px; }
 }
 .dropdown-content a:hover { background-color: #f1f1f1; }
 .dropdown-content hr {
-    margin: 5px 10px;
+    margin: 4px 10px;
     border: none;
     border-top: 1px solid var(--border-color);
 }
 
+/* [MODIFIED] Compact list items */
 .item-list > .item {
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 8px 12px;
-    margin-bottom: 8px;
+    margin-bottom: 4px; /* Reduced margin */
     transition: all 0.2s ease;
     position: relative;
 }
 .item-list > .item.active {
     border-color: var(--success-color);
     box-shadow: 0 0 8px rgba(72, 187, 120, 0.2);
+    background-color: #f6fff9;
 }
 .item-list > .item.pinned {
     background-color: #f0e6ff;
@@ -376,34 +389,101 @@ textarea { resize: vertical; min-height: 100px; }
 }
 .item-name .item-icon {
     margin-right: 6px;
+    display: inline-block;
+    width: 20px;
+    text-align: center;
 }
-.memory-item .item-name { cursor: grab; }
-.memory-item .item-name:active { cursor: grabbing; }
 
 .item-actions { display: flex; gap: 5px; align-items: center; }
 
 .collapsible-section summary {
     cursor: pointer;
     font-weight: 500;
-    padding: 5px 0;
+    padding: 5px;
     border-radius: 5px;
     transition: background 0.2s;
+    list-style: revert;
 }
 .collapsible-section summary:hover { background: #f0f0f0; }
-.collapsible-section .item-list { padding-top: 10px; }
+.collapsible-section .item-list { padding-top: 5px; }
+
+/* [NEW] Compact Memory Item Styles */
+.memory-item {
+    padding: 4px 8px;
+}
+.memory-item .item-header {
+    gap: 8px;
+}
+.memory-item .item-name {
+    font-weight: normal;
+    font-size: 0.85rem;
+    cursor: default;
+}
+.memory-item .item-actions {
+    margin-left: auto;
+}
 
 .memory-toggle {
-    width: 40px; height: 20px; background: #cbd5e0;
-    border-radius: 10px; position: relative; cursor: pointer;
+    width: 34px; height: 18px; background: #cbd5e0;
+    border-radius: 9px; position: relative; cursor: pointer;
     transition: background 0.3s ease;
+    flex-shrink: 0;
 }
 .memory-toggle.active { background: var(--success-color); }
 .memory-toggle::after {
-    content: ''; width: 16px; height: 16px; background: white;
+    content: ''; width: 14px; height: 14px; background: white;
     border-radius: 50%; position: absolute; top: 2px; left: 2px;
     transition: transform 0.3s ease;
 }
-.memory-toggle.active::after { transform: translateX(20px); }
+.memory-toggle.active::after { transform: translateX(16px); }
+
+
+/* [NEW] Summary Log List Styles */
+#summaryLogList .summary-group {
+    padding-left: 10px;
+    margin-bottom: 5px;
+}
+#summaryLogList .summary-group summary {
+    font-size: 0.8rem;
+    color: #4a5568;
+    font-weight: bold;
+}
+.summary-log-item {
+    background: #f7fafc;
+    border: 1px solid transparent;
+    border-left: 3px solid var(--border-color);
+    padding: 6px 8px;
+    margin: 4px 0 4px 10px;
+    font-size: 0.8rem;
+    border-radius: 4px;
+}
+.summary-log-item.active {
+    border-left-color: var(--success-color);
+    background: #f0fff8;
+    font-weight: bold;
+}
+.summary-log-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.summary-log-item-title {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 5px;
+}
+.summary-log-item-actions {
+    display: flex;
+    flex-shrink: 0;
+}
+.summary-log-item-actions button {
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
+}
+
 
 .chat-header {
     padding: 10px 25px; 
@@ -448,11 +528,13 @@ textarea { resize: vertical; min-height: 100px; }
     font-size: 0.9em;
     color: var(--primary-color);
     margin-bottom: 5px;
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 .message.system {
     align-self: center;
-    max-width: 60%;
+    max-width: 80%;
     text-align: center;
     background: #f0f4f8;
     color: #64748b;
@@ -604,7 +686,7 @@ textarea { resize: vertical; min-height: 100px; }
 
 #chat-actions-menu a {
     color: var(--text-dark);
-    padding: 12px 16px;
+    padding: 8px 14px;
     text-decoration: none;
     display: block;
     font-size: 0.95rem;
@@ -870,12 +952,7 @@ body.focus-mode #chatInput {
 .agent-sortable-item .drag-handle:active {
     cursor: grabbing;
 }
-
-
-
-/* สไตล์สำหรับ Agent/Group ที่กำลัง active */
-.item-list > .item.active {
-    border-color: var(--success-color);
-    box-shadow: 0 0 8px rgba(72, 187, 120, 0.2);
-    background-color: #f6fff9;
+/* [NEW] Helper class to bring an item to the front */
+.item.z-index-front {
+    z-index: 1105; /* Higher than sidebar's z-index */
 }

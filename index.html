@@ -25,7 +25,7 @@
             <div class="settings-content">
                 <div class="section-box">
                     <h3>About PromptPrim Studio</h3>
-                    <p>Version: v.04-manual-summarize</p>
+                    <p>Version: v.05-redesign-ux</p>
                 </div>
                 <div class="section-box">
                     <h3>🎨 การแสดงผล</h3>
@@ -86,46 +86,46 @@
                         </h3>
                          <div id="pinnedSessionList" class="item-list"></div>
                         <div id="sessionListContainer" class="item-list"></div>
-                        <div class="collapsible-section" id="archivedSessionsSection" style="display:none;">
-                            <details>
-                                <summary>Archived Sessions</summary>
-                                <div id="archivedSessionList" class="item-list"></div>
-                            </details>
-                        </div>
+                        <details class="collapsible-section" id="archivedSessionsSection" style="display:none;">
+                            <summary>Archived Sessions</summary>
+                            <div id="archivedSessionList" class="item-list"></div>
+                        </details>
                     </div>
                 </div>
                 <div class="sidebar-resizer"></div>
                 <div class="memories-frame">
-                    <div class="section-box">
-                        <h3>
-                            <span>🤝 Agent Groups</span>
-                             <div class="dropdown align-right">
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>🤝 Agent Groups</h3>
+                            <div class="dropdown align-right">
                                 <button class="btn-icon" onclick="toggleDropdown(event)" title="Manage Groups">&#8942;</button>
                                 <div class="dropdown-content">
                                     <a href="#" onclick="event.preventDefault(); showAgentGroupEditor()">สร้าง Group ใหม่</a>
                                 </div>
                             </div>
-                        </h3>
-                        <div id="agentGroupList" class="item-list"></div>
-                    </div>
-
-                    <div class="section-box">
-                        <h3>
-                            <span>🤖 Agent Presets</span>
-                             <div class="dropdown align-right">
+                        </summary>
+                        <div class="section-box">
+                            <div id="agentGroupList" class="item-list"></div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>🤖 Agent Presets</h3>
+                            <div class="dropdown align-right">
                                 <button class="btn-icon" onclick="toggleDropdown(event)" title="Manage Agents">&#8942;</button>
                                 <div class="dropdown-content">
                                     <a href="#" onclick="event.preventDefault(); showAgentEditor(false)">สร้าง Agent ใหม่</a>
                                 </div>
                             </div>
-                        </h3>
-                         <div id="agentPresetList" class="item-list"></div>
-                    </div>
-
-                    <div class="section-box">
-                        <h3>
-                            <span>🧠 Command Memories</span>
-                             <div class="dropdown align-right">
+                        </summary>
+                         <div class="section-box">
+                            <div id="agentPresetList" class="item-list"></div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section">
+                        <summary class="section-header">
+                            <h3>🧠 Command Memories</h3>
+                            <div class="dropdown align-right">
                                 <button class="btn-icon" onclick="toggleDropdown(event)" title="Manage Memories">&#8942;</button>
                                 <div class="dropdown-content">
                                     <a href="#" onclick="event.preventDefault(); showMemoryEditor()">เพิ่ม Memory ใหม่</a>
@@ -135,22 +135,28 @@
                                     <input type="file" id="load-memory-package-input" accept=".json" style="display:none;" onchange="loadMemoryPackage(event)">
                                 </div>
                             </div>
-                        </h3>
-                        <div id="memories-container">
-                            <div class="collapsible-section">
+                        </summary>
+                        <div class="section-box">
+                            <div id="memories-container">
                                 <details id="active-memories-details" open>
                                     <summary>Active Memories</summary>
                                     <div id="activeMemoriesList" class="item-list"></div>
                                 </details>
-                            </div>
-                            <div class="collapsible-section" id="inactiveMemoriesSection" style="display:none;">
-                                <details>
+                                <details id="inactiveMemoriesSection" style="display:none;">
                                     <summary>Inactive Memories</summary>
                                     <div id="inactiveMemoriesList" class="item-list"></div>
                                 </details>
                             </div>
                         </div>
-                    </div>
+                    </details>
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>💡 Summary Logs</h3>
+                        </summary>
+                        <div class="section-box">
+                            <div id="summaryLogList" class="item-list"></div>
+                        </div>
+                    </details>
                 </div>
             </div>
              <div class="sidebar-horizontal-resizer"></div>
@@ -171,15 +177,14 @@
             <div class="chat-input-wrapper">
                 <div id="file-preview-container"></div>
                 <div class="input-container">
-
                     <div id="chat-actions-container" class="dropdown">
                         <button class="btn" id="chat-actions-btn" title="More Actions">+</button>
                         <div id="chat-actions-menu" class="dropdown-content">
                             <a href="#" id="manual-summarize-btn">🧠 Summarize Conversation</a>
+                            <a href="#" id="clear-summary-btn" style="display: none;">🧹 Clear Summary Context</a>
                             <a href="#" id="menu-upload-file-btn">📎 Upload File</a>
                         </div>
                     </div>
-
                     <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
                     <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
                     <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">&#9724;</button>
@@ -249,6 +254,10 @@
                 <div class="form-group">
                     <label for="agent-name-input">Agent Name</label>
                     <input type="text" id="agent-name-input" placeholder="e.g., Python Expert">
+                </div>
+                <div class="form-group">
+                    <label for="agent-icon-input">Agent Icon (Emoji)</label>
+                    <input type="text" id="agent-icon-input" placeholder="🧑‍💻">
                 </div>
                  <div class="form-group">
                     <label for="agent-model-select">Model</label>
@@ -367,6 +376,19 @@
             </div>
         </div>
     </div>
+    
+    <div id="view-summary-modal" class="modal-overlay">
+        <div class="modal-box" style="max-width: 700px;">
+            <h3 id="view-summary-title"></h3>
+            <div class="modal-body">
+                <pre id="view-summary-content" style="white-space: pre-wrap; word-wrap: break-word;"></pre>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideViewSummaryModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
 
     <script src="js/state.js"></script>
     <script src="js/db.js"></script>

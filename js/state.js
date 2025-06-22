@@ -3,8 +3,13 @@ const DB_NAME_PREFIX = 'AIChatbotDB_Project_';
 const SESSIONS_STORE_NAME = 'chatSessions';
 const METADATA_STORE_NAME = 'projectMetadata';
 const METADATA_KEY = 'projectInfo';
+
+// [NEW] List of random icons for new agents
+const RANDOMLY_ASSIGNED_ICONS = ['🧑‍💻', '✍️', '🎨', '🕵️‍♂️', '👨‍🔬', '🚀', '💡', '📈', '💬', '🧠', '💼', '📊'];
+
 const ALL_AGENT_SETTINGS_IDS = {
     'agent-name-input': 'name',
+    'agent-icon-input': 'icon', // [NEW] Added icon input
     'agent-model-select': 'model',
     'agent-system-prompt': 'systemPrompt',
     'agent-use-markdown': 'useMarkdown',
@@ -24,6 +29,7 @@ const defaultMemories = [
 ];
 
 const defaultAgentSettings = {
+    icon: '🤖', // [NEW] Default icon
     model: '',
     systemPrompt: 'You are a helpful assistant.',
     useMarkdown: true,
