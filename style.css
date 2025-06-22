@@ -501,11 +501,9 @@ textarea { resize: vertical; min-height: 100px; }
     padding: 20px 25px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 45px;
 }
-.message:hover {
-    padding-bottom: 38px;
-}
+
 .message {
     max-width: 85%;
     padding: 12px 18px;
@@ -557,13 +555,15 @@ textarea { resize: vertical; min-height: 100px; }
 }
 .message-actions {
     position: absolute;
-    bottom: 4px;
-    left: 4px;
+    bottom: -32px; /* [MODIFIED] Position it below the bubble */
+    left: 50%; /* [MODIFIED] Center it horizontally */
+    transform: translateX(-50%); /* [NEW] Fine-tune centering */
     display: none;
     gap: 5px;
     border-radius: 20px;
-    padding: 2px;
+    padding: 4px; /* [MODIFIED] Increased padding slightly */
 }
+
 .message.user .message-actions {
     left: auto;
     right: 4px;
@@ -1129,4 +1129,280 @@ body.focus-mode #chatInput {
     gap: 10px;
     margin-top: 8px;
     justify-content: flex-end;
+}
+
+/* [NEW] Dark Mode Theme */
+body.dark-mode {
+    --primary-color: #7f9cf5;
+    --secondary-color: #a78bfa;
+    --background-gradient: linear-gradient(135deg, #4a5568 0%, #2d3748 100%); /* [NEW] */
+
+    --text-dark: #e2e8f0; /* Inverted */
+    --text-light: #1a202c; /* Inverted */
+    --border-color: #4a5568; /* Inverted */
+    --white-alpha-95: rgba(26, 32, 44, 0.85); /* Dark with blur */
+    --white-alpha-50: rgba(45, 55, 72, 0.5);  /* Dark with blur */
+
+    /* Re-style specific elements for dark mode */
+    background: #1a202c;
+    color: var(--text-dark);
+}
+
+body.dark-mode .sidebar {
+    background: var(--white-alpha-95);
+}
+
+body.dark-mode #settings-panel {
+    background: #2d3748;
+}
+
+body.dark-mode .main-chat-area {
+    background: #2d3748cc;
+}
+
+body.dark-mode input[type="text"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="number"],
+body.dark-mode select,
+body.dark-mode textarea {
+    background-color: #4a5568;
+    color: var(--text-dark);
+    border-color: #718096;
+}
+
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #4a5568 inset !important;
+    -webkit-text-fill-color: var(--text-dark) !important;
+}
+
+body.dark-mode .message.assistant {
+    background: #4a5568;
+    border-color: #718096;
+}
+
+body.dark-mode .message.system {
+    background: #4a5568;
+    color: #a0aec0;
+    border-color: #718096;
+}
+
+/* [NEW] Additional Dark Mode styles for components */
+
+/* --- General Items (Agent Presets, Groups, Sessions) --- */
+body.dark-mode .item-list > .item {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+
+body.dark-mode .item-list > .item.active {
+    border-color: var(--success-color);
+    background-color: #2c4736; /* Dark green tint */
+}
+
+body.dark-mode .item-list > .item.pinned {
+    background-color: #3c3658; /* Dark purple tint */
+}
+
+body.dark-mode .item-name {
+    color: var(--text-dark); /* Should now be a light color */
+}
+
+
+/* --- Collapsible Sections & Summaries --- */
+body.dark-mode .collapsible-section summary {
+    color: #a0aec0;
+}
+body.dark-mode .collapsible-section summary:hover {
+    background: #4a5568;
+}
+body.dark-mode .summary-log-item {
+    background: #2d3748;
+    border-left-color: #4a5568;
+}
+body.dark-mode .summary-log-item.active {
+    border-left-color: var(--success-color);
+    background: #2c4736;
+    font-weight: bold;
+}
+body.dark-mode .summary-log-item-title {
+    color: #cbd5e0;
+}
+
+
+/* --- Memory Toggle Switch --- */
+body.dark-mode .memory-toggle {
+    background: #718096;
+}
+body.dark-mode .memory-toggle.active {
+    background: var(--success-color);
+}
+
+
+/* --- Dropdown Menus --- */
+body.dark-mode .dropdown-content {
+    background-color: #2d3748;
+    border: 1px solid #4a5568;
+}
+body.dark-mode .dropdown-content a {
+    color: var(--text-dark);
+}
+body.dark-mode .dropdown-content a:hover {
+    background-color: #4a5568;
+}
+body.dark-mode .dropdown-content hr {
+    border-top-color: #4a5568;
+}
+
+
+/* --- Buttons & Icons --- */
+body.dark-mode .btn-icon {
+    color: #a0aec0;
+}
+body.dark-mode .btn-icon:hover {
+    background: #4a5568;
+    color: var(--text-dark);
+}
+body.dark-mode .btn-secondary {
+    background: #718096;
+    color: #e2e8f0;
+}
+
+
+/* --- Modals --- */
+body.dark-mode .modal-box {
+    background: #2d3748;
+}
+body.dark-mode #agent-enhancer-column {
+    background-color: #1a202c;
+    border-color: #4a5568;
+}
+
+/* [NEW] Dark mode styles for the chat input area */
+
+body.dark-mode .chat-input-wrapper {
+    background: #1a202c; /* Make the wrapper background dark */
+    border-top-color: #4a5568;
+}
+
+body.dark-mode #chat-actions-btn {
+    background: #4a5568; /* Darker background for the '+' button */
+    color: #e2e8f0;      /* Lighter color for the '+' symbol */
+}
+
+/* [NEW] Final Dark Mode adjustments for Modals and Menus */
+
+/* --- Context Inspector Modal --- */
+body.dark-mode #context-inspector-modal pre {
+    background: #1a202c;
+    border-color: #4a5568;
+    color: #cbd5e0;
+}
+
+/* --- Chat Actions (+) Menu --- */
+body.dark-mode #chat-actions-menu {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+body.dark-mode #chat-actions-menu a {
+    color: var(--text-dark); /* Should be a light color */
+}
+body.dark-mode #chat-actions-menu a:hover {
+    background-color: #4a5568;
+}
+
+/* --- Agent Editor Modal --- */
+body.dark-mode #agent-enhancer-column {
+    background-color: #1a202c;
+    border-color: #4a5568;
+}
+body.dark-mode details summary {
+    color: #a0aec0;
+}
+body.dark-mode details summary:hover {
+    background-color: #4a5568;
+}
+
+/* --- General Input/UI elements in Modals --- */
+body.dark-mode #group-member-list {
+    border-color: #4a5568;
+}
+body.dark-mode .agent-sortable-item {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+body.dark-mode .agent-sortable-item .drag-handle {
+    color: #718096;
+}
+body.dark-mode code {
+    background-color: #4a5568;
+    color: #f7fafc;
+}
+body.dark-mode .message-content pre code {
+    background-color: transparent; /* Code inside a pre block should be transparent */
+}
+
+/* [NEW] Final component tweaks for Dark Mode */
+
+/* --- In-line Editing UI in Chat Bubble --- */
+body.dark-mode .inline-edit-textarea {
+    background-color: #2d3748; /* Dark background for textarea */
+    color: var(--text-dark);      /* Light text color */
+    border-color: var(--primary-color);
+}
+
+/* --- Horizontal Rule (HR) --- */
+body.dark-mode hr {
+    border-top-color: #4a5568; /* Darker border for separators */
+}
+
+/* [NEW] Custom scrollbar styles for Dark Mode */
+body.dark-mode *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+body.dark-mode *::-webkit-scrollbar-track {
+    background: #2d3748; /* Background of the scrollbar track */
+}
+
+body.dark-mode *::-webkit-scrollbar-thumb {
+    background-color: #718096; /* The draggable scroll handle */
+    border-radius: 5px;
+    border: 2px solid #2d3748; /* Creates padding around thumb */
+}
+
+body.dark-mode *::-webkit-scrollbar-thumb:hover {
+    background-color: #a0aec0; /* Lighter handle on hover */
+}
+
+/* [NEW] Dark mode styles for the Agent Profile Generator component */
+
+body.dark-mode .agent-enhancer-column {
+    background-color: #1a202c; /* A darker background to differentiate it */
+    border-color: #4a5568;
+}
+
+/* Adjusts the 'Powered by' and other warning text for better readability */
+body.dark-mode .modal-warning {
+    color: #a0aec0;
+}
+
+/* Adjusts the status box text color below the generate button */
+body.dark-mode .enhancer-status-box {
+    color: #a0aec0;
+}
+
+/* [NEW] Dark mode styles for the sidebar resizer */
+body.dark-mode .sidebar-resizer {
+    background: #2d3748;
+    border-top: 1px solid #4a5568;
+    border-bottom: 1px solid #4a5568;
+}
+
+body.dark-mode .sidebar-resizer:hover {
+    background: var(--primary-color);
+    opacity: 0.6;
 }

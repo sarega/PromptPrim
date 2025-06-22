@@ -39,6 +39,15 @@
                         </select>
                     </div>
                 </div>
+                    <div class="section-box">
+                        <h3>🌗 ธีม</h3>
+                        <div class="form-group" id="theme-switcher">
+                            <label><input type="radio" name="theme" value="light" checked> สว่าง</label>
+                            <label><input type="radio" name="theme" value="dark"> มืด</label>
+                            <label><input type="radio" name="theme" value="system"> ตามระบบ</label>
+                        </div>
+                    </div>
+
                 <div class="section-box">
                     <h3>🔧 API Settings</h3>
                     <div class="form-group">
@@ -300,7 +309,17 @@
             </div>
         </div>
     </div>
-
+    <div id="alert-modal" class="modal-overlay">
+        <div class="modal-box" style="max-width: 500px;">
+            <h3 id="alert-modal-title">Notification</h3>
+            <div class="modal-body" style="padding-top: 15px;">
+                <p id="alert-modal-message">This is a sample message.</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="hideCustomAlert()">Close</button>
+            </div>
+        </div>
+    </div>
     <div id="memory-editor-modal" class="modal-overlay"><div class="modal-box"><h3 id="memory-modal-title">เพิ่ม/แก้ไข Memory</h3><div class="form-group"><label for="memory-name-input">ชื่อ Memory</label><input type="text" id="memory-name-input"></div><div class="form-group"><label for="memory-content-input">เนื้อหา Memory</label><textarea id="memory-content-input" rows="8"></textarea></div><input type="hidden" id="memory-edit-index"><div class="modal-actions"><button class="btn btn-secondary" onclick="hideMemoryEditor()">ยกเลิก</button><button class="btn" onclick="saveMemory()">บันทึก</button></div></div></div>
     <div id="image-upload-modal" class="modal-overlay"><div class="modal-box"><h3>เพิ่มไฟล์</h3><div class="form-group"><label for="image-url-input">วาง Image URL</label><input type="text" id="image-url-input" placeholder="https://example.com/image.png"><p class="modal-warning">ระบบอาจยังไม่รองรับการค้นภาพจากเว็บไซต์</p></div><button class="btn" onclick="handleImageUrlConfirm()">ยืนยัน URL</button><hr style="margin: 20px 0;"><p style="text-align: center; margin-bottom: 10px;">หรือ</p><button class="btn" onclick="document.getElementById('file-input').click()">อัปโหลดจากเครื่อง</button><input type="file" id="file-input" accept=".pdf,.txt,.docx,.csv,.xls,.xlsx,.jpg,.jpeg,.png" style="display: none;" onchange="handleFileUpload(event)"><div class="modal-actions"><button class="btn btn-secondary" onclick="hideImageUploadModal()">ยกเลิก</button></div></div></div>
     <div id="save-project-modal" class="modal-overlay"><div class="modal-box"><h3>บันทึกโปรเจกต์</h3><div class="form-group"><label for="project-name-input">ชื่อโปรเจกต์</label><input type="text" id="project-name-input" placeholder="My Awesome Project"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="hideSaveProjectModal()">ยกเลิก</button><button class="btn" onclick="handleProjectSaveConfirm()">บันทึก</button></div></div></div>

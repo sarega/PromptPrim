@@ -205,7 +205,7 @@ async function _loadProjectFromFile(file) {
             const data = JSON.parse(e.target.result);
             if (data && data.id && data.name && data.agentPresets) {
                 await loadProjectData(data, true);
-                alert(`Project '${data.name}' loaded successfully!`);
+                showCustomAlert(`Project '${data.name}' loaded successfully!`, 'Project Loaded'); // <-- แก้ไขเป็นบรรทัดนี้
             } else { throw new Error('Invalid project file format.'); }
         } catch (error) { alert(`Error loading project: ${error.message}`); console.error(error); }
     };
@@ -1221,33 +1221,36 @@ function handleImageUrlConfirm() {
     hideImageUploadModal();
 }
 
+// [REVISED] ฟังก์ชันสำหรับจัดการการเลือก preset จาก dropdown
 function handleSummarizationPresetChange() {
     const selector = document.getElementById('system-utility-summary-preset-select');
     const selectedName = selector.value;
     
-    if (selectedName === 'custom') return; // Do nothing if 'Custom' is selected
+    if (selectedName === 'custom') {
+        return; // ไม่ต้องทำอะไรถ้าเป็น 'Custom'
+    }
 
     const presets = currentProject.globalSettings.summarizationPromptPresets;
     if (presets && presets[selectedName]) {
         const presetContent = presets[selectedName];
         document.getElementById('system-utility-summary-prompt').value = presetContent;
-        // Immediately save the change to the active settings
+        // บันทึกการเปลี่ยนแปลงลงใน state และอัปเดต UI ทันที
         saveSystemUtilityAgentSettings();
     }
 }
 
-// [NEW] เพิ่มฟังก์ชันใหม่สำหรับจัดการการบันทึก preset
+// [REVISED] ฟังก์ชันสำหรับจัดการการบันทึก preset
 function handleSaveSummarizationPreset() {
     const currentText = document.getElementById('system-utility-summary-prompt').value.trim();
     if (!currentText) {
-        alert('Prompt template cannot be empty.');
+        showCustomAlert('Prompt template cannot be empty.', 'Error');
         return;
     }
 
+    // หมายเหตุ: เราจะยังคงใช้ prompt() ของเบราว์เซอร์ไปก่อนเพื่อความรวดเร็ว
     const newName = prompt('Enter a name for this new preset:', '');
     if (!newName || !newName.trim()) {
-        alert('Preset name cannot be empty.');
-        return;
+        return; // User กด Cancel หรือไม่ได้ใส่ชื่อ
     }
 
     const trimmedName = newName.trim();
@@ -1260,8 +1263,8 @@ function handleSaveSummarizationPreset() {
     currentProject.globalSettings.summarizationPromptPresets[trimmedName] = currentText;
     updateAndPersistState().then(() => {
         renderSummarizationPresetSelector();
-        // Set the dropdown to the newly saved/updated preset
+        // ตั้งค่า dropdown ให้เป็น preset ที่เพิ่งบันทึก/อัปเดต
         document.getElementById('system-utility-summary-preset-select').value = trimmedName;
-        alert(`Preset '${trimmedName}' saved successfully!`);
+        showCustomAlert(`Preset '${trimmedName}' saved successfully!`, 'Success');
     });
 }

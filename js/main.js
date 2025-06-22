@@ -11,6 +11,9 @@ async function init() {
         
         document.getElementById('app-version').textContent = APP_VERSION; // [MODIFIED]
         
+                initializeTheme(); // [NEW] Call theme initializer at the beginning
+
+
         await loadLastActiveProject();
         setupEventListeners();
         makeSidebarResizable();
@@ -42,13 +45,25 @@ function setupEventListeners() {
          updateAndPersistState();
     });
 
-    // [NEW] Listeners for System Utility Agent Settings
+    // --- System Utility Agent Settings Listeners ---
     document.getElementById('system-utility-model-select').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
     document.getElementById('system-utility-prompt').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
-    document.getElementById('system-utility-summary-prompt').addEventListener('change', (e) => saveSystemUtilityAgentSettings()); // [NEW]
     document.getElementById('system-utility-temperature').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
     document.getElementById('system-utility-topP').addEventListener('change', (e) => saveSystemUtilityAgentSettings());
     
+    // [MODIFIED] Corrected listener setup for Summarization Presets
+    document.getElementById('system-utility-summary-prompt').addEventListener('change', () => {
+        // เมื่อ user พิมพ์เอง ให้เรียก saveSystemUtilityAgentSettings()
+        // ซึ่งจะอัปเดตค่าและ render dropdown ใหม่ให้เป็น 'Custom'
+        saveSystemUtilityAgentSettings();
+    });
+
+    // [NEW & CRITICAL] เพิ่ม listeners สำหรับ UI ของ preset ใหม่ที่ขาดไป
+    document.getElementById('system-utility-summary-preset-select').addEventListener('change', handleSummarizationPresetChange);
+    document.getElementById('save-summary-preset-btn').addEventListener('click', handleSaveSummarizationPreset);
+
+
+    // --- Other UI Listeners ---
     document.getElementById('entitySelector').addEventListener('change', loadSelectedEntity);
     
     document.getElementById('chat-actions-btn').addEventListener('click', (e) => {
@@ -68,18 +83,20 @@ function setupEventListeners() {
         document.getElementById('chat-actions-menu').classList.remove('active');
     });
 
-    // [NEW] Listener for the new Generate Agent Profile button
     document.getElementById('generate-agent-profile-btn').addEventListener('click', generateAgentProfile);
     
     window.addEventListener('beforeunload', (event) => {
         if (isDirty) { event.preventDefault(); event.returnValue = ''; }
     });
 
+    // --- Global Click Listeners for closing menus ---
     document.addEventListener('click', (event) => {
+        // Close dropdowns if clicked outside
         if (!event.target.closest('.dropdown')) {
             document.querySelectorAll('.dropdown.open').forEach(d => { d.classList.remove('open'); });
             document.querySelectorAll('.item.z-index-front').forEach(i => { i.classList.remove('z-index-front'); });
         }
+        // Close chat actions menu if clicked outside
         if (!event.target.closest('#chat-actions-container')) {
             document.getElementById('chat-actions-menu').classList.remove('active');
         }
@@ -106,6 +123,48 @@ async function loadLastActiveProject() {
     }
     await proceedWithCreatingNewProject();
 }
+
+// [NEW] Theme Management Logic
+const themeSwitcher = document.getElementById('theme-switcher');
+const themeRadios = themeSwitcher.querySelectorAll('input[type="radio"]');
+
+function applyTheme(theme) {
+    if (theme === 'system') {
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.body.classList.toggle('dark-mode', systemPrefersDark);
+    } else {
+        document.body.classList.toggle('dark-mode', theme === 'dark');
+    }
+}
+
+function handleThemeChange(event) {
+    const selectedTheme = event.target.value;
+    localStorage.setItem('theme', selectedTheme);
+    applyTheme(selectedTheme);
+}
+
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'system';
+    
+    themeRadios.forEach(radio => {
+        if (radio.value === savedTheme) {
+            radio.checked = true;
+        }
+        radio.addEventListener('change', handleThemeChange);
+    });
+
+    applyTheme(savedTheme);
+
+    // Listen for changes in OS theme preference
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        const currentTheme = localStorage.getItem('theme') || 'system';
+        if (currentTheme === 'system') {
+            applyTheme('system');
+        }
+    });
+}
+
+
 
 // --- Start the application ---
 init();

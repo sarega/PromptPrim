@@ -911,3 +911,14 @@ function renderSummarizationPresetSelector() {
         selector.value = matchingPresetName;
     }
 }
+
+// [NEW] Functions to control the custom alert modal
+function showCustomAlert(message, title = 'Notification') {
+    document.getElementById('alert-modal-title').textContent = title;
+    document.getElementById('alert-modal-message').textContent = message;
+    document.getElementById('alert-modal').style.display = 'flex';
+}
+
+function hideCustomAlert() {
+    document.getElementById('alert-modal').style.display = 'none';
+}
