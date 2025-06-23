@@ -210,17 +210,28 @@
                 <button id="hamburger-btn" class="menu-toggle-btn" onclick="toggleMobileSidebar()">&#9776;</button>
                 <button id="collapse-sidebar-btn" class="menu-toggle-btn" onclick="toggleSidebarCollapse()">&laquo;</button>
                 <h1 id="chat-title" class="chat-title">AI Assistant</h1>
-                 <div class="form-group" style="margin-bottom:0; min-width: 250px;">
-                    <select id="entitySelector"></select>
-                 </div>
-                 <button class="btn-icon" id="focus-mode-btn" onclick="toggleFocusMode()" title="Focus Mode">&#x2922;</button>
+                
+                <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
+                    <select id="entitySelector" onchange="loadSelectedEntity()"></select>
+
+                    <div id="custom-entity-selector-trigger" class="custom-select-trigger" onclick="toggleCustomEntitySelector(event)">
+                        <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
+                        <span id="custom-entity-selector-text">Default Agent</span>
+                        <span class="custom-select-arrow"></span>
+                    </div>
+                    <div id="custom-entity-selector-options" class="custom-select-options">
+                        </div>
+                </div>
+                
+                <button class="btn-icon" id="focus-mode-btn" onclick="toggleFocusMode()" title="Focus Mode">&#x2922;</button>
             </div>
+
             <div class="chat-messages" id="chatMessages"></div>
              
             <div class="chat-input-wrapper">
                 <div id="file-preview-container"></div>
-                <div class="input-container">
-                    <div id="chat-actions-container" class="dropdown">
+                
+                <div class="input-container-seamless"> <div id="chat-actions-container" class="dropdown input-adornment left">
                         <button class="btn" id="chat-actions-btn" title="More Actions">+</button>
                         <div id="chat-actions-menu" class="dropdown-content">
                             <a href="#" id="manual-summarize-btn">🧠 Summarize Conversation</a>
@@ -228,11 +239,18 @@
                             <a href="#" id="menu-upload-file-btn">📎 Upload File</a>
                         </div>
                     </div>
+
                     <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
-                    <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
-                    <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">&#9724;</button>
+
+                    <div class="input-adornment right">
+                        <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
+                        <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">&#9724;</button>
+                    </div>
+
+                    <!-- <button id="expand-toggle-btn" class="expand-toggle-btn" title="Expand Input" style="display: none;">&#x2922; </button> -->
+
                 </div>
-                 <p class="input-disclaimer">AI อาจทำผิดพลาดได้ ดังนั้นโปรดตรวจสอบคำตอบอีกครั้ง</p>
+                <!-- <p class="input-disclaimer">AI อาจทำผิดพลาดได้ ดังนั้นโปรดตรวจสอบคำตอบอีกครั้ง</p> -->
             </div>
             <div id="status-panel">
                  <div class="status-left">
@@ -321,7 +339,7 @@
         </div>
     </div>
     <div id="memory-editor-modal" class="modal-overlay"><div class="modal-box"><h3 id="memory-modal-title">เพิ่ม/แก้ไข Memory</h3><div class="form-group"><label for="memory-name-input">ชื่อ Memory</label><input type="text" id="memory-name-input"></div><div class="form-group"><label for="memory-content-input">เนื้อหา Memory</label><textarea id="memory-content-input" rows="8"></textarea></div><input type="hidden" id="memory-edit-index"><div class="modal-actions"><button class="btn btn-secondary" onclick="hideMemoryEditor()">ยกเลิก</button><button class="btn" onclick="saveMemory()">บันทึก</button></div></div></div>
-    <div id="image-upload-modal" class="modal-overlay"><div class="modal-box"><h3>เพิ่มไฟล์</h3><div class="form-group"><label for="image-url-input">วาง Image URL</label><input type="text" id="image-url-input" placeholder="https://example.com/image.png"><p class="modal-warning">ระบบอาจยังไม่รองรับการค้นภาพจากเว็บไซต์</p></div><button class="btn" onclick="handleImageUrlConfirm()">ยืนยัน URL</button><hr style="margin: 20px 0;"><p style="text-align: center; margin-bottom: 10px;">หรือ</p><button class="btn" onclick="document.getElementById('file-input').click()">อัปโหลดจากเครื่อง</button><input type="file" id="file-input" accept=".pdf,.txt,.docx,.csv,.xls,.xlsx,.jpg,.jpeg,.png" style="display: none;" onchange="handleFileUpload(event)"><div class="modal-actions"><button class="btn btn-secondary" onclick="hideImageUploadModal()">ยกเลิก</button></div></div></div>
+    <!-- <div id="image-upload-modal" class="modal-overlay"><div class="modal-box"><h3>เพิ่มไฟล์</h3><div class="form-group"><label for="image-url-input">วาง Image URL</label><input type="text" id="image-url-input" placeholder="https://example.com/image.png"><p class="modal-warning">ระบบอาจยังไม่รองรับการค้นภาพจากเว็บไซต์</p></div><button class="btn" onclick="handleImageUrlConfirm()">ยืนยัน URL</button><hr style="margin: 20px 0;"><p style="text-align: center; margin-bottom: 10px;">หรือ</p><button class="btn" onclick="document.getElementById('file-input').click()">อัปโหลดจากเครื่อง</button><input type="file" id="file-input" accept=".pdf,.txt,.docx,.csv,.xls,.xlsx,.jpg,.jpeg,.png" style="display: none;" onchange="handleFileUpload(event)"><div class="modal-actions"><button class="btn btn-secondary" onclick="hideImageUploadModal()">ยกเลิก</button></div></div></div> -->
     <div id="save-project-modal" class="modal-overlay"><div class="modal-box"><h3>บันทึกโปรเจกต์</h3><div class="form-group"><label for="project-name-input">ชื่อโปรเจกต์</label><input type="text" id="project-name-input" placeholder="My Awesome Project"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="hideSaveProjectModal()">ยกเลิก</button><button class="btn" onclick="handleProjectSaveConfirm()">บันทึก</button></div></div></div>
     <div id="unsaved-changes-modal" class="modal-overlay"><div class="modal-box"><h3>มีข้อมูลที่ยังไม่ได้บันทึก</h3><p>โปรเจกต์ปัจจุบันของคุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการทำอะไร?</p><div class="modal-actions"><button class="btn btn-secondary" onclick="handleUnsavedChanges('cancel')">ยกเลิก</button><button class="btn btn-danger" onclick="handleUnsavedChanges('discard')">ไม่บันทึก</button><button class="btn" onclick="handleUnsavedChanges('save')">บันทึกโปรเจกต์</button></div></div></div>
     <div id="context-inspector-modal" class="modal-overlay"><div class="modal-box"><h3 >Context Inspector</h3><div class="modal-body"><div class="info-grid"><strong>Active Entity:</strong><span id="inspector-agent-name"></span><strong>Model:</strong><span id="inspector-agent-model"></span><strong>Total Tokens:</strong><span id="inspector-token-count"></span></div><h4>Final System Prompt:</h4><pre id="inspector-system-prompt"></pre></div><div class="modal-actions"><button class="btn btn-secondary" onclick="hideContextInspector()">Close</button></div></div></div>

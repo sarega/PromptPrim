@@ -12,7 +12,6 @@
     --white-alpha-50: rgba(247, 250, 252, 0.5);
     --shadow-light: rgba(102, 126, 234, 0.1);
     --shadow-dark: rgba(0, 0, 0, 0.1);
-    /* Dynamic Font Variables */
     --main-font-family: 'Sarabun', sans-serif;
     --main-font-size: 16px;
 }
@@ -45,7 +44,8 @@ body {
 }
 
 .sidebar {
-    width: 340px; 
+    flex-basis: 340px; /* เปลี่ยนจาก width */
+    flex-shrink: 0;   /* เพิ่มเข้ามา */
     min-width: 250px;
     max-width: 600px;
     background: var(--white-alpha-95);
@@ -56,10 +56,16 @@ body {
     transition: margin-left 0.3s ease-in-out;
     z-index: 1100;
     position: relative;
+    transition: flex-basis 0.3s ease-in-out, padding 0.3s ease-in-out; /* ปรับ transition */
 }
 
-.app-wrapper.sidebar-collapsed .sidebar {
-    margin-left: -340px; 
+ .app-wrapper.sidebar-collapsed .sidebar {
+    flex-basis: 0;
+    min-width: 0; /* สำคัญมาก: อนุญาตให้ flex-basis เป็น 0 ได้ */
+    overflow: hidden; /* ซ่อนเนื้อหาข้างในขณะที่กำลังยุบ */
+    padding-left: 0;
+    padding-right: 0;
+    border-right-width: 0;
 }
 
 .sidebar-header {
@@ -167,7 +173,8 @@ body {
     flex-direction: column;
     background: var(--white-alpha-50);
     transition: width 0.3s ease-in-out;
-    width: calc(100% - 340px);
+    /* width: calc(100% - 340px); */
+    position: relative;
 }
 
 #settings-panel {
@@ -221,7 +228,6 @@ body {
     position: relative;
 }
 
-/* [MODIFIED] Styling for collapsible section headers */
 .section-header {
     display: flex;
     justify-content: space-between;
@@ -236,7 +242,7 @@ body {
     flex-grow: 1;
 }
 .section-header .btn-icon {
-    color: #718096; /* Darker icon color */
+    color: #718096;
     font-weight: bold;
 }
 
@@ -336,7 +342,6 @@ textarea { resize: vertical; min-height: 100px; }
     top: 100%;
     margin-top: 4px;
 }
-/* [MODIFIED] Compact dropdown items */
 .dropdown-content a {
     color: black;
     padding: 8px 14px;
@@ -353,13 +358,12 @@ textarea { resize: vertical; min-height: 100px; }
     border-top: 1px solid var(--border-color);
 }
 
-/* [MODIFIED] Compact list items */
 .item-list > .item {
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 8px 12px;
-    margin-bottom: 4px; /* Reduced margin */
+    margin-bottom: 4px;
     transition: all 0.2s ease;
     position: relative;
 }
@@ -407,7 +411,6 @@ textarea { resize: vertical; min-height: 100px; }
 .collapsible-section summary:hover { background: #f0f0f0; }
 .collapsible-section .item-list { padding-top: 5px; }
 
-/* [NEW] Compact Memory Item Styles */
 .memory-item {
     padding: 4px 8px;
 }
@@ -438,7 +441,6 @@ textarea { resize: vertical; min-height: 100px; }
 .memory-toggle.active::after { transform: translateX(16px); }
 
 
-/* [NEW] Summary Log List Styles */
 #summaryLogList .summary-group {
     padding-left: 10px;
     margin-bottom: 5px;
@@ -553,29 +555,31 @@ textarea { resize: vertical; min-height: 100px; }
 .message.system .speaker-label {
     display: none;
 }
-.message-actions {
+/* .message-actions {
     position: absolute;
-    bottom: -32px; /* [MODIFIED] Position it below the bubble */
-    left: 50%; /* [MODIFIED] Center it horizontally */
-    transform: translateX(-50%); /* [NEW] Fine-tune centering */
+    bottom: -20px;
+    left: 10%;
+    transform: translateX(-50%);
     display: none;
     gap: 5px;
     border-radius: 20px;
-    padding: 4px; /* [MODIFIED] Increased padding slightly */
-}
+    padding: 4px;
+
+} */
 
 .message.user .message-actions {
     left: auto;
     right: 4px;
 }
 .message.assistant .message-actions {
-    background: rgba(237, 242, 247, 0.8);
-    backdrop-filter: blur(2px);
+    background: transparent;
+    /* background: rgba(237, 242, 247, 0.8);
+    backdrop-filter: blur(2px); */
 }
-.message.user .message-actions {
+/* .message.user .message-actions {
     background: rgba(0, 0, 0, 0.2);
     backdrop-filter: blur(2px);
-}
+} */
  .message:hover .message-actions {
     display: flex;
 }
@@ -633,44 +637,129 @@ textarea { resize: vertical; min-height: 100px; }
     margin-top: 10px;
 }
 
+/* =================================================================== */
+/* == START: COMPACT, MODERN, MOCKUP-MATCHING INPUT STYLES        == */
+/* =================================================================== */
+
+/* 1. The main wrapper (now invisible) */
 .chat-input-wrapper {
-    background: rgba(255, 255, 255, 0.8);
-    padding: 15px 25px 5px 25px;
-    border-top: 1px solid var(--border-color);
+    background: transparent;
+    padding: 0 20px 15px;
+    border-top: none;
+    flex-shrink: 0;
 }
+
+/* 2. The visible "bubble" container */
+.input-container-seamless {
+    position: relative; 
+    background-color: #f0f4f8;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    width: 100%;
+    padding-bottom: 0px; /* Create space at the bottom for buttons */
+}
+
+/* 3. The actual textarea */
+#chatInput {
+    width: 100%;
+    background: transparent;
+    border: none;
+    resize: none;
+    line-height: 1.6;
+    color: var(--text-dark);
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 12px 60px 12px 55px; /* Top, Right, Bottom, Left */
+    margin: 0;
+}
+#chatInput:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* 4. The container for the buttons */
+.input-adornment {
+    position: absolute;
+    bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.input-adornment.left {
+    left: 8px;
+}
+.input-adornment.right {
+    right: 8px;
+}
+
+/* 5. Styling for the buttons */
+.input-adornment .btn {
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.input-adornment #chat-actions-btn {
+    width: 38px;
+    height: 38px;
+    background: none !important;      /* เปลี่ยนเป็น background: none และเพิ่ม !important */
+    border: none !important;          /* เพิ่มเข้ามาเพื่อให้แน่ใจว่าไม่มีเส้นขอบ */
+    color: #5f6368;
+    font-size: 20px;
+    position: relative;
+    top: 0px;
+    transition: color 0.2s ease;
+}
+
+.input-adornment #chat-actions-btn:hover {
+    background-color: transparent; /* ทำให้แน่ใจว่าพื้นหลังไม่ปรากฏเมื่อ hover */
+    color: #202124;                 /* ทำให้ไอคอนเข้มขึ้นเล็กน้อยเมื่อ hover */
+}
+
+.input-adornment .send-btn,
+.input-adornment .stop-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;    
+}
+
+/* 6. Hide unused buttons */
+.input-adornment .stop-btn {
+    display: none;
+}
+
+/* --- Dark Mode for the new input --- */
+body.dark-mode .chat-input-wrapper {
+    background: transparent;
+    border-top: none;
+}
+body.dark-mode .input-container-seamless {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+body.dark-mode #chatInput {
+    color: var(--text-dark);
+}
+body.dark-mode .input-adornment #chat-actions-btn {
+    background-color: transparent; /* ทำให้พื้นหลังโปร่งใส */
+    color: #bdc1c6;                 /* เปลี่ยนสีไอคอนเป็นสีเทาอ่อน (Soft White) */
+}
+body.dark-mode .input-adornment #chat-actions-btn:hover {
+    background-color: transparent; /* ทำให้แน่ใจว่าพื้นหลังไม่ปรากฏเมื่อ hover */
+    color: #e8eaed;                 /* ทำให้ไอคอนสว่างขึ้น (เป็นสีขาว) เมื่อ hover */
+}
+
+/* =================================================================== */
+/* == END OF MODERN INPUT STYLES                                    == */
+/* =================================================================== */
+
+
 .input-disclaimer {
     font-size: 12px;
     text-align: center;
     color: #a0aec0;
     padding-top: 10px;
-}
-
-.input-container { 
-    display: flex; 
-    gap: 10px; 
-    align-items: flex-end; 
-    position: relative;
-}
-#chatInput {
-    flex: 1; min-height: 48px; max-height: 150px;
-    padding: 12px 18px; border: 1px solid var(--border-color);
-    border-radius: 24px; resize: none;
-}
-.send-btn, .stop-btn, #chat-actions-btn {
-    width: 48px; height: 48px; border-radius: 50%;
-    flex-shrink: 0;
-}
-#chat-actions-btn { 
-    background: #e2e8f0; 
-    color: var(--text-dark); 
-    font-size: 24px;
-}
-.stop-btn { background: var(--error-color); display: none; }
-
-#chat-actions-container {
-    position: relative;
-    display: flex;
-    align-items: flex-end;
 }
 
 #chat-actions-menu {
@@ -705,41 +794,92 @@ textarea { resize: vertical; min-height: 100px; }
 }
 
 #file-preview-container {
-    display: none;
-    position: relative;
-    margin-bottom: 10px;
-    max-width: 250px;
-    background: #f7fafc;
-    padding: 10px;
-    border-radius: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 0;
+    background: transparent;
+    width: 100%;
 }
-#file-preview {
-    max-width: 100%;
+.file-preview-item {
+    position: relative;
     border-radius: 8px;
+    overflow: hidden;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f4f8;
     border: 1px solid var(--border-color);
 }
- #file-info {
+
+body.dark-mode .file-preview-item {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+
+.file-preview-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.file-preview-thumbnail.file-icon {
+    font-size: 48px;
+    color: #718096;
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
 }
+
+.file-preview-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 4px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+.remove-file-btn {
+    position: absolute;
+    top: 4px; 
+    right: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border-radius: 50%;
+    border: 1.5px solid white;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-size: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    z-index: 2;
+    transition: background 0.2s ease;
+}
+
+.remove-file-btn:hover {
+    background: rgba(229, 62, 62, 0.9);
+}
+
 #file-info span {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-#remove-file-btn {
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    background: var(--error-color);
-    color: white;
-    border-radius: 50%;
-    border: none;
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    font-weight: bold;
 }
 
 #status-panel {
@@ -928,7 +1068,7 @@ body.focus-mode #chatInput {
     min-height: 80px;
     font-size: 1.1rem;
 }
-/* Styles for Agent Group Reordering */
+
 .agent-sortable-item {
     display: flex;
     align-items: center;
@@ -960,17 +1100,15 @@ body.focus-mode #chatInput {
 .agent-sortable-item .drag-handle:active {
     cursor: grabbing;
 }
-/* [NEW] Helper class to bring an item to the front */
+
 .item.z-index-front {
-    z-index: 1105; /* Higher than sidebar's z-index */
+    z-index: 1105;
 }
 
-/* [NEW] Styles for the refactored Agent Editor Modal */
 #agent-editor-modal .modal-box {
-    max-width: 900px; /* Increase max width for two columns */
+    max-width: 900px;
 }
 
-/* Default to a single column layout (mobile-first) */
 #agent-editor-modal .modal-body {
     display: flex;
     flex-direction: column;
@@ -998,27 +1136,25 @@ body.focus-mode #chatInput {
     color: #4a5568;
 }
 
-/* Apply two-column layout on wider screens */
 @media (min-width: 768px) {
     #agent-editor-modal .modal-body {
         flex-direction: row;
     }
     .agent-editor-column {
-        flex: 2; /* Takes up 2/3 of the space */
+        flex: 2;
     }
     .agent-enhancer-column {
-        flex: 1; /* Takes up 1/3 of the space */
+        flex: 1;
     }
 }
 
-/* [NEW] Styles for the code block copy functionality */
 .code-block-wrapper {
     position: relative;
-    margin: 1em 0; /* ใช้ margin ที่ wrapper แทนที่ pre */
+    margin: 1em 0;
 }
 
 .message-content pre {
-    margin: 0; /* เอา margin เดิมของ pre ออก */
+    margin: 0;
 }
 
 .copy-code-btn {
@@ -1049,14 +1185,14 @@ body.focus-mode #chatInput {
 }
 
 .message-content { outline: none; }
-/* [NEW] Add specific styles for headings inside chat messages to restore visual hierarchy */
+
 .message-content h1,
 .message-content h2,
 .message-content h3,
 .message-content h4,
 .message-content h5,
 .message-content h6 {
-    font-weight: 700; /* ทำให้เป็นตัวหนาเสมอ */
+    font-weight: 700;
     line-height: 1.3;
     margin-top: 0.8rem;
     margin-bottom: 0.4rem;
@@ -1078,9 +1214,6 @@ body.focus-mode #chatInput {
     font-size: 1.1rem;
 }
 
-/* [NEW] Definitive fix for paragraph spacing using CSS display properties.
-   This prevents large gaps between paragraphs rendered from Markdown. */
-
 .message-content p {
     margin: 0;
     padding: 0;
@@ -1088,17 +1221,14 @@ body.focus-mode #chatInput {
 }
 
 .message-content p::after {
-    content: '\A';      /* ใช้ CSS เพื่อแทรกสัญลักษณ์ขึ้นบรรทัดใหม่ (newline) */
-    white-space: pre;   /* บอกให้เบราว์เซอร์แสดงผลสัญลักษณ์ newline นั้นจริงๆ */
+    content: '\A';
+    white-space: pre;
 }
 
-/* Optional: Prevents a line break if the paragraph is the very last element */
 .message-content p:last-child::after {
     content: '';
 }   
 
-
-/* [NEW] Styles for the in-line message editing UI */
 .inline-edit-container {
     width: 100%;
 }
@@ -1131,19 +1261,17 @@ body.focus-mode #chatInput {
     justify-content: flex-end;
 }
 
-/* [NEW] Dark Mode Theme */
 body.dark-mode {
     --primary-color: #7f9cf5;
     --secondary-color: #a78bfa;
-    --background-gradient: linear-gradient(135deg, #4a5568 0%, #2d3748 100%); /* [NEW] */
+    --background-gradient: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
 
-    --text-dark: #e2e8f0; /* Inverted */
-    --text-light: #1a202c; /* Inverted */
-    --border-color: #4a5568; /* Inverted */
-    --white-alpha-95: rgba(26, 32, 44, 0.85); /* Dark with blur */
-    --white-alpha-50: rgba(45, 55, 72, 0.5);  /* Dark with blur */
+    --text-dark: #e2e8f0;
+    --text-light: #1a202c;
+    --border-color: #4a5568;
+    --white-alpha-95: rgba(26, 32, 44, 0.85);
+    --white-alpha-50: rgba(45, 55, 72, 0.5);
 
-    /* Re-style specific elements for dark mode */
     background: #1a202c;
     color: var(--text-dark);
 }
@@ -1189,9 +1317,6 @@ body.dark-mode .message.system {
     border-color: #718096;
 }
 
-/* [NEW] Additional Dark Mode styles for components */
-
-/* --- General Items (Agent Presets, Groups, Sessions) --- */
 body.dark-mode .item-list > .item {
     background-color: #2d3748;
     border-color: #4a5568;
@@ -1199,19 +1324,17 @@ body.dark-mode .item-list > .item {
 
 body.dark-mode .item-list > .item.active {
     border-color: var(--success-color);
-    background-color: #2c4736; /* Dark green tint */
+    background-color: #2c4736;
 }
 
 body.dark-mode .item-list > .item.pinned {
-    background-color: #3c3658; /* Dark purple tint */
+    background-color: #3c3658;
 }
 
 body.dark-mode .item-name {
-    color: var(--text-dark); /* Should now be a light color */
+    color: var(--text-dark);
 }
 
-
-/* --- Collapsible Sections & Summaries --- */
 body.dark-mode .collapsible-section summary {
     color: #a0aec0;
 }
@@ -1231,8 +1354,6 @@ body.dark-mode .summary-log-item-title {
     color: #cbd5e0;
 }
 
-
-/* --- Memory Toggle Switch --- */
 body.dark-mode .memory-toggle {
     background: #718096;
 }
@@ -1240,8 +1361,6 @@ body.dark-mode .memory-toggle.active {
     background: var(--success-color);
 }
 
-
-/* --- Dropdown Menus --- */
 body.dark-mode .dropdown-content {
     background-color: #2d3748;
     border: 1px solid #4a5568;
@@ -1256,8 +1375,6 @@ body.dark-mode .dropdown-content hr {
     border-top-color: #4a5568;
 }
 
-
-/* --- Buttons & Icons --- */
 body.dark-mode .btn-icon {
     color: #a0aec0;
 }
@@ -1270,50 +1387,27 @@ body.dark-mode .btn-secondary {
     color: #e2e8f0;
 }
 
-
-/* --- Modals --- */
 body.dark-mode .modal-box {
     background: #2d3748;
 }
-body.dark-mode #agent-enhancer-column {
-    background-color: #1a202c;
-    border-color: #4a5568;
-}
 
-/* [NEW] Dark mode styles for the chat input area */
-
-body.dark-mode .chat-input-wrapper {
-    background: #1a202c; /* Make the wrapper background dark */
-    border-top-color: #4a5568;
-}
-
-body.dark-mode #chat-actions-btn {
-    background: #4a5568; /* Darker background for the '+' button */
-    color: #e2e8f0;      /* Lighter color for the '+' symbol */
-}
-
-/* [NEW] Final Dark Mode adjustments for Modals and Menus */
-
-/* --- Context Inspector Modal --- */
 body.dark-mode #context-inspector-modal pre {
     background: #1a202c;
     border-color: #4a5568;
     color: #cbd5e0;
 }
 
-/* --- Chat Actions (+) Menu --- */
 body.dark-mode #chat-actions-menu {
     background-color: #2d3748;
     border-color: #4a5568;
 }
 body.dark-mode #chat-actions-menu a {
-    color: var(--text-dark); /* Should be a light color */
+    color: var(--text-dark);
 }
 body.dark-mode #chat-actions-menu a:hover {
     background-color: #4a5568;
 }
 
-/* --- Agent Editor Modal --- */
 body.dark-mode #agent-enhancer-column {
     background-color: #1a202c;
     border-color: #4a5568;
@@ -1325,7 +1419,6 @@ body.dark-mode details summary:hover {
     background-color: #4a5568;
 }
 
-/* --- General Input/UI elements in Modals --- */
 body.dark-mode #group-member-list {
     border-color: #4a5568;
 }
@@ -1341,61 +1434,51 @@ body.dark-mode code {
     color: #f7fafc;
 }
 body.dark-mode .message-content pre code {
-    background-color: transparent; /* Code inside a pre block should be transparent */
+    background-color: transparent;
 }
 
-/* [NEW] Final component tweaks for Dark Mode */
-
-/* --- In-line Editing UI in Chat Bubble --- */
 body.dark-mode .inline-edit-textarea {
-    background-color: #2d3748; /* Dark background for textarea */
-    color: var(--text-dark);      /* Light text color */
+    background-color: #2d3748;
+    color: var(--text-dark);
     border-color: var(--primary-color);
 }
 
-/* --- Horizontal Rule (HR) --- */
 body.dark-mode hr {
-    border-top-color: #4a5568; /* Darker border for separators */
+    border-top-color: #4a5568;
 }
 
-/* [NEW] Custom scrollbar styles for Dark Mode */
 body.dark-mode *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
 }
 
 body.dark-mode *::-webkit-scrollbar-track {
-    background: #2d3748; /* Background of the scrollbar track */
+    background: #2d3748;
 }
 
 body.dark-mode *::-webkit-scrollbar-thumb {
-    background-color: #718096; /* The draggable scroll handle */
+    background-color: #718096;
     border-radius: 5px;
-    border: 2px solid #2d3748; /* Creates padding around thumb */
+    border: 2px solid #2d3748;
 }
 
 body.dark-mode *::-webkit-scrollbar-thumb:hover {
-    background-color: #a0aec0; /* Lighter handle on hover */
+    background-color: #a0aec0;
 }
 
-/* [NEW] Dark mode styles for the Agent Profile Generator component */
-
 body.dark-mode .agent-enhancer-column {
-    background-color: #1a202c; /* A darker background to differentiate it */
+    background-color: #1a202c;
     border-color: #4a5568;
 }
 
-/* Adjusts the 'Powered by' and other warning text for better readability */
 body.dark-mode .modal-warning {
     color: #a0aec0;
 }
 
-/* Adjusts the status box text color below the generate button */
 body.dark-mode .enhancer-status-box {
     color: #a0aec0;
 }
 
-/* [NEW] Dark mode styles for the sidebar resizer */
 body.dark-mode .sidebar-resizer {
     background: #2d3748;
     border-top: 1px solid #4a5568;
@@ -1407,16 +1490,154 @@ body.dark-mode .sidebar-resizer:hover {
     opacity: 0.6;
 }
 
-/* [FIX] Corrects the text color and ensures the bubble expands during editing in Dark Mode */
-
-/* 1. Correct Text Color in User Edit Textarea for Dark Mode */
 body.dark-mode .message.user .inline-edit-textarea {
-    background-color: rgba(0, 0, 0, 0.2); /* Slightly darker, transparent background */
-    color: #f7fafc; /* Force text to be light */
-    border-color: #7f9cf5; /* A light blue border to indicate editing */
+    background-color: rgba(0, 0, 0, 0.2);
+    color: #f7fafc;
+    border-color: #7f9cf5;
 }
 
-/* 2. Ensure bubble expansion works correctly */
 .message.user.is-editing {
-    max-width: 95% !important; /* Use !important to ensure this rule wins */
+    max-width: 95% !important
+    }
+
+/* New for dropdown */
+/* --- Custom Entity Selector Styles --- */
+.custom-select-wrapper {
+    position: relative;
+    margin-left: 15px;
+    min-width: 200px;
+    max-width: 300px;
+    flex-grow: 1;
+}
+
+.custom-select-wrapper select {
+    display: none; /* ซ่อน select เดิม */
+}
+
+/* --- Force Dropdown Font Size (Final Fix) --- */
+
+/* บังคับใช้ขนาด font กับ "ตัวหนังสือ" โดยตรง */
+#custom-entity-selector-text {
+    font-size: 0.8rem !important; /* ใช้ขนาด 0.8rem เท่ากับปุ่ม Project */
+}
+
+/* ปรับขนาด "ไอคอน" ให้สมดุลกับขนาด font ใหม่ */
+#custom-entity-selector-trigger .item-icon {
+    font-size: 0.9rem !important; /* ปรับให้ใหญ่กว่าตัวหนังสือเล็กน้อยเพื่อความสวยงาม */
+}
+
+.custom-select-trigger {
+    background-color: #f0f4f8;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1px 8px; /* << แก้ไขค่าแรกให้เล็กลง */
+    font-size: 8px;   << เพิ่มบรรทัดนี้เพื่อลดขนาด Font ของชื่อ */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+}
+
+.custom-select-trigger:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--shadow-light);
+}
+
+.custom-select-trigger .item-icon {
+    margin-right: 8px;
+    font-size: 1rem; /* << ลดขนาดไอคอนลงเล็กน้อย (จาก 1.1rem) */
+}
+
+.custom-select-arrow {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #5f6368;
+    transition: transform 0.3s ease;
+}
+
+.custom-select-wrapper.open .custom-select-arrow {
+    transform: rotate(180deg);
+}
+
+.custom-select-options {
+    display: none;
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1500;
+    max-height: 40vh;
+    overflow-y: auto;
+    padding: 5px;
+}
+
+.custom-select-wrapper.open .custom-select-options {
+    display: block;
+}
+
+.custom-select-group {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #718096;
+    text-transform: uppercase;
+}
+
+.custom-select-option {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.custom-select-option:hover {
+    background-color: #f0f4f8;
+}
+
+.custom-select-option .item-icon {
+    margin-right: 10px;
+}
+
+/* --- Dark Mode Styles --- */
+body.dark-mode .custom-select-trigger {
+    background-color: #4a5568;
+    border-color: #718096;
+}
+
+body.dark-mode .custom-select-arrow {
+    border-top-color: #cbd5e0;
+}
+
+body.dark-mode .custom-select-options {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+
+body.dark-mode .custom-select-group {
+    color: #a0aec0;
+}
+
+body.dark-mode .custom-select-option:hover {
+    background-color: #4a5568;
+}
+
+/* --- Responsive (Mobile) --- */
+@media (max-width: 768px) {
+    .custom-select-wrapper {
+        min-width: 150px;
+    }
+    #custom-entity-selector-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }

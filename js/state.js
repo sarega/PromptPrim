@@ -1,9 +1,6 @@
 // --- Global Variables, Constants & State ---
-const APP_VERSION = 'v0.6-enhancer';
-const DB_NAME_PREFIX = 'AIChatbotDB_Project_';
-const SESSIONS_STORE_NAME = 'chatSessions';
-const METADATA_STORE_NAME = 'projectMetadata';
-const METADATA_KEY = 'projectInfo';
+const APP_VERSION = 'v0.7-new-look';
+// Constants from db.js are available globally after db.js is loaded
 
 const RANDOMLY_ASSIGNED_ICONS = ['🧑‍💻', '✍️', '🎨', '🕵️‍♂️', '👨‍🔬', '🚀', '💡', '📈', '💬', '🧠', '💼', '📊'];
 
@@ -23,7 +20,6 @@ const ALL_AGENT_SETTINGS_IDS = {
     'agent-stop-sequences': 'stop_sequences',
 };
 
-// [NEW] เพิ่มค่าเริ่มต้นสำหรับ Summarization Presets
 const defaultSummarizationPresets = {
     'Standard': `You are a professional summarizer. Your task is to create a dense, context-rich summary of a conversation.
 Include all key entities, character names, locations, critical events, and important emotional states.
@@ -84,12 +80,10 @@ Now, here are the new events to be added:
 Please provide the updated, complete continuity document, integrating the new events chronologically. Your response should be a single block of text containing only the updated document.`
 };
 
-
-// [MODIFIED] ใน defaultSystemUtilityAgent, แก้ไข summarizationPrompt ให้ใช้ค่า default จาก preset
 const defaultSystemUtilityAgent = {
     model: 'openai/gpt-4o-mini',
     systemPrompt: 'You are a highly efficient assistant that processes user requests and responds in a structured JSON format when required. You are objective and precise.',
-    summarizationPrompt: defaultSummarizationPresets['Standard'], // [MODIFIED]
+    summarizationPrompt: defaultSummarizationPresets['Standard'], 
     temperature: 0.2, topP: 1.0, topK: 0,
     presence_penalty: 0.0, frequency_penalty: 0.0,
     max_tokens: 2048, seed: -1, stop_sequences: ''
@@ -113,7 +107,7 @@ let allProviderModels = [];
 let isLoading = false;
 let abortController = null;
 let memorySortable = null;
-let attachedFile = null;
+let attachedFiles = [];
 
 let isDirty = false;
 let pendingFileToOpen = null;
@@ -138,10 +132,15 @@ function markAsClean() {
     }
 }
 
+// [ROLLBACK] กลับไปเวอร์ชันที่ทำงานกับ keyPath: 'id' ที่เรียบง่าย
 async function updateAndPersistState() {
     markAsDirty();
     const metadata = { ...currentProject };
     delete metadata.chatSessions;
-    await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', { id: METADATA_KEY, ...metadata });
+
+    // สร้าง object ที่มี id เป็น METADATA_KEY เพื่อให้เข้ากับ keyPath
+    const storableMetadata = { ...metadata, id: METADATA_KEY };
+    
+    await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', storableMetadata);
     updateContextInspector();
 }

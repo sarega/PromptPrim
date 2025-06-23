@@ -1,12 +1,21 @@
+// --- Global Constants ---
+const DB_NAME_PREFIX = 'AIChatbotDB_Project_';
+const SESSIONS_STORE_NAME = 'chatSessions';
+const METADATA_STORE_NAME = 'projectMetadata';
+const METADATA_KEY = 'projectInfo';
+
 // --- IndexedDB ---
 async function openDb(projectId) {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(`${DB_NAME_PREFIX}${projectId}`, 2);
+        // [STABLE VERSION] ใช้ DB version ที่สูงและแน่นอน เพื่อให้เปิดได้ทุกฐานข้อมูลเก่า
+        const request = indexedDB.open(`${DB_NAME_PREFIX}${projectId}`, 5); 
         request.onupgradeneeded = e => {
             const dbInstance = e.target.result;
+            // สร้าง store สำหรับ session ถ้ายังไม่มี
             if (!dbInstance.objectStoreNames.contains(SESSIONS_STORE_NAME)) {
-                dbInstance.createObjectStore(SESSIONS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                dbInstance.createObjectStore(SESSIONS_STORE_NAME, { keyPath: 'id' });
             }
+            // [STABLE VERSION] กลับมาใช้ keyPath: 'id' สำหรับ Metadata Store เพื่อความเรียบง่ายและเสถียร
             if (!dbInstance.objectStoreNames.contains(METADATA_STORE_NAME)) {
                 dbInstance.createObjectStore(METADATA_STORE_NAME, { keyPath: 'id' });
             }
@@ -16,6 +25,7 @@ async function openDb(projectId) {
     });
 }
 
+// [STABLE VERSION] กลับไปใช้ dbRequest เวอร์ชัน 4 อาร์กิวเมนต์ที่เรียบง่าย
 async function dbRequest(storeName, mode, action, data) {
      return new Promise((resolve, reject) => {
         if (!db) return reject("Database is not open.");

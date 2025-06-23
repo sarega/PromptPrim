@@ -3,8 +3,8 @@
 var groupSortable = null;
 
 function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
-function showImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'flex'; }
-function hideImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'none'; }
+// function showImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'flex'; }
+// function hideImageUploadModal() { document.getElementById('image-upload-modal').style.display = 'none'; }
 function showViewSummaryModal() { document.getElementById('view-summary-modal').style.display = 'flex'; }
 function hideViewSummaryModal() { document.getElementById('view-summary-modal').style.display = 'none'; }
 
@@ -166,24 +166,112 @@ function renderAgentGroups() {
     }
 }
 
+// [NEW] ฟังก์ชันสำหรับเปิด/ปิด Custom Dropdown
+function toggleCustomEntitySelector(event) {
+    event.stopPropagation();
+    document.getElementById('custom-entity-selector-wrapper').classList.toggle('open');
+}
+
+// [DEFINITIVE FIX] - Correct String Parsing
+function selectCustomEntity(value) {
+    // 1. ค้นหาตำแหน่งของขีดล่างแรกสุด
+    const separatorIndex = value.indexOf('_');
+
+    // 2. ตัดคำด้วยวิธีที่แน่นอนและปลอดภัย
+    const type = value.substring(0, separatorIndex);
+    const name = value.substring(separatorIndex + 1);
+    
+    // ---- DEBUG (สามารถลบออกได้หลังแก้ไขเสร็จ) ----
+    console.log(`ตัดคำใหม่ -> Type: "${type}", Name: "${name}"`);
+    // -----------------------------------------
+
+    // 3. เรียกฟังก์ชันปลายทางด้วยค่าที่ถูกต้อง
+    selectEntity(type, name);
+
+    // 4. ปิด Dropdown menu หลังจากเลือกเสร็จ
+    document.getElementById('custom-entity-selector-wrapper').classList.remove('open');
+}
+
+// [REPLACED] แทนที่ renderEntitySelector() เดิมด้วยฟังก์ชันใหม่ที่สมบูรณ์นี้
 function renderEntitySelector() {
     const selector = document.getElementById('entitySelector');
+    const optionsContainer = document.getElementById('custom-entity-selector-options');
+    const triggerIcon = document.getElementById('custom-entity-selector-icon');
+    const triggerText = document.getElementById('custom-entity-selector-text');
+
+    // 1. เคลียร์ค่าเก่า
     selector.innerHTML = '';
-    const agentGroup = document.createElement('optgroup');
-    agentGroup.label = 'Agent Presets';
-    Object.keys(currentProject.agentPresets || {}).forEach(name => {
-        agentGroup.appendChild(new Option(name, `agent_${name}`));
-    });
-    selector.appendChild(agentGroup);
-    const groupGroup = document.createElement('optgroup');
-    groupGroup.label = 'Agent Groups';
-    Object.keys(currentProject.agentGroups || {}).forEach(name => {
-        groupGroup.appendChild(new Option(name, `group_${name}`));
-    });
-    selector.appendChild(groupGroup);
+    optionsContainer.innerHTML = '';
+
+    // 2. สร้าง <option> สำหรับ <select> ที่ซ่อนไว้ และสร้าง <div> สำหรับ UI ที่แสดง
+    
+    // Agent Presets
+    const agentPresets = currentProject.agentPresets || {};
+    if (Object.keys(agentPresets).length > 0) {
+        const agentOptgroup = document.createElement('optgroup');
+        agentOptgroup.label = 'Agent Presets';
+        selector.appendChild(agentOptgroup);
+
+        const agentGroupDiv = document.createElement('div');
+        agentGroupDiv.className = 'custom-select-group';
+        agentGroupDiv.textContent = 'Agent Presets';
+        optionsContainer.appendChild(agentGroupDiv);
+
+        Object.keys(agentPresets).forEach(name => {
+            const preset = agentPresets[name];
+            const optionValue = `agent_${name}`;
+            
+            agentOptgroup.appendChild(new Option(`${preset.icon || '🤖'} ${name}`, optionValue));
+
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'custom-select-option';
+            optionDiv.innerHTML = `<span class="item-icon">${preset.icon || '🤖'}</span> <span>${name}</span>`;
+            optionDiv.onclick = () => selectCustomEntity(optionValue);
+            optionsContainer.appendChild(optionDiv);
+        });
+    }
+
+    // Agent Groups
+    const agentGroups = currentProject.agentGroups || {};
+     if (Object.keys(agentGroups).length > 0) {
+        const groupOptgroup = document.createElement('optgroup');
+        groupOptgroup.label = 'Agent Groups';
+        selector.appendChild(groupOptgroup);
+
+        const groupGroupDiv = document.createElement('div');
+        groupGroupDiv.className = 'custom-select-group';
+        groupGroupDiv.textContent = 'Agent Groups';
+        optionsContainer.appendChild(groupGroupDiv);
+
+        Object.keys(agentGroups).forEach(name => {
+            const optionValue = `group_${name}`;
+            
+            groupOptgroup.appendChild(new Option(`🤝 ${name}`, optionValue));
+
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'custom-select-option';
+            optionDiv.innerHTML = `<span class="item-icon">🤝</span> <span>${name}</span>`;
+            optionDiv.onclick = () => selectCustomEntity(optionValue);
+            optionsContainer.appendChild(optionDiv);
+        });
+    }
+
+    // 3. อัปเดตค่าที่แสดงผลบนปุ่ม Trigger ให้ตรงกับค่าที่ถูกเลือกในปัจจุบัน
     if (currentProject.activeEntity) {
-        const {type, name} = currentProject.activeEntity;
-        selector.value = `${type}_${name}`;
+        const { type, name } = currentProject.activeEntity;
+        const selectedValue = `${type}_${name}`;
+        selector.value = selectedValue;
+
+        if (type === 'agent') {
+            const preset = agentPresets[name];
+            if (preset) {
+                triggerIcon.textContent = preset.icon || '🤖';
+                triggerText.textContent = name;
+            }
+        } else { // group
+            triggerIcon.textContent = '🤝';
+            triggerText.textContent = name;
+        }
     }
 }
 
@@ -727,28 +815,50 @@ function addMessageToUI(role, content, index, speakerName = null) {
     return msgDiv;
 }
 
-function showFilePreview() {
-    if (!attachedFile) return;
+function renderFilePreviews() {
     const container = document.getElementById('file-preview-container');
-    container.innerHTML = '';
-    if (attachedFile.type.startsWith('image/')) {
-         const img = document.createElement('img');
-         img.src = attachedFile.data;
-         img.id = 'image-preview';
-         container.appendChild(img);
-    } else {
-         container.innerHTML = `<div id="file-info"><span>📄</span><span>${attachedFile.name}</span></div>`;
+    container.innerHTML = ''; // เคลียร์ของเก่าทิ้งทุกครั้งที่ render
+
+    if (attachedFiles.length === 0) {
+        container.style.display = 'none';
+        return;
     }
-    const removeBtn = document.createElement('button');
-    removeBtn.id = 'remove-file-btn';
-    removeBtn.innerHTML = '&times;';
-    removeBtn.onclick = removeAttachedFile;
-    container.appendChild(removeBtn);
-    container.style.display = 'block';
+    container.style.display = 'grid'; // [แก้ไข] ใช้ Grid layout
+
+    attachedFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'file-preview-item';
+
+        let previewContent = '';
+        if (file.type.startsWith('image/')) {
+            // ถ้าไฟล์ถูกอ่านเสร็จแล้ว, ให้แสดงรูปภาพ
+            if(file.data) {
+                previewContent = `<img src="${file.data}" class="file-preview-thumbnail" alt="${file.name}">`;
+            } else {
+                 // ถ้ายังอ่านไม่เสร็จ, แสดง loading spinner
+                previewContent = `<div class="file-preview-thumbnail loading-placeholder"></div>`;
+            }
+        } else {
+            // สำหรับไฟล์ที่ไม่ใช่รูปภาพ, แสดงเป็น icon
+            previewContent = `<div class="file-preview-thumbnail file-icon">📄</div>`;
+        }
+
+        item.innerHTML = `
+            ${previewContent}
+            <span class="file-preview-name">${file.name}</span>
+            <button class="remove-file-btn" onclick="removeAttachedFile(${index})">&times;</button>
+        `;
+        container.appendChild(item);
+    });
 }
-function removeAttachedFile() {
-    attachedFile = null;
-    document.getElementById('file-preview-container').style.display = 'none';
+
+function removeAttachedFile(index) {
+    // ลบไฟล์ออกจาก array ตาม index
+    if (index > -1 && index < attachedFiles.length) {
+        attachedFiles.splice(index, 1);
+    }
+    // Render preview ใหม่เพื่ออัปเดต UI
+    renderFilePreviews();
 }
 function updateContextInspector(isModal = false) {
     const { type, name } = currentProject.activeEntity || {};
@@ -833,7 +943,6 @@ function makeSidebarResizable() {
         if (newWidth < 200) newWidth = 200;
         if (newWidth > 600) newWidth = 600;
         sidebar.style.width = `${newWidth}px`;
-        mainChatArea.style.width = `calc(100% - ${newWidth}px)`;
     };
      const startHorizontalResizing = (e) => {
         e.preventDefault();
