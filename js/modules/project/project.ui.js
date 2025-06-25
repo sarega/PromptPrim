@@ -4,6 +4,11 @@ function updateProjectTitle(projectName) {
     const projectTitleEl = document.getElementById('project-title');
     if (projectTitleEl) projectTitleEl.textContent = projectName;
 }
+// FIX: เพิ่มฟังก์ชันที่ขาดหายไปนี้
+function toggleCustomEntitySelector(event) {
+    if (event) event.stopPropagation();
+    document.getElementById('custom-entity-selector-wrapper').classList.toggle('open');
+}
 
 function scrollToLinkedEntity(type, name) {
     let element;
@@ -37,7 +42,20 @@ function renderEntitySelector() {
 
     selector.innerHTML = '';
     optionsContainer.innerHTML = '';
-    
+
+    const createOption = (type, name, icon, container) => {
+        const optionValue = `${type}_${name}`;
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'custom-select-option';
+        optionDiv.innerHTML = `<span class="item-icon">${icon}</span> <span>${name}</span>`;
+
+        // FIX: เปลี่ยนจากการใช้ .onclick มาเป็น addEventListener
+        optionDiv.addEventListener('click', () => selectCustomEntity(optionValue));
+
+        container.appendChild(new Option(`${icon} ${name}`, optionValue));
+        optionsContainer.appendChild(optionDiv);
+    };
+
     const agentPresets = project.agentPresets || {};
     if (Object.keys(agentPresets).length > 0) {
         const agentOptgroup = document.createElement('optgroup');
@@ -47,20 +65,14 @@ function renderEntitySelector() {
         agentGroupDiv.className = 'custom-select-group';
         agentGroupDiv.textContent = 'Agent Presets';
         optionsContainer.appendChild(agentGroupDiv);
+
         Object.keys(agentPresets).forEach(name => {
-            const preset = agentPresets[name];
-            const optionValue = `agent_${name}`;
-            agentOptgroup.appendChild(new Option(`${preset.icon || '🤖'} ${name}`, optionValue));
-            const optionDiv = document.createElement('div');
-            optionDiv.className = 'custom-select-option';
-            optionDiv.innerHTML = `<span class="item-icon">${preset.icon || '🤖'}</span> <span>${name}</span>`;
-            optionDiv.onclick = () => selectCustomEntity(optionValue);
-            optionsContainer.appendChild(optionDiv);
+            createOption('agent', name, agentPresets[name].icon || '🤖', agentOptgroup);
         });
     }
 
     const agentGroups = project.agentGroups || {};
-     if (Object.keys(agentGroups).length > 0) {
+    if (Object.keys(agentGroups).length > 0) {
         const groupOptgroup = document.createElement('optgroup');
         groupOptgroup.label = 'Agent Groups';
         selector.appendChild(groupOptgroup);
@@ -68,28 +80,19 @@ function renderEntitySelector() {
         groupGroupDiv.className = 'custom-select-group';
         groupGroupDiv.textContent = 'Agent Groups';
         optionsContainer.appendChild(groupGroupDiv);
+
         Object.keys(agentGroups).forEach(name => {
-            const optionValue = `group_${name}`;
-            groupOptgroup.appendChild(new Option(`🤝 ${name}`, optionValue));
-            const optionDiv = document.createElement('div');
-            optionDiv.className = 'custom-select-option';
-            optionDiv.innerHTML = `<span class="item-icon">🤝</span> <span>${name}</span>`;
-            optionDiv.onclick = () => selectCustomEntity(optionValue);
-            optionsContainer.appendChild(optionDiv);
+            createOption('group', name, '🤝', groupOptgroup);
         });
     }
 
     if (project.activeEntity) {
         const { type, name } = project.activeEntity;
-        const selectedValue = `${type}_${name}`;
-        selector.value = selectedValue;
-        if (type === 'agent') {
-            const preset = agentPresets[name];
-            if (preset) {
-                triggerIcon.textContent = preset.icon || '🤖';
-                triggerText.textContent = name;
-            }
-        } else {
+        selector.value = `${type}_${name}`;
+        if (type === 'agent' && agentPresets[name]) {
+            triggerIcon.textContent = agentPresets[name].icon || '🤖';
+            triggerText.textContent = name;
+        } else if (type === 'group') {
             triggerIcon.textContent = '🤝';
             triggerText.textContent = name;
         }
@@ -150,6 +153,8 @@ function initProjectUI() {
     projectDropdown.querySelector('a[data-action="saveProjectAs"]').addEventListener('click', (e) => { e.preventDefault(); saveProject(true); });
     projectDropdown.querySelector('a[data-action="exportChat"]').addEventListener('click', (e) => { e.preventDefault(); exportChat(); });
     document.getElementById('load-project-input').addEventListener('change', handleFileSelectedForOpen);
-    
+    // FIX: เพิ่ม Event Listener นี้เข้าไปในฟังก์ชัน initProjectUI
+    document.getElementById('custom-entity-selector-trigger').addEventListener('click', toggleCustomEntitySelector);
+
     console.log("Project UI Initialized.");
 }

@@ -1,33 +1,24 @@
-// js/main.js
+// ในไฟล์ js/main.js
 
 /**
  * ฟังก์ชันหลักในการเริ่มต้นการทำงานของแอปพลิเคชันทั้งหมด
  */
 async function init() {
     try {
-        // --- 1. ตั้งค่าพื้นฐานสำหรับ Library ภายนอก ---
+        // ... (ส่วนของการตั้งค่า marked และ UI เหมือนเดิม) ...
         marked.setOptions({
             highlight: function(code, lang) {
                 const language = hljs.getLanguage(lang) ? lang : 'plaintext';
                 return hljs.highlight(code, { language }).value;
             },
-            gfm: true,
-            breaks: true,
+            gfm: true, breaks: true,
         });
-
-        // --- 2. เริ่มต้น UI และ Event Listener ส่วนกลางและของแต่ละ Module ---
-        // ส่วนนี้สำคัญมาก เพราะจะเป็นการนำ Event Listener ที่เราเตรียมไว้ไปผูกกับปุ่มต่างๆ
-        initCoreUI();
-        initProjectUI();
-        initSessionUI();
-        initAgentUI();
-        initGroupUI();
-        initMemoryUI();
-        initChatUI();
+        initCoreUI(); initProjectUI(); initSessionUI(); initAgentUI(); initGroupUI(); initMemoryUI(); initChatUI();
         
-        // --- 3. ตั้งค่า Theme เริ่มต้น ---
+        // ... (ส่วนของการตั้งค่า Theme เหมือนเดิม) ...
         const savedTheme = localStorage.getItem('theme') || 'system';
-        document.querySelector(`#theme-switcher input[value="${savedTheme}"]`).checked = true;
+        const themeRadio = document.querySelector(`#theme-switcher input[value="${savedTheme}"]`);
+        if (themeRadio) themeRadio.checked = true;
         document.body.classList.toggle('dark-mode', savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
         document.querySelectorAll('#theme-switcher input[name="theme"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -37,8 +28,45 @@ async function init() {
             });
         });
 
-        // --- 4. เริ่มต้นโปรเจกต์ใหม่เป็นค่าเริ่มต้น ---
-        await proceedWithCreatingNewProject();
+        // --- START: [REVISED] Logic การโหลดโปรเจกต์ล่าสุด (ฉบับทนทาน) ---
+        const lastProjectId = localStorage.getItem('lastActiveProjectId');
+        
+        if (lastProjectId) {
+            console.log(`พบโปรเจกต์ล่าสุด: ${lastProjectId}, กำลังพยายามโหลด...`);
+            try {
+                await openDb(lastProjectId);
+                
+                // [FIX] ดึง Object ที่ครอบข้อมูลโปรเจกต์ไว้อีกที
+                const storedObject = await dbRequest(METADATA_STORE_NAME, 'readonly', 'get', METADATA_KEY);
+                const sessions = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'getAll');
+                
+                // [FIX] ตรวจสอบว่ามีข้อมูล และมี projectData อยู่ข้างในหรือไม่
+                if (storedObject && storedObject.projectData && sessions) {
+                    const metadata = storedObject.projectData; // ดึงข้อมูลโปรเจกต์จริงๆ ออกมา
+                    
+                    // [FIX] เพิ่มการตรวจสอบ ID เพื่อความปลอดภัย
+                    if (metadata.id !== lastProjectId) {
+                        throw new Error("Project ID mismatch between localStorage and IndexedDB.");
+                    }
+
+                    const lastProject = { ...metadata, chatSessions: sessions };
+                    await loadProjectData(lastProject, false);
+                    console.log("โหลดโปรเจกต์ล่าสุดสำเร็จ");
+
+                } else {
+                    throw new Error("ไม่พบข้อมูลโปรเจกต์ที่สมบูรณ์ใน IndexedDB");
+                }
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดในการโหลดโปรเจกต์ล่าสุด:", error);
+                // หากมีปัญหา ให้ล้าง ID ที่อาจไม่ถูกต้องทิ้ง แล้วเริ่มใหม่
+                localStorage.removeItem('lastActiveProjectId');
+                await proceedWithCreatingNewProject();
+            }
+        } else {
+            console.log("ไม่พบโปรเจกต์ล่าสุด, กำลังสร้างโปรเจกต์ใหม่...");
+            await proceedWithCreatingNewProject();
+        }
+        // --- END: [REVISED] Logic การโหลดโปรเจกต์ล่าสุด ---
 
     } catch (error) {
         console.error("Critical initialization failed:", error);
@@ -51,4 +79,3 @@ async function init() {
 
 // --- เริ่มต้นการทำงานของแอปพลิเคชันหลังจากที่ HTML โหลดเสร็จสมบูรณ์ ---
 document.addEventListener('DOMContentLoaded', init);
-// --- เริ่มต้นการทำงานของแอปพลิเคชัน ---

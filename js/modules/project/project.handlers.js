@@ -62,6 +62,9 @@ async function loadProjectData(projectData, overwriteDb = false) {
     }
     
     stateManager.setDirty(false);
+    // START: [NEW] บันทึก ID ของโปรเจกต์ที่ใช้งานล่าสุด
+    localStorage.setItem('lastActiveProjectId', projectData.id);
+    // END: [NEW]
 }
 
 // [FIXED] แก้ไขฟังก์ชันนี้เพื่อเพิ่ม Logic การตั้งค่า Default Agent อัตโนมัติ
@@ -287,13 +290,20 @@ async function rewriteDatabaseWithProjectData(projectData) {
     
     const metadata = { ...projectData };
     delete metadata.chatSessions;
-    metadataStore.put({ id: METADATA_KEY, ...metadata });
+
+    // [FIX] ใช้โครงสร้างข้อมูลแบบเดียวกันกับที่ใช้ใน core.state.js
+    const storableObject = {
+        id: METADATA_KEY,
+        projectData: metadata
+    };
+    metadataStore.put(storableObject);
 
     await new Promise((resolve, reject) => {
         transaction.oncomplete = resolve;
-        transaction.onerror = reject;
+        transaction.onerror = (event) => reject(event.target.error);
     });
 }
+
 
 async function selectEntity(type, name) {
     const project = stateManager.getProject();

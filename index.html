@@ -205,7 +205,7 @@
                 <h1 id="chat-title" class="chat-title">AI Assistant</h1>
                 <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
                     <select id="entitySelector"></select>
-                    <div id="custom-entity-selector-trigger" class="custom-select-trigger" onclick="toggleCustomEntitySelector(event)">
+                    <div id="custom-entity-selector-trigger" class="custom-select-trigger">
                         <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
                         <span id="custom-entity-selector-text">Default Agent</span>
                         <span class="custom-select-arrow"></span>
@@ -238,7 +238,8 @@
             <div id="status-panel">
                 <div class="status-left">
                     <div class="status-dot" id="statusDot"></div>
-                    <span id="statusText">Disconnected</span>
+                    <!-- FIX: เพิ่ม class="status-text-content" เข้าไปใน span นี้ -->
+                    <span id="statusText" class="status-text-content">Disconnected</span>
                 </div>
                 <div class="status-right">
                     <span id="active-agent-status"></span> &nbsp;

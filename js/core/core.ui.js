@@ -36,20 +36,24 @@ function applyFontSettings() {
 }
 
 function updateStatus({ message, state }) {
-    const statusText = document.querySelector('#status-panel .status-text-content');
+    // FIX: เปลี่ยน selector ให้ตรงกับ class ที่เราเพิ่มใน HTML
+    const statusText = document.querySelector('#statusText.status-text-content'); 
     const statusDot = document.getElementById('statusDot');
-    if (!statusText || !statusDot) return;
+    
+    if (!statusText || !statusDot) {
+        // console.warn("Status UI elements not found.");
+        return;
+    }
 
     statusText.textContent = message || 'Ready';
-    statusDot.className = 'status-dot';
+    statusDot.className = 'status-dot'; // Reset class
     if (state === 'connected') {
         statusDot.classList.add('connected');
     } else if (state === 'error') {
         statusDot.classList.add('error');
-    } else if (state === 'loading') {
-        // You can add a loading state if needed
     }
 }
+
 
 function makeSidebarResizable() {
     // This function for desktop resizing remains unchanged.

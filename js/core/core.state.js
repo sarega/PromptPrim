@@ -168,11 +168,32 @@ const stateManager = {
     // --- Business Logic Setters ---
     updateAndPersistState: async () => {
         stateManager.setDirty(true);
-        const metadata = { ..._appState.currentProject };
+        const project = stateManager.getProject();
+        
+        if (!project || !project.id) {
+            console.warn("updateAndPersistState called without a valid project.");
+            return;
+        }
+
+        // 1. สร้าง object metadata ที่สะอาด โดยไม่มี sessions
+        const metadata = { ...project };
         delete metadata.chatSessions;
-        const storableMetadata = { ...metadata, id: METADATA_KEY };
-        await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', storableMetadata);
-    },
+        
+        // 2. [FIX] สร้าง Object สำหรับจัดเก็บ โดยแยก key ของ DB ออกจากข้อมูลโปรเจกต์
+        const storableObject = {
+            id: METADATA_KEY,      // Key ของ Record ใน DB คือ 'projectInfo'
+            projectData: metadata  // ข้อมูลโปรเจกต์จริงๆ จะถูกเก็บไว้ใน property นี้
+        };
+
+    // 3. บันทึก Object ใหม่นี้ลง DB และตั้งค่า ID โปรเจกต์ล่าสุด
+        try {
+            await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', storableObject);
+            localStorage.setItem('lastActiveProjectId', project.id);
+            console.log(`Persisted state for project: ${project.id}`);
+        } catch(error) {
+            console.error("Failed to persist state:", error);
+        }
+    },      
     
     newAbortController: () => {
         _appState.abortController = new AbortController();
