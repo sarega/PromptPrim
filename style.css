@@ -44,8 +44,8 @@ body {
 }
 
 .sidebar {
-    flex-basis: 340px; /* เปลี่ยนจาก width */
-    flex-shrink: 0;   /* เพิ่มเข้ามา */
+    flex-basis: 340px;
+    flex-shrink: 0;
     min-width: 250px;
     max-width: 600px;
     background: var(--white-alpha-95);
@@ -56,13 +56,13 @@ body {
     transition: margin-left 0.3s ease-in-out;
     z-index: 1100;
     position: relative;
-    transition: flex-basis 0.3s ease-in-out, padding 0.3s ease-in-out; /* ปรับ transition */
+    transition: flex-basis 0.3s ease-in-out, padding 0.3s ease-in-out;
 }
 
  .app-wrapper.sidebar-collapsed .sidebar {
     flex-basis: 0;
-    min-width: 0; /* สำคัญมาก: อนุญาตให้ flex-basis เป็น 0 ได้ */
-    overflow: hidden; /* ซ่อนเนื้อหาข้างในขณะที่กำลังยุบ */
+    min-width: 0;
+    overflow: hidden;
     padding-left: 0;
     padding-right: 0;
     border-right-width: 0;
@@ -101,7 +101,7 @@ body {
     margin-left: 12px;
 }
 
-.menu-toggle-btn, #collapse-sidebar-btn {
+.menu-toggle-btn, #collapse-sidebar-btn, #settings-btn {
     font-size: 24px;
     cursor: pointer;
     background: none;
@@ -173,7 +173,6 @@ body {
     flex-direction: column;
     background: var(--white-alpha-50);
     transition: width 0.3s ease-in-out;
-    /* width: calc(100% - 340px); */
     position: relative;
 }
 
@@ -350,6 +349,7 @@ textarea { resize: vertical; min-height: 100px; }
     align-items: center;
     gap: 8px;
     font-size: 0.9rem;
+    cursor: pointer;
 }
 .dropdown-content a:hover { background-color: #f1f1f1; }
 .dropdown-content hr {
@@ -366,6 +366,7 @@ textarea { resize: vertical; min-height: 100px; }
     margin-bottom: 4px;
     transition: all 0.2s ease;
     position: relative;
+    cursor: pointer;
 }
 .item-list > .item.active {
     border-color: var(--success-color);
@@ -384,7 +385,6 @@ textarea { resize: vertical; min-height: 100px; }
 .item-name {
     font-weight: 500;
     font-size: 0.9rem;
-    cursor: pointer;
     flex-grow: 1;
     padding-right: 10px;
     overflow: hidden;
@@ -486,6 +486,16 @@ textarea { resize: vertical; min-height: 100px; }
     height: 24px;
 }
 
+/* START: Mobile UX Improvement */
+.chat-header.is-hidden {
+    transform: translateY(-100%);
+}
+
+#status-panel.is-hidden {
+    transform: translateY(100%);
+}
+/* END: Mobile UX Improvement */
+
 
 .chat-header {
     padding: 10px 25px; 
@@ -503,42 +513,68 @@ textarea { resize: vertical; min-height: 100px; }
     padding: 20px 25px;
     display: flex;
     flex-direction: column;
-    gap: 45px;
+    gap: 20px;
+}
+
+.message-turn-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+/* [FIXED] แก้ไขส่วนนี้ */
+.message-turn-wrapper.user-turn {
+    align-self: flex-end; /* จัด turn ของ user ชิดขวา */
+    align-items: flex-end; /* จัด bubble ของ user ชิดขวา (ภายใน turn) */
+    max-width: 85%;
+}
+
+.message-turn-wrapper.assistant-turn {
+    align-self: flex-start; /* จัด turn ของ assistant ชิดซ้าย */
+    align-items: flex-start; /* จัด bubble ของ assistant ชิดซ้าย (ภายใน turn) */
+    width: 100%; /* ทำให้ turn ของ assistant กว้างเต็มที่ */
+}
+
+.speaker-label-wrapper {
+    margin-bottom: 5px;
+    padding: 0 10px;
+}
+
+.speaker-label {
+    font-weight: bold;
+    font-size: 0.9em;
+    color: var(--primary-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+body.dark-mode .speaker-label {
+    color: var(--primary-color);
 }
 
 .message {
-    max-width: 85%;
     padding: 12px 18px;
     border-radius: 18px;
     position: relative;
     white-space: pre-wrap;
     line-height: 1.6;
     word-wrap: break-word;
-    transition: padding 0.2s ease-in-out, max-width 0.3s ease-in-out;
 }
 .message.user.is-editing {
-    max-width: 95%;
+    max-width: 95% !important;
 }
 
 .message.user {
     background: var(--background-gradient);
-    color: white; align-self: flex-end;
+    color: white; 
     border-bottom-right-radius: 5px;
+    width: fit-content; /* [FIXED] ทำให้ bubble ของ user กว้างพอดีกับเนื้อหา */
 }
 .message.assistant {
     background: white; 
     border: 1px solid var(--border-color);
     border-bottom-left-radius: 5px;
-    max-width: 100%;
-}
-.message.assistant .speaker-label {
-    font-weight: bold;
-    font-size: 0.9em;
-    color: var(--primary-color);
-    margin-bottom: 5px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    width: 100%; /* [FIXED] ทำให้ bubble ของ assistant กว้างเต็มที่ */
 }
 .message.system {
     align-self: center;
@@ -552,34 +588,26 @@ textarea { resize: vertical; min-height: 100px; }
     border-radius: 15px;
     border: 1px solid var(--border-color);
 }
-.message.system .speaker-label {
-    display: none;
-}
-/* .message-actions {
+
+.message-actions {
     position: absolute;
-    bottom: -20px;
-    left: 10%;
-    transform: translateX(-50%);
+    bottom: -25px;
     display: none;
     gap: 5px;
+    background: rgba(237, 242, 247, 0.8);
+    backdrop-filter: blur(2px);
     border-radius: 20px;
     padding: 4px;
-
-} */
+    border: 1px solid rgba(0,0,0,0.05);
+}
 
 .message.user .message-actions {
     left: auto;
     right: 4px;
 }
 .message.assistant .message-actions {
-    background: transparent;
-    /* background: rgba(237, 242, 247, 0.8);
-    backdrop-filter: blur(2px); */
+    left: 4px;
 }
-/* .message.user .message-actions {
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(2px);
-} */
  .message:hover .message-actions {
     display: flex;
 }
@@ -592,6 +620,7 @@ textarea { resize: vertical; min-height: 100px; }
     height: 28px;
     font-size: 16px;
     border-radius: 50%;
+    cursor: pointer;
 }
 .message.user .message-actions button {
     color: rgba(255, 255, 255, 0.7);
@@ -637,11 +666,6 @@ textarea { resize: vertical; min-height: 100px; }
     margin-top: 10px;
 }
 
-/* =================================================================== */
-/* == START: COMPACT, MODERN, MOCKUP-MATCHING INPUT STYLES        == */
-/* =================================================================== */
-
-/* 1. The main wrapper (now invisible) */
 .chat-input-wrapper {
     background: transparent;
     padding: 0 20px 15px;
@@ -649,35 +673,136 @@ textarea { resize: vertical; min-height: 100px; }
     flex-shrink: 0;
 }
 
-/* 2. The visible "bubble" container */
+/* --- START: Improved Chat Input Area --- */
 .input-container-seamless {
     position: relative; 
-    background-color: #f0f4f8;
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
     width: 100%;
-    padding-bottom: 0px; /* Create space at the bottom for buttons */
+    /* The container now controls the background color and border */
+    background-color: white; 
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* 3. The actual textarea */
+/* Add a focus ring to the container when the textarea inside is focused */
+.input-container-seamless:focus-within {
+    box-shadow: 0 0 0 3px var(--shadow-light);
+    border-color: var(--primary-color);
+}
+
 #chatInput {
     width: 100%;
-    background: transparent;
+    /* Make the textarea itself transparent */
+    background-color: transparent; 
     border: none;
+    border-radius: 24px;
     resize: none;
-    line-height: 1.6;
+    line-height: 1.5;
     color: var(--text-dark);
-    max-height: 250px;
+    max-height: 200px;
     overflow-y: auto;
-    padding: 12px 60px 12px 55px; /* Top, Right, Bottom, Left */
     margin: 0;
+    min-height: auto;
+    /* Add padding to create space for the buttons */
+    padding: 8px 45px 8px 45px; /* Top, Right, Bottom, Left */
+    
+    /* Hide the scrollbar */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;  /* IE 10+ */
 }
+
+#chatInput::-webkit-scrollbar { /* WebKit */
+    display: none;
+}
+
 #chatInput:focus {
-    outline: none;
+    /* The focus outline is now handled by the container */
+    outline: none; 
     box-shadow: none;
 }
 
-/* 4. The container for the buttons */
+/* Position the buttons inside the container's padding area */
+.input-adornment {
+    position: absolute;
+    bottom: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+}
+
+.input-adornment.left {
+    left: 8px;
+}
+
+.input-adornment.right {
+    right: 8px;
+}
+
+/* Adjusted icon sizes */
+#chat-actions-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    color: #5f6368;
+    background: none !important;
+    border: none !important;
+}
+
+#sendBtn, #stopBtn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+}
+
+#stopBtn { display: none; }
+/* END: ซ่อน Scrollbar */
+
+
+#chatInput:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--shadow-light);
+    border-color: var(--primary-color);
+}
+
+/* จัดวางปุ่มให้อยู่บนพื้นที่ Padding ของ Textarea */
+.input-adornment {
+    position: absolute;
+    bottom: 5px; /* จัดตำแหน่งในแนวตั้ง */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px; /* กำหนดความสูงให้เท่าปุ่ม */
+}
+
+.input-adornment.left {
+    left: 8px;
+}
+
+.input-adornment.right {
+    right: 8px;
+}
+
+/* ขนาดไอคอนที่ปรับแล้ว */
+#chat-actions-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    color: #5f6368;
+    background: none !important;
+    border: none !important;
+}
+
+#sendBtn, #stopBtn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+}
+
+#stopBtn { display: none; }
+/* --- END: Improved Chat Input Area --- */
+
+
 .input-adornment {
     position: absolute;
     bottom: 8px;
@@ -692,7 +817,6 @@ textarea { resize: vertical; min-height: 100px; }
     right: 8px;
 }
 
-/* 5. Styling for the buttons */
 .input-adornment .btn {
     border-radius: 50%;
     padding: 0;
@@ -703,8 +827,8 @@ textarea { resize: vertical; min-height: 100px; }
 .input-adornment #chat-actions-btn {
     width: 38px;
     height: 38px;
-    background: none !important;      /* เปลี่ยนเป็น background: none และเพิ่ม !important */
-    border: none !important;          /* เพิ่มเข้ามาเพื่อให้แน่ใจว่าไม่มีเส้นขอบ */
+    background: none !important;
+    border: none !important;
     color: #5f6368;
     font-size: 20px;
     position: relative;
@@ -713,8 +837,8 @@ textarea { resize: vertical; min-height: 100px; }
 }
 
 .input-adornment #chat-actions-btn:hover {
-    background-color: transparent; /* ทำให้แน่ใจว่าพื้นหลังไม่ปรากฏเมื่อ hover */
-    color: #202124;                 /* ทำให้ไอคอนเข้มขึ้นเล็กน้อยเมื่อ hover */
+    background-color: transparent;
+    color: #202124;
 }
 
 .input-adornment .send-btn,
@@ -724,43 +848,10 @@ textarea { resize: vertical; min-height: 100px; }
     font-size: 20px;    
 }
 
-/* 6. Hide unused buttons */
 .input-adornment .stop-btn {
     display: none;
 }
 
-/* --- Dark Mode for the new input --- */
-body.dark-mode .chat-input-wrapper {
-    background: transparent;
-    border-top: none;
-}
-body.dark-mode .input-container-seamless {
-    background-color: #2d3748;
-    border-color: #4a5568;
-}
-body.dark-mode #chatInput {
-    color: var(--text-dark);
-}
-body.dark-mode .input-adornment #chat-actions-btn {
-    background-color: transparent; /* ทำให้พื้นหลังโปร่งใส */
-    color: #bdc1c6;                 /* เปลี่ยนสีไอคอนเป็นสีเทาอ่อน (Soft White) */
-}
-body.dark-mode .input-adornment #chat-actions-btn:hover {
-    background-color: transparent; /* ทำให้แน่ใจว่าพื้นหลังไม่ปรากฏเมื่อ hover */
-    color: #e8eaed;                 /* ทำให้ไอคอนสว่างขึ้น (เป็นสีขาว) เมื่อ hover */
-}
-
-/* =================================================================== */
-/* == END OF MODERN INPUT STYLES                                    == */
-/* =================================================================== */
-
-
-.input-disclaimer {
-    font-size: 12px;
-    text-align: center;
-    color: #a0aec0;
-    padding-top: 10px;
-}
 
 #chat-actions-menu {
     display: none;
@@ -787,6 +878,7 @@ body.dark-mode .input-adornment #chat-actions-btn:hover {
     text-decoration: none;
     display: block;
     font-size: 0.95rem;
+    cursor: pointer;
 }
 
 #chat-actions-menu a:hover {
@@ -876,12 +968,6 @@ body.dark-mode .file-preview-item {
     background: rgba(229, 62, 62, 0.9);
 }
 
-#file-info span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 #status-panel {
     padding: 8px 15px;
     border-top: 1px solid var(--border-color);
@@ -891,16 +977,32 @@ body.dark-mode .file-preview-item {
     justify-content: space-between;
     gap: 10px;
     flex-shrink: 0;
+    cursor: pointer; /* เพิ่มเข้ามา: ทำให้ผู้ใช้รู้ว่ากดได้ */
+    overflow: hidden; /* เพิ่มเข้ามา: ป้องกันข้อความล้นตอนย่อ */
+    transition: all 0.3s ease-in-out; /* แก้ไข/เพิ่ม: ทำให้การย่อขยายสวยงาม */
 }
-.status-left {
+/* START: Mobile Collapsible Status Bar */
+@media (max-width: 768px) {
+    #status-panel.is-collapsed {
+        height: 32px; /* กำหนดความสูงตอนย่อ */
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    #status-panel.is-collapsed .status-right,
+    #status-panel.is-collapsed #context-inspector-trigger-btn {
+        display: none; /* ซ่อนรายละเอียดฝั่งขวา */
+    }
+    #status-panel.is-collapsed .status-left {
+        flex-grow: 1; /* ทำให้ฝั่งซ้ายขยายเต็มพื้นที่ */
+    }
+}
+/* END: Mobile Collapsible Status Bar */
+.status-left, .status-right {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 .status-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     font-size: 12px;
     color: #718096;
     text-align: right;
@@ -928,7 +1030,6 @@ body.dark-mode .file-preview-item {
 }
 .status-dot.connected { background: var(--success-color); }
 .status-dot.error { background: var(--error-color); }
-
 .loading { display: flex; gap: 4px; align-items: center; }
 .loading-dot {
     width: 8px; height: 8px; border-radius: 50%;
@@ -1496,9 +1597,9 @@ body.dark-mode .message.user .inline-edit-textarea {
     border-color: #7f9cf5;
 }
 
-.message.user.is-editing {
+/* .message.user.is-editing {
     max-width: 95% !important
-    }
+    } */
 
 /* New for dropdown */
 /* --- Custom Entity Selector Styles --- */
@@ -1530,8 +1631,8 @@ body.dark-mode .message.user .inline-edit-textarea {
     background-color: #f0f4f8;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 1px 8px; /* << แก้ไขค่าแรกให้เล็กลง */
-    font-size: 8px;   << เพิ่มบรรทัดนี้เพื่อลดขนาด Font ของชื่อ */
+    padding: 1px 8px;
+    font-size: 0.9rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1629,6 +1730,31 @@ body.dark-mode .custom-select-group {
 body.dark-mode .custom-select-option:hover {
     background-color: #4a5568;
 }
+
+/* --- START: Dark Mode Fix for Chat Input --- */
+body.dark-mode .input-container-seamless {
+    background-color: #2d3748; /* Dark background for the container */
+    border-color: #4a5568;
+}
+
+body.dark-mode .input-container-seamless:focus-within {
+     box-shadow: 0 0 0 3px rgba(127, 156, 245, 0.4); /* Dark mode focus ring color */
+     border-color: var(--primary-color);
+}
+
+body.dark-mode #chatInput {
+    color: #e2e8f0; /* Light text color for dark background */
+}
+
+body.dark-mode #chatInput::placeholder {
+    color: #a0aec0; /* Lighter placeholder text */
+}
+
+body.dark-mode #chat-actions-btn {
+    color: #bdc1c6; /* Lighter + icon */
+}
+/* --- END: Dark Mode Fix for Chat Input --- */
+
 
 /* --- Responsive (Mobile) --- */
 @media (max-width: 768px) {
