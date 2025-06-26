@@ -3,7 +3,7 @@
 // --- IndexedDB ---
 let db;
 
-async function openDb(projectId) {
+export async function openDb(projectId) {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(`${DB_NAME_PREFIX}${projectId}`, 5);
         request.onupgradeneeded = e => {
@@ -20,7 +20,7 @@ async function openDb(projectId) {
     });
 }
 
-async function dbRequest(storeName, mode, action, data) {
+export async function dbRequest(storeName, mode, action, data) {
      return new Promise((resolve, reject) => {
         if (!db) return reject("Database is not open.");
         try {
