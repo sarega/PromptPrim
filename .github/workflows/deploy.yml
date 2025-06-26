@@ -1,0 +1,42 @@
+# ชื่อของ Workflow ที่จะแสดงในหน้า Actions ของ GitHub
+name: Deploy to GitHub Pages
+
+# ทริกเกอร์: ให้ workflow นี้ทำงานทุกครั้งที่มีการ push ไปที่ branch 'main'
+on:
+  push:
+    branches: [ main ]
+
+# การอนุญาต: อนุญาตให้ workflow นี้เขียนข้อมูลลงใน repository 
+# (จำเป็นสำหรับการสร้างและอัปเดต gh-pages branch)
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    # OS ที่จะใช้รันงาน (ใช้ default ได้เลย)
+    runs-on: ubuntu-latest
+    steps:
+      # 1. เช็คเอาท์โค้ดล่าสุดจาก repository ของเรามาไว้ในเครื่องเซิร์ฟเวอร์ชั่วคราว
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. ตั้งค่า Node.js เพื่อให้เราใช้คำสั่ง npm ได้
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # แนะนำให้ใช้เวอร์ชัน LTS ล่าสุด
+
+      # 3. ติดตั้ง Dependencies ทั้งหมดจากไฟล์ package.json
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Build โปรเจกต์ด้วย Vite (ขั้นตอนนี้จะสร้างโฟลเดอร์ 'dist')
+      - name: Build project
+        run: npm run build
+
+      # 5. Deploy โฟลเดอร์ 'dist' ที่ได้จากการ build ไปที่ GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist # ระบุว่าให้เอาโฟลเดอร์ dist ไป deploy
