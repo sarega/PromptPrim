@@ -1,11 +1,37 @@
-// js/core/core.api.js
+// ===============================================
+// FILE: src/js/core/core.api.js (Complete)
+// DESCRIPTION: All communication with external LLM APIs.
+// ===============================================
+
+import { stateManager } from './core.state.js';
+
+// --- Helper sub-functions (not exported, private to this module) ---
+async function fetchOpenRouterModels(apiKey) {
+    const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { 'Authorization': `Bearer ${apiKey}` } });
+    if (!response.ok) throw new Error('Could not fetch models from OpenRouter');
+    const data = await response.json();
+    return data.data.map(m => ({ id: m.id, name: m.name || m.id, provider: 'openrouter' }));
+}
+
+async function fetchOllamaModels(baseUrl) {
+    try {
+        const response = await fetch(`${baseUrl}/api/tags`);
+        if (!response.ok) throw new Error(`Could not connect to Ollama (HTTP ${response.status})`);
+        const data = await response.json();
+        return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama'}));
+    } catch (error) {
+        if (error instanceof TypeError) throw new Error('Could not connect to Ollama. Check URL, server status, and CORS settings.');
+        throw error;
+    }
+}
+
 
 export async function loadAllProviderModels() {
-    stateManager.bus.publish('status:update', { message: 'กำลังโหลด models...', state: 'loading' });
+    stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
     const project = stateManager.getProject();
-    const apiKey = project.globalSettings.apiKey ? project.globalSettings.apiKey.trim() : '';
-    const baseUrl = project.globalSettings.ollamaBaseUrl ? project.globalSettings.ollamaBaseUrl.trim() : '';
-    let finalStatus = { message: 'ไม่พบ Model. กรุณาตรวจสอบการตั้งค่า API', state: 'warning' };
+    const apiKey = project.globalSettings.apiKey?.trim() || '';
+    const baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
+    let finalStatus = { message: 'No models found. Please check API settings.', state: 'warning' };
     
     const fetchPromises = [];
     if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error(e); return []; }));
@@ -17,32 +43,16 @@ export async function loadAllProviderModels() {
         stateManager.setAllModels(allModels);
         
         if (allModels.length > 0) {
-            finalStatus = { message: `โหลด ${allModels.length} models เรียบร้อยแล้ว`, state: 'connected' };
+            finalStatus = { message: `Loaded ${allModels.length} models successfully.`, state: 'connected' };
         }
     } catch (error) {
-        finalStatus = { message: `เกิดข้อผิดพลาด: ${error.message}`, state: 'error' };
+        finalStatus = { message: `Error loading models: ${error.message}`, state: 'error' };
     }
     stateManager.bus.publish('status:update', finalStatus);
 }
 
-export async function fetchOpenRouterModels(apiKey) {
-    const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { 'Authorization': `Bearer ${apiKey}` } });
-    if (!response.ok) throw new Error('ไม่สามารถโหลด models จาก OpenRouter');
-    const data = await response.json();
-    return data.data.map(m => ({ id: m.id, name: m.name || m.id, provider: 'openrouter' }));
-}
 
-export async function fetchOllamaModels(baseUrl) {
-    try {
-        const response = await fetch(`${baseUrl}/api/tags`);
-        if (!response.ok) throw new Error(`ไม่สามารถเชื่อมต่อ Ollama (HTTP ${response.status})`);
-        const data = await response.json();
-        return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama'}));
-    } catch (error) {
-        if (error instanceof TypeError) throw new Error('ไม่สามารถเชื่อมต่อ Ollama. กรุณาตรวจสอบ URL, สถานะ Server, และการตั้งค่า CORS');
-        throw error;
-    }
-}
+
 
 export async function callLLM(agent, messages) {
     const allModels = stateManager.getState().allProviderModels;
