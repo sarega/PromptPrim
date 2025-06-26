@@ -1,6 +1,6 @@
 // js/modules/session/session.ui.js
 
-function renderSessionList() {
+export function renderSessionList() {
     const project = stateManager.getProject();
     const allSessions = project.chatSessions || [];
     const pinnedContainer = document.getElementById('pinnedSessionList');
@@ -21,7 +21,7 @@ function renderSessionList() {
     archivedSection.style.display = archivedSessions.length > 0 ? 'block' : 'none';
 }
 
-function createSessionElement(session) {
+export function createSessionElement(session) {
     const project = stateManager.getProject();
     const item = document.createElement('div');
     item.className = `item session-item ${session.id === project.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
@@ -71,7 +71,7 @@ function createSessionElement(session) {
     return item;
 }
 
-function initSessionUI() {
+export function initSessionUI() {
     stateManager.bus.subscribe('project:loaded', renderSessionList);
     stateManager.bus.subscribe('session:loaded', renderSessionList);
     stateManager.bus.subscribe('session:changed', renderSessionList); 

@@ -1,6 +1,6 @@
 // js/modules/agent/agent.ui.js
 
-function renderAgentPresets() {
+export function renderAgentPresets() {
     const project = stateManager.getProject();
     if (!project || !project.agentPresets) return;
     const container = document.getElementById('agentPresetList');
@@ -40,7 +40,7 @@ function renderAgentPresets() {
 }
 
 // [FIX 1] แก้ไขฟังก์ชันนี้ให้เลือก Model ที่บันทึกไว้ได้อย่างถูกต้อง
-function populateModelSelectors() {
+export function populateModelSelectors() {
     const allModels = stateManager.getState().allProviderModels || [];
     const project = stateManager.getProject();
     const selectors = [
@@ -82,7 +82,7 @@ function populateModelSelectors() {
 }
 
 
-function showAgentEditor(isEditing = false, agentName = null) {
+export function showAgentEditor(isEditing = false, agentName = null) {
     stateManager.setState('editingAgentName', isEditing ? agentName : null);
     const project = stateManager.getProject();
     const allModels = stateManager.getState().allProviderModels;
@@ -122,12 +122,12 @@ function showAgentEditor(isEditing = false, agentName = null) {
     document.getElementById('agent-editor-modal').style.display = 'flex';
 }
 
-function hideAgentEditor() {
+export function hideAgentEditor() {
     document.getElementById('agent-editor-modal').style.display = 'none';
     stateManager.setState('editingAgentName', null);
 }
 
-function initAgentUI() {
+export function initAgentUI() {
     stateManager.bus.subscribe('entity:selected', renderAgentPresets);
     stateManager.bus.subscribe('project:loaded', renderAgentPresets);
     stateManager.bus.subscribe('agent:listChanged', renderAgentPresets);

@@ -1,6 +1,6 @@
 // js/modules/agent/agent.handlers.js
 
-async function generateAgentProfile() {
+export async function generateAgentProfile() {
     const enhancerPrompt = document.getElementById('enhancer-prompt-input').value.trim();
     if (!enhancerPrompt) {
         showCustomAlert('Please describe the agent you want to create.', 'Error');
@@ -34,7 +34,7 @@ async function generateAgentProfile() {
     }
 }
 
-function saveAgentPreset() {
+export function saveAgentPreset() {
     const nameInput = document.getElementById('agent-name-input');
     const newName = nameInput.value.trim();
     if (!newName) {
@@ -87,7 +87,7 @@ function saveAgentPreset() {
     hideAgentEditor();
 }
 
-function deleteAgentPreset(agentNameToDelete) {
+export function deleteAgentPreset(agentNameToDelete) {
     const project = stateManager.getProject();
     if (!agentNameToDelete || Object.keys(project.agentPresets).length <= 1) {
         showCustomAlert("Cannot delete the last agent.", "Error"); return;

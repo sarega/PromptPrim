@@ -2,7 +2,7 @@
 
 var groupSortable = null;
 
-function renderAgentGroups() {
+export function renderAgentGroups() {
     const project = stateManager.getProject();
     if (!project || !project.agentGroups) return;
     const container = document.getElementById('agentGroupList');
@@ -37,7 +37,7 @@ function renderAgentGroups() {
     }
 }
 
-function showAgentGroupEditor(isEditing = false, groupName = null) {
+export function showAgentGroupEditor(isEditing = false, groupName = null) {
     stateManager.setState('editingGroupName', isEditing ? groupName : null);
     const project = stateManager.getProject();
     const group = isEditing ? project.agentGroups[groupName] : null;
@@ -84,7 +84,7 @@ function showAgentGroupEditor(isEditing = false, groupName = null) {
     document.getElementById('agent-group-editor-modal').style.display = 'flex';
 }
 
-function hideAgentGroupEditor() {
+export function hideAgentGroupEditor() {
     if (window.groupSortable) {
         window.groupSortable.destroy();
         window.groupSortable = null;
@@ -93,7 +93,7 @@ function hideAgentGroupEditor() {
     stateManager.setState('editingGroupName', null);
 }
 
-function updateModeratorDropdown(selectedModerator = null) {
+export function updateModeratorDropdown(selectedModerator = null) {
     const moderatorSelect = document.getElementById('group-moderator-select');
     const memberItems = document.querySelectorAll('#group-member-list .agent-sortable-item');
     const selectedMembers = Array.from(memberItems)
@@ -111,14 +111,14 @@ function updateModeratorDropdown(selectedModerator = null) {
     }
 }
 
-function toggleMaxTurnsInput() {
+export function toggleMaxTurnsInput() {
     const flowSelect = document.getElementById('group-flow-select');
     const maxTurnsGroup = document.getElementById('max-turns-group');
     maxTurnsGroup.style.display = (flowSelect.value === 'auto-moderator') ? 'none' : 'block';
 }
 
 
-function initGroupUI() {
+export function initGroupUI() {
     // [FIX] เพิ่มบรรทัดนี้เข้ามา
     stateManager.bus.subscribe('entity:selected', renderAgentGroups);
 

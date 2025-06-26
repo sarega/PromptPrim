@@ -1,6 +1,6 @@
 // js/modules/chat/ui.js
 
-function renderChatMessages(){
+export function renderChatMessages(){
     const project = stateManager.getProject();
     const container = document.getElementById('chatMessages');
     container.innerHTML=''; 
@@ -14,7 +14,7 @@ function renderChatMessages(){
     if (clearBtn) clearBtn.style.display = (session?.summaryState?.activeSummaryId) ? 'block' : 'none';
 }
 
-function addMessageToUI(role, content, index, speakerName = null, isLoading = false) {
+export function addMessageToUI(role, content, index, speakerName = null, isLoading = false) {
     const project = stateManager.getProject();
     const container = document.getElementById('chatMessages');
     
@@ -110,7 +110,7 @@ function addMessageToUI(role, content, index, speakerName = null, isLoading = fa
     return msgDiv;
 }
 
-function renderFilePreviews(files) {
+export function renderFilePreviews(files) {
     const container = document.getElementById('file-preview-container');
     container.innerHTML = '';
     if (!files || files.length === 0) {
@@ -135,7 +135,7 @@ function renderFilePreviews(files) {
     });
 }
 
-function enhanceCodeBlocks(messageElement) {
+export function enhanceCodeBlocks(messageElement) {
     const codeBlocks = messageElement.querySelectorAll('pre');
     codeBlocks.forEach(pre => {
         if (pre.parentNode.classList.contains('code-block-wrapper')) return;
@@ -160,7 +160,7 @@ function enhanceCodeBlocks(messageElement) {
     });
 }
 
-function updateContextInspector(isModal = false) {
+export function updateContextInspector(isModal = false) {
     const project = stateManager.getProject();
     if (!project.activeEntity) return;
 
@@ -199,16 +199,16 @@ function updateContextInspector(isModal = false) {
 }
 
 
-function showContextInspector() {
+export function showContextInspector() {
     updateContextInspector(true);
     document.getElementById('context-inspector-modal').style.display = 'flex';
 }
 
-function hideContextInspector() {
+export function hideContextInspector() {
     document.getElementById('context-inspector-modal').style.display = 'none';
 }
 
-function initChatUI() {
+export function initChatUI() {
     stateManager.bus.subscribe('session:loaded', (session) => {
         document.getElementById('chat-title').textContent = session.name;
         renderChatMessages();

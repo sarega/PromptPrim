@@ -1,16 +1,16 @@
 // js/modules/project/project.ui.js
 
-function updateProjectTitle(projectName) {
+export function updateProjectTitle(projectName) {
     const projectTitleEl = document.getElementById('project-title');
     if (projectTitleEl) projectTitleEl.textContent = projectName;
 }
 // FIX: เพิ่มฟังก์ชันที่ขาดหายไปนี้
-function toggleCustomEntitySelector(event) {
+export function toggleCustomEntitySelector(event) {
     if (event) event.stopPropagation();
     document.getElementById('custom-entity-selector-wrapper').classList.toggle('open');
 }
 
-function scrollToLinkedEntity(type, name) {
+export function scrollToLinkedEntity(type, name) {
     let element;
     if (type === 'agent') {
         element = document.querySelector(`.item[data-agent-name="${name}"]`);
@@ -23,7 +23,7 @@ function scrollToLinkedEntity(type, name) {
     console.log(`Scrolled to linked entity: ${type} - ${name}`);    
 }
 
-function selectCustomEntity(value) {
+export function selectCustomEntity(value) {
     const separatorIndex = value.indexOf('_');
     const type = value.substring(0, separatorIndex);
     const name = value.substring(separatorIndex + 1);
@@ -31,7 +31,7 @@ function selectCustomEntity(value) {
     document.getElementById('custom-entity-selector-wrapper').classList.remove('open');
 }
 
-function renderEntitySelector() {
+export function renderEntitySelector() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
 
@@ -99,7 +99,7 @@ function renderEntitySelector() {
     }
 }
 
-function renderSummarizationPresetSelector() {
+export function renderSummarizationPresetSelector() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
 
@@ -124,7 +124,7 @@ function renderSummarizationPresetSelector() {
     }
 }
 
-function initProjectUI() {
+export function initProjectUI() {
     stateManager.bus.subscribe('project:loaded', (eventData) => {
         updateProjectTitle(eventData.projectData.name);
         renderEntitySelector();

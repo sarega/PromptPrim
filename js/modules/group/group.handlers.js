@@ -1,6 +1,6 @@
 // js/modules/group/group.handlers.js
 
-function saveAgentGroup() {
+export function saveAgentGroup() {
     const newName = document.getElementById('group-name-input').value.trim();
     const oldName = stateManager.getState().editingGroupName;
     if (!newName) {
@@ -56,7 +56,7 @@ function saveAgentGroup() {
     hideAgentGroupEditor();
 }
 
-function deleteAgentGroup(groupName) {
+export function deleteAgentGroup(groupName) {
      if (!groupName) return;
      if (confirm(`Are you sure you want to delete the group '${groupName}'?`)) {
          const project = stateManager.getProject();

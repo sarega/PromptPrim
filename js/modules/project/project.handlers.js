@@ -1,6 +1,6 @@
 // js/modules/project/project.handlers.js
 
-function initializeFirstProject() {
+export function initializeFirstProject() {
     const projectId = `proj_${Date.now()}`;
     const defaultAgentName = "Default Agent";
     return {
@@ -23,7 +23,7 @@ function initializeFirstProject() {
     };
 }
 
-async function loadProjectData(projectData, overwriteDb = false) {
+export async function loadProjectData(projectData, overwriteDb = false) {
     const migratedProject = migrateProjectData(projectData);
 
     if (window.db && window.db.name !== `${DB_NAME_PREFIX}${migratedProject.id}`) {
@@ -68,7 +68,7 @@ async function loadProjectData(projectData, overwriteDb = false) {
 }
 
 // [FIXED] แก้ไขฟังก์ชันนี้เพื่อเพิ่ม Logic การตั้งค่า Default Agent อัตโนมัติ
-function saveSystemUtilityAgentSettings() {
+export function saveSystemUtilityAgentSettings() {
     const project = stateManager.getProject();
     if (!project.globalSettings) return;
 
@@ -100,13 +100,13 @@ function saveSystemUtilityAgentSettings() {
 
 
 // ... a rest of the file remains the same ...
-async function proceedWithCreatingNewProject() {
+export async function proceedWithCreatingNewProject() {
     const newProject = initializeFirstProject();
     await loadProjectData(newProject, true);
 }
 
 
-function createNewProject() {
+export function createNewProject() {
     if (stateManager.isDirty()) {
         stateManager.setState('pendingActionAfterSave', 'new');
         showUnsavedChangesModal();
@@ -115,7 +115,7 @@ function createNewProject() {
     }
 }
 
-function handleFileSelectedForOpen(event) {
+export function handleFileSelectedForOpen(event) {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -130,7 +130,7 @@ function handleFileSelectedForOpen(event) {
     }
 }
 
-function proceedWithOpeningProject() {
+export function proceedWithOpeningProject() {
     const fileToOpen = stateManager.getState().pendingFileToOpen;
     if (!fileToOpen) return;
 
@@ -138,7 +138,7 @@ function proceedWithOpeningProject() {
     stateManager.setState('pendingFileToOpen', null);
 }
 
-async function saveProject(saveAs = false) {
+export async function saveProject(saveAs = false) {
     const project = stateManager.getProject();
     if (saveAs || project.name === "Untitled Project") {
         showSaveProjectModal();
@@ -147,7 +147,7 @@ async function saveProject(saveAs = false) {
     }
 }
 
-async function handleProjectSaveConfirm(projectNameFromDirectSave = null) {
+export async function handleProjectSaveConfirm(projectNameFromDirectSave = null) {
     const newName = projectNameFromDirectSave || document.getElementById('project-name-input').value.trim();
     if (!newName) {
         showCustomAlert('กรุณาใส่ชื่อโปรเจกต์');
@@ -185,7 +185,7 @@ async function handleProjectSaveConfirm(projectNameFromDirectSave = null) {
     }
 }
 
-async function handleUnsavedChanges(choice) {
+export async function handleUnsavedChanges(choice) {
     hideUnsavedChangesModal();
     switch (choice) {
         case 'save':
@@ -204,7 +204,7 @@ async function handleUnsavedChanges(choice) {
     }
 }
 
-function performPendingAction() {
+export function performPendingAction() {
     const action = stateManager.getState().pendingActionAfterSave;
     if (action === 'open') {
         proceedWithOpeningProject();
@@ -214,7 +214,7 @@ function performPendingAction() {
     stateManager.setState('pendingActionAfterSave', null);
 }
 
-async function _loadProjectFromFile(file) {
+export async function _loadProjectFromFile(file) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
@@ -233,7 +233,7 @@ async function _loadProjectFromFile(file) {
     reader.readAsText(file);
 }
 
-function migrateProjectData(projectData) {
+export function migrateProjectData(projectData) {
     if (!projectData.globalSettings) projectData.globalSettings = {};
     if (!projectData.globalSettings.systemUtilityAgent) {
         projectData.globalSettings.systemUtilityAgent = { ...defaultSystemUtilityAgent };
@@ -279,7 +279,7 @@ function migrateProjectData(projectData) {
     return projectData;
 }
 
-async function rewriteDatabaseWithProjectData(projectData) {
+export async function rewriteDatabaseWithProjectData(projectData) {
     await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
     
     const transaction = db.transaction([SESSIONS_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
@@ -305,7 +305,7 @@ async function rewriteDatabaseWithProjectData(projectData) {
 }
 
 
-async function selectEntity(type, name) {
+export async function selectEntity(type, name) {
     const project = stateManager.getProject();
     project.activeEntity = { type, name };
 
@@ -327,7 +327,7 @@ async function selectEntity(type, name) {
     });
 }
 
-async function loadSelectedEntity() {
+export async function loadSelectedEntity() {
     const selector = document.getElementById('entitySelector');
     if (!selector || !selector.value) return;
     
@@ -338,7 +338,7 @@ async function loadSelectedEntity() {
     await selectEntity(type, name);
 }
 
-async function loadGlobalSettings() {
+export async function loadGlobalSettings() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
 
@@ -359,7 +359,7 @@ async function loadGlobalSettings() {
     stateManager.bus.publish('ui:applyFontSettings');
 }
 
-function handleSummarizationPresetChange() {
+export function handleSummarizationPresetChange() {
     const selector = document.getElementById('system-utility-summary-preset-select');
     const selectedName = selector.value;
     
@@ -376,7 +376,7 @@ function handleSummarizationPresetChange() {
     }
 }
 
-function handleSaveSummarizationPreset() {
+export function handleSaveSummarizationPreset() {
     const currentText = document.getElementById('system-utility-summary-prompt').value.trim();
     if (!currentText) {
         showCustomAlert('Prompt template cannot be empty.', 'Error');

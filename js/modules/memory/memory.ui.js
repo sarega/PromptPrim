@@ -2,7 +2,7 @@
 
 var memorySortable = null;
 
-function loadAndRenderMemories() {
+export function loadAndRenderMemories() {
     const project = stateManager.getProject();
     const container = document.getElementById('memories-container');
     const activeList = document.getElementById('activeMemoriesList');
@@ -62,7 +62,7 @@ function loadAndRenderMemories() {
     });
 }
 
-function createMemoryElement(memory, isActive) {
+export function createMemoryElement(memory, isActive) {
     const project = stateManager.getProject();
     const itemDiv = document.createElement('div');
     itemDiv.className = `item memory-item`;
@@ -92,7 +92,7 @@ function createMemoryElement(memory, isActive) {
     return itemDiv;
 }
 
-function showMemoryEditor(index = null, event) {
+export function showMemoryEditor(index = null, event) {
     if(event) event.stopPropagation();
     const project = stateManager.getProject();
     const modal = document.getElementById('memory-editor-modal');
@@ -112,12 +112,12 @@ function showMemoryEditor(index = null, event) {
     modal.style.display='flex';
 }
 
-function hideMemoryEditor() {
+export function hideMemoryEditor() {
     document.getElementById('memory-editor-modal').style.display = 'none';
 }
 
 // [FIXED] อัปเดตทั้งฟังก์ชันนี้ในไฟล์ js/modules/memory/memory.ui.js
-function initMemoryUI() {
+export function initMemoryUI() {
     // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', loadAndRenderMemories);
     stateManager.bus.subscribe('memory:listChanged', loadAndRenderMemories);

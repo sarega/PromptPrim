@@ -1,6 +1,6 @@
 // js/modules/memory/memory.handlers.js
 
-function toggleMemory(name, event) {
+export function toggleMemory(name, event) {
     event.stopPropagation();
     const project = stateManager.getProject();
     if (project.activeEntity.type !== 'agent') return;
@@ -21,7 +21,7 @@ function toggleMemory(name, event) {
     stateManager.bus.publish('memory:listChanged');
 }
 
-function saveMemory() {
+export function saveMemory() {
     const name = document.getElementById('memory-name-input').value.trim();
     const content = document.getElementById('memory-content-input').value.trim();
     const indexStr = document.getElementById('memory-edit-index').value;
@@ -54,7 +54,7 @@ function saveMemory() {
     hideMemoryEditor();
 }
 
-function deleteMemory(index, e) {
+export function deleteMemory(index, e) {
     e.stopPropagation();
     const project = stateManager.getProject();
     if(confirm(`ลบ '${project.memories[index].name}'?`)){
@@ -76,7 +76,7 @@ function deleteMemory(index, e) {
 
 
 // [FIXED] เพิ่มฟังก์ชันที่ขาดหายไป
-function saveMemoryPackage() {
+export function saveMemoryPackage() {
     try {
         const project = stateManager.getProject();
         // Package only memories and agent presets, not the whole project
@@ -102,7 +102,7 @@ function saveMemoryPackage() {
 }
 
 // [FIXED] เพิ่มฟังก์ชันที่ขาดหายไป
-function loadMemoryPackage(event) {
+export function loadMemoryPackage(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();

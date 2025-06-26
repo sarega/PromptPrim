@@ -22,7 +22,7 @@ import { initChatUI, showCustomAlert } from './js/modules/chat/chat.ui.js'; // A
 /**
  * ฟังก์ชันหลักในการเริ่มต้นการทำงานของแอปพลิเคชันทั้งหมด
  */
-async function init() {
+export async function init() {
     try {
         // --- Library Setup ---
         if (window.marked) {

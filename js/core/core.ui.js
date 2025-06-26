@@ -1,26 +1,26 @@
 // js/core/core.ui.js
 
-function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
-function showSaveProjectModal() {
+export function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
+export function showSaveProjectModal() {
     const project = stateManager.getProject();
     document.getElementById('project-name-input').value = (project.name === "Untitled Project") ? "" : project.name;
     document.getElementById('save-project-modal').style.display = 'flex';
 }
-function hideSaveProjectModal() { document.getElementById('save-project-modal').style.display = 'none'; }
-function showUnsavedChangesModal() { document.getElementById('unsaved-changes-modal').style.display = 'flex'; }
-function hideUnsavedChangesModal() { document.getElementById('unsaved-changes-modal').style.display = 'none'; }
-function showCustomAlert(message, title = 'Notification') {
+export function hideSaveProjectModal() { document.getElementById('save-project-modal').style.display = 'none'; }
+export function showUnsavedChangesModal() { document.getElementById('unsaved-changes-modal').style.display = 'flex'; }
+export function hideUnsavedChangesModal() { document.getElementById('unsaved-changes-modal').style.display = 'none'; }
+export function showCustomAlert(message, title = 'Notification') {
     document.getElementById('alert-modal-title').textContent = title;
     document.getElementById('alert-modal-message').textContent = message;
     document.getElementById('alert-modal').style.display = 'flex';
 }
-function hideCustomAlert() { document.getElementById('alert-modal').style.display = 'none'; }
-function toggleMobileSidebar() {
+export function hideCustomAlert() { document.getElementById('alert-modal').style.display = 'none'; }
+export function toggleMobileSidebar() {
     document.querySelector('.sidebar').classList.toggle('open');
     document.getElementById('mobile-overlay').classList.toggle('active');
 }
-function toggleSidebarCollapse() { document.querySelector('.app-wrapper').classList.toggle('sidebar-collapsed'); }
-function toggleDropdown(event) {
+export function toggleSidebarCollapse() { document.querySelector('.app-wrapper').classList.toggle('sidebar-collapsed'); }
+export function toggleDropdown(event) {
     event.stopPropagation();
     const dropdown = event.currentTarget.closest('.dropdown');
     const wasOpen = dropdown.classList.contains('open');
@@ -28,14 +28,14 @@ function toggleDropdown(event) {
     if (!wasOpen) dropdown.classList.add('open');
 }
 
-function applyFontSettings() {
+export function applyFontSettings() {
     const project = stateManager.getProject();
     if (project && project.globalSettings) {
         document.documentElement.style.setProperty('--main-font-family', project.globalSettings.fontFamilySelect);
     }
 }
 
-function updateStatus({ message, state }) {
+export function updateStatus({ message, state }) {
     // FIX: เปลี่ยน selector ให้ตรงกับ class ที่เราเพิ่มใน HTML
     const statusText = document.querySelector('#statusText.status-text-content'); 
     const statusDot = document.getElementById('statusDot');
@@ -55,7 +55,7 @@ function updateStatus({ message, state }) {
 }
 
 
-function makeSidebarResizable() {
+export function makeSidebarResizable() {
     // This function for desktop resizing remains unchanged.
     const verticalResizer = document.querySelector('.sidebar-resizer');
     const horizontalResizer = document.querySelector('.sidebar-horizontal-resizer');
@@ -123,7 +123,7 @@ function makeSidebarResizable() {
 /**
  * Initializes all UI/UX enhancements specifically for mobile devices.
  */
-function initMobileUX() {
+export function initMobileUX() {
     // Check if we are on a mobile-like screen
     if (window.innerWidth > 768) {
         return;
@@ -180,7 +180,7 @@ function initMobileUX() {
 // --- END: Mobile UX Improvement Logic ---
 
 
-function initCoreUI() {
+export function initCoreUI() {
     stateManager.bus.subscribe('ui:applyFontSettings', applyFontSettings);
     stateManager.bus.subscribe('status:update', updateStatus);
 

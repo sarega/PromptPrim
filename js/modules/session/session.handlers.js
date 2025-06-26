@@ -3,7 +3,7 @@
 // FILE: js/modules/session/session.handlers.js
 // ===============================================
 
-async function createNewChatSession() {
+export async function createNewChatSession() {
     const project = stateManager.getProject();
     const newSession = {
         id: `sid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -26,7 +26,7 @@ async function createNewChatSession() {
     }
 }
 
-async function loadChatSession(id) {
+export async function loadChatSession(id) {
     if (stateManager.isLoading()) return;
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === id);
@@ -53,7 +53,7 @@ async function loadChatSession(id) {
     }
 }
 
-async function renameChatSession(id, e) {
+export async function renameChatSession(id, e) {
     if (e) e.stopPropagation();
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === id);
@@ -73,7 +73,7 @@ async function renameChatSession(id, e) {
     }
 }
 
-async function deleteChatSession(id, e) {
+export async function deleteChatSession(id, e) {
     if (e) e.stopPropagation();
     if (!confirm("ลบ Chat?")) return;
     
@@ -100,7 +100,7 @@ async function deleteChatSession(id, e) {
     }
 }
 
-async function togglePinSession(id, event) {
+export async function togglePinSession(id, event) {
     event.stopPropagation();
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === id);
@@ -114,7 +114,7 @@ async function togglePinSession(id, event) {
     stateManager.bus.publish('session:changed');
 }
 
-async function cloneSession(id, event) {
+export async function cloneSession(id, event) {
     event.stopPropagation();
     const project = stateManager.getProject();
     const sessionToClone = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'get', id);
@@ -135,7 +135,7 @@ async function cloneSession(id, event) {
     await stateManager.updateAndPersistState();
 }
 
-async function archiveSession(id, event) {
+export async function archiveSession(id, event) {
     event.stopPropagation();
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === id);
@@ -162,7 +162,7 @@ async function archiveSession(id, event) {
     }
 }
 
-function exportChat(sessionId, event) {
+export function exportChat(sessionId, event) {
     if (event) event.stopPropagation();
     const project = stateManager.getProject();
     const idToExport = sessionId || project.activeSessionId;

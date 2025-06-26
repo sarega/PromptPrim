@@ -1,6 +1,6 @@
 // js/core/core.api.js
 
-async function loadAllProviderModels() {
+export export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'กำลังโหลด models...', state: 'loading' });
     const project = stateManager.getProject();
     const apiKey = project.globalSettings.apiKey ? project.globalSettings.apiKey.trim() : '';
@@ -25,14 +25,14 @@ async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', finalStatus);
 }
 
-async function fetchOpenRouterModels(apiKey) {
+export async function fetchOpenRouterModels(apiKey) {
     const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { 'Authorization': `Bearer ${apiKey}` } });
     if (!response.ok) throw new Error('ไม่สามารถโหลด models จาก OpenRouter');
     const data = await response.json();
     return data.data.map(m => ({ id: m.id, name: m.name || m.id, provider: 'openrouter' }));
 }
 
-async function fetchOllamaModels(baseUrl) {
+export async function fetchOllamaModels(baseUrl) {
     try {
         const response = await fetch(`${baseUrl}/api/tags`);
         if (!response.ok) throw new Error(`ไม่สามารถเชื่อมต่อ Ollama (HTTP ${response.status})`);
@@ -44,7 +44,7 @@ async function fetchOllamaModels(baseUrl) {
     }
 }
 
-async function callLLM(agent, messages) {
+export async function callLLM(agent, messages) {
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
     if (!modelData) throw new Error("Model data not found for the agent.");
@@ -89,7 +89,7 @@ async function callLLM(agent, messages) {
 }
 
 // [FIXED] แก้ไขฟังก์ชันนี้ทั้งหมดเพื่ออัปเดต UI อย่างปลอดภัย
-async function streamLLMResponse(contentDiv, agent, messages, speakerName = null) {
+export async function streamLLMResponse(contentDiv, agent, messages, speakerName = null) {
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
     if (!modelData) throw new Error("Model data not found for active agent.");
@@ -182,7 +182,7 @@ async function streamLLMResponse(contentDiv, agent, messages, speakerName = null
 }
 
 
-async function generateAndRenameSession(history){
+export async function generateAndRenameSession(history){
      try{
         const project = stateManager.getProject();
         if(project.activeEntity.type !== 'agent') return;

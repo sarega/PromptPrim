@@ -2,9 +2,9 @@
 
 let attachedFiles = [];
 
-function estimateTokens(text) { return Math.ceil((text || "").length / 3); }
+export function estimateTokens(text) { return Math.ceil((text || "").length / 3); }
 
-function getFullSystemPrompt(agentName) {
+export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
     if (!project.agentPresets || !agentName) return "";
     const agent = project.agentPresets[agentName];
@@ -17,7 +17,7 @@ function getFullSystemPrompt(agentName) {
     return finalSystemContent.trim();
 }
 
-function buildPayloadMessages(history, targetAgentName, session) { 
+export function buildPayloadMessages(history, targetAgentName, session) { 
     const messages = [];
     const project = stateManager.getProject();
     const allModels = stateManager.getState().allProviderModels;
@@ -59,7 +59,7 @@ function buildPayloadMessages(history, targetAgentName, session) {
     return messages;
 }
 
-async function sendMessage(isRegeneration = false) {
+export async function sendMessage(isRegeneration = false) {
     const project = stateManager.getProject();
     const { type } = project.activeEntity;
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
@@ -69,7 +69,7 @@ async function sendMessage(isRegeneration = false) {
     else await sendSingleAgentMessage(isRegeneration);
 }
 
-async function sendSingleAgentMessage(isRegeneration = false) {
+export async function sendSingleAgentMessage(isRegeneration = false) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) return;
@@ -116,7 +116,7 @@ async function sendSingleAgentMessage(isRegeneration = false) {
     }
 }
 
-async function runConversationTurn() {
+export async function runConversationTurn() {
     // ADAPT: เปลี่ยน currentProject เป็น project
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
@@ -196,7 +196,7 @@ async function runConversationTurn() {
     }
 }
 
-async function createModeratorDefinedPlan(group, contextHistory, session) {
+export async function createModeratorDefinedPlan(group, contextHistory, session) {
     // ADAPT: เปลี่ยน currentProject เป็น project
     const project = stateManager.getProject();
     const utilityAgent = project.globalSettings.systemUtilityAgent;
@@ -237,7 +237,7 @@ async function createModeratorDefinedPlan(group, contextHistory, session) {
     }
 }
 
-function createRoundRobinPlan(group) {
+export function createRoundRobinPlan(group) {
     const members = group.members.filter(name => name !== group.moderatorAgent);
     const maxTurns = group.maxTurns || members.length;
     const plan = [];
@@ -247,7 +247,7 @@ function createRoundRobinPlan(group) {
     }
     return plan;
 }
-function stopGeneration(){
+export function stopGeneration(){
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (session?.groupChatState) session.groupChatState.isRunning = false;
@@ -256,7 +256,7 @@ function stopGeneration(){
     stateManager.bus.publish('ui:hideLoadingIndicator');
 }
 
-function handleFileUpload(event) {
+export function handleFileUpload(event) {
     const files = event.target.files;
     if (!files) return;
     for (const file of files) {
@@ -279,7 +279,7 @@ function handleFileUpload(event) {
     event.target.value = '';
 }
 
-async function handleManualSummarize() {
+export async function handleManualSummarize() {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) { showCustomAlert("No active session found."); return; }
@@ -289,7 +289,7 @@ async function handleManualSummarize() {
     }
 }
 
-async function unloadSummaryFromActiveSession() {
+export async function unloadSummaryFromActiveSession() {
     document.getElementById('chat-actions-menu').classList.remove('active');
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
@@ -304,7 +304,7 @@ async function unloadSummaryFromActiveSession() {
 }
 
 // [FIXED] เพิ่มฟังก์ชันที่จำเป็นสำหรับการทำงานของ Chat Bubble Actions
-async function copyMessageToClipboard(index, event) {
+export async function copyMessageToClipboard(index, event) {
     if(event) event.stopPropagation();
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
@@ -335,7 +335,7 @@ async function copyMessageToClipboard(index, event) {
  *
  * @param {number} index The index of the message in the session's history array.
  */
-async function editMessage(index) {
+export async function editMessage(index) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) return;
@@ -465,7 +465,7 @@ async function editMessage(index) {
     // --- END: Fixed Logic for Assistant Messages ---
 }
 
-function regenerateMessage(index) {
+export function regenerateMessage(index) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session || index >= session.history.length) return;
@@ -483,7 +483,7 @@ function regenerateMessage(index) {
     sendMessage(true); // Call with regeneration flag
 }
 
-function deleteMessage(index) {
+export function deleteMessage(index) {
     if (!confirm("Are you sure? This will delete this message and all subsequent messages in this chat.")) return;
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
