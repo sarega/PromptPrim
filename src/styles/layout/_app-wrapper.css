@@ -1,0 +1,43 @@
+/* ===============================================
+   FILE: src/styles/layout/_app-wrapper.css
+   DESCRIPTION: Main application wrapper and high-level layout states.
+   =============================================== */
+
+.app-wrapper {
+    display: flex;
+    height: 100dvh;
+    width: 100vw;
+    position: relative;
+    transition: all 0.3s ease-in-out;
+}
+
+/* --- Sidebar Collapsed State --- */
+.app-wrapper.sidebar-collapsed .sidebar {
+    flex-basis: 0 !important; /* Use important to override inline styles from JS */
+    min-width: 0;
+    overflow: hidden;
+    padding-left: 0;
+    padding-right: 0;
+    border-right-width: 0;
+}
+
+/* --- Focus Mode State --- */
+body.focus-mode .sidebar,
+body.focus-mode #hamburger-btn,
+body.focus-mode .sidebar-horizontal-resizer {
+    display: none !important;
+}
+
+body.focus-mode .main-chat-area {
+    width: 100%;
+    max-width: 100%;
+}
+
+body.focus-mode .chat-input-wrapper {
+    padding: 20px 30px;
+}
+
+body.focus-mode #chatInput {
+    min-height: 80px;
+    font-size: 1.1rem;
+}

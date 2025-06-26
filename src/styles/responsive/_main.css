@@ -1,0 +1,72 @@
+/* ===============================================
+   FILE: src/styles/responsive/_main.css
+   DESCRIPTION: All media queries for responsive design.
+   =============================================== */
+
+/* --- Tablet and Mobile Layout --- */
+@media (max-width: 1024px) {
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 320px;
+        max-width: 85vw;
+        min-width: unset;
+        transform: translateX(-100%);
+        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .sidebar-resizer, .sidebar-horizontal-resizer {
+        display: none;
+    }
+    .sidebar-content {
+        flex-direction: column;
+    }
+    #collapse-sidebar-btn {
+        display: none;
+    }
+    #hamburger-btn {
+        display: block;
+    }
+}
+
+/* --- Mobile Specific UX --- */
+@media (max-width: 768px) {
+    #status-panel.is-collapsed {
+        height: 32px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    #status-panel.is-collapsed .status-right,
+    #status-panel.is-collapsed #context-inspector-trigger-btn {
+        display: none;
+    }
+    #status-panel.is-collapsed .status-left {
+        flex-grow: 1;
+    }
+
+    .custom-select-wrapper {
+        min-width: 150px;
+    }
+    #custom-entity-selector-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+
+/* --- Agent Editor Modal Responsive Layout --- */
+@media (min-width: 768px) {
+    #agent-editor-modal .modal-body {
+        flex-direction: row;
+    }
+    .agent-editor-column {
+        flex: 2;
+    }
+    .agent-enhancer-column {
+        flex: 1;
+    }
+}

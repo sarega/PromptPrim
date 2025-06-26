@@ -1,0 +1,127 @@
+/* ===============================================
+   FILE: src/styles/components/_item-list.css
+   DESCRIPTION: Shared styles for list items (Sessions, Agents, etc.).
+   =============================================== */
+
+.item-list > .item {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: pointer;
+}
+
+.item-list > .item.active {
+    border-color: var(--success-color);
+    box-shadow: 0 0 8px rgba(72, 187, 120, 0.2);
+    background-color: #f6fff9;
+}
+
+.item-list > .item.pinned {
+    background-color: #f0e6ff;
+}
+
+/* This class temporarily raises the z-index of an item
+   so its dropdown menu appears above other items. */
+.item.z-index-front {
+    z-index: 1105;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    flex-grow: 1;
+    padding-right: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-name .item-icon {
+    margin-right: 6px;
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+}
+
+.item-actions {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+/* Specific item types */
+.collapsible-section summary {
+    cursor: pointer;
+    font-weight: 500;
+    padding: 5px;
+    border-radius: 5px;
+    transition: background 0.2s;
+    list-style: revert;
+}
+
+.collapsible-section summary:hover {
+    background: #f0f0f0;
+}
+
+.collapsible-section .item-list {
+    padding-top: 5px;
+}
+
+.memory-item {
+    padding: 4px 8px;
+}
+
+.memory-item .item-header {
+    gap: 8px;
+}
+
+.memory-item .item-name {
+    font-weight: normal;
+    font-size: 0.85rem;
+    cursor: default;
+}
+
+.memory-item .item-actions {
+    margin-left: auto;
+}
+
+.memory-toggle {
+    width: 34px;
+    height: 18px;
+    background: #cbd5e0;
+    border-radius: 9px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    flex-shrink: 0;
+}
+
+.memory-toggle.active {
+    background: var(--success-color);
+}
+
+.memory-toggle::after {
+    content: '';
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease;
+}
+
+.memory-toggle.active::after {
+    transform: translateX(16px);
+}

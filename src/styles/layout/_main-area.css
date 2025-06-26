@@ -1,0 +1,118 @@
+/* ===============================================
+   FILE: src/styles/layout/_main-area.css
+   DESCRIPTION: Styles for the main content area, header, and status panel.
+   =============================================== */
+
+.main-chat-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--white-alpha-50);
+    transition: width 0.3s ease-in-out;
+    position: relative;
+    width: 100%; /* Take up remaining space */
+}
+
+.chat-header {
+    padding: 10px 25px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--white-alpha-95);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.3s ease-in-out; /* For mobile auto-hide */
+    flex-shrink: 0;
+}
+
+.chat-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    flex-grow: 1;
+}
+
+#status-panel {
+    padding: 8px 15px;
+    border-top: 1px solid var(--border-color);
+    background: var(--text-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-shrink: 0;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.status-left, .status-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-right {
+    font-size: 12px;
+    color: #718096;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    margin-left: auto;
+}
+
+#context-inspector-trigger-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 5px;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--primary-color);
+}
+
+#context-inspector-trigger-btn:hover {
+    opacity: 0.7;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--warning-color);
+    transition: background 0.3s;
+}
+
+.status-dot.connected { background: var(--success-color); }
+.status-dot.error { background: var(--error-color); }
+
+.loading {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.loading-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    animation: loadingBounce 1.4s infinite ease-in-out both;
+}
+
+.loading-dot:nth-child(1) { animation-delay: -0.32s; }
+.loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes loadingBounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+/* For mobile auto-hide feature */
+.chat-header.is-hidden {
+    transform: translateY(-100%);
+}
+
+#status-panel.is-hidden {
+    transform: translateY(100%);
+}

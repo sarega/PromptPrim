@@ -1,0 +1,36 @@
+/* ===============================================
+   FILE: src/styles/main.css
+   DESCRIPTION: Main entry point for all CSS.
+   This file imports all other partials in the correct order.
+   =============================================== */
+
+/* 1. Abstracts - Variables, functions, mixins. */
+@import './abstracts/_variables.css';
+
+/* 2. Base - Global styles, resets, typography. */
+@import './base/_reset.css';
+@import './base/_typography.css';
+@import './base/_forms.css';
+
+/* 3. Components - Reusable UI elements. */
+@import './components/_buttons.css';
+@import './components/_modals.css';
+@import './components/_dropdowns.css';
+@import './components/_item-list.css';
+@import './components/_code-block.css';
+
+/* 4. Layout - Major page structure. */
+@import './layout/_app-wrapper.css';
+@import './layout/_sidebar.css';
+@import './layout/_main-area.css';
+
+/* 5. Features - Styles for specific application features. */
+@import './features/_chat.css';
+@import './features/_settings-panel.css';
+@import './features/_editors.css';
+
+/* 6. Themes - Theming styles (e.g., dark mode). */
+@import './themes/_dark-mode.css';
+
+/* 7. Responsive - Media queries. Must be last. */
+@import './responsive/_main.css';

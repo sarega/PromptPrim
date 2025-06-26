@@ -1,0 +1,142 @@
+/* ===============================================
+   FILE: src/styles/layout/_sidebar.css
+   DESCRIPTION: Styles for the main sidebar container and its contents.
+   =============================================== */
+
+.sidebar {
+    flex-basis: 340px;
+    flex-shrink: 0;
+    min-width: 250px;
+    max-width: 600px;
+    background: var(--white-alpha-95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    z-index: 1100;
+    position: relative;
+    transition: flex-basis 0.3s ease-in-out, padding 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+.sidebar-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.sidebar-top-row, .sidebar-bottom-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.app-main-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-right: auto;
+    color: var(--text-dark);
+}
+
+.project-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #4a5568;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 12px;
+}
+
+.menu-toggle-btn,
+#collapse-sidebar-btn,
+#settings-btn {
+    font-size: 24px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-dark);
+    padding: 5px;
+    line-height: 1;
+}
+
+#hamburger-btn {
+    display: none; /* Controlled by responsive styles */
+    font-size: 28px;
+    margin-right: 15px;
+}
+
+.sidebar-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 15px;
+}
+
+.sessions-frame {
+    flex: 1 1 55%;
+    min-height: 100px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.memories-frame {
+    flex: 1 1 45%;
+    min-height: 100px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-resizer {
+    flex: 0 0 8px;
+    cursor: ns-resize;
+    background: #e2e8f0;
+    border-top: 1px solid #d1d5db;
+    border-bottom: 1px solid #d1d5db;
+    flex-shrink: 0;
+}
+
+.sidebar-resizer:hover {
+    background: var(--primary-color);
+    opacity: 0.3;
+}
+
+.sidebar-horizontal-resizer {
+    width: 8px;
+    cursor: ew-resize;
+    background: transparent;
+    position: absolute;
+    top: 0;
+    right: -4px;
+    height: 100%;
+    z-index: 1101;
+    transition: background .2s ease;
+}
+
+.sidebar-horizontal-resizer:hover {
+    background: var(--primary-color);
+}
+
+.mobile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    z-index: 1050;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.mobile-overlay.active {
+    display: block;
+    opacity: 1;
+}
