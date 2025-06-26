@@ -1,6 +1,6 @@
 // js/core/core.api.js
 
-export export async function loadAllProviderModels() {
+export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'กำลังโหลด models...', state: 'loading' });
     const project = stateManager.getProject();
     const apiKey = project.globalSettings.apiKey ? project.globalSettings.apiKey.trim() : '';
