@@ -210,4 +210,16 @@ const stateManager = {
     bus: eventBus
 };
 
+// Expose important constants and the state manager on the global object so
+// other modules that rely on global variables can access them without explicit
+// imports. This mirrors the previous non-module behaviour of the app.
+window.DB_NAME_PREFIX = DB_NAME_PREFIX;
+window.SESSIONS_STORE_NAME = SESSIONS_STORE_NAME;
+window.METADATA_STORE_NAME = METADATA_STORE_NAME;
+window.METADATA_KEY = METADATA_KEY;
+window.ALL_AGENT_SETTINGS_IDS = ALL_AGENT_SETTINGS_IDS;
+window.defaultAgentSettings = defaultAgentSettings;
+window.defaultSystemUtilityAgent = defaultSystemUtilityAgent;
+window.defaultSummarizationPresets = defaultSummarizationPresets;
+window.defaultMemories = defaultMemories;
 window.stateManager = stateManager;
