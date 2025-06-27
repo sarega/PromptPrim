@@ -1,5 +1,6 @@
 // ===============================================
-// FILE: src/js/modules/chat/chat.ui.js (Refactored)
+// FILE: src/js/modules/chat/chat.ui.js (Definitive Fix)
+// DESCRIPTION: Ensures the Send/Stop button toggle logic is correctly implemented using classes.
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -11,17 +12,14 @@ function enhanceCodeBlocks(messageElement) {
     const codeBlocks = messageElement.querySelectorAll('pre');
     codeBlocks.forEach(pre => {
         if (pre.parentNode.classList.contains('code-block-wrapper')) return;
-
         const wrapper = document.createElement('div');
         wrapper.className = 'code-block-wrapper';
         pre.parentNode.insertBefore(wrapper, pre);
         wrapper.appendChild(pre);
-
         const copyButton = document.createElement('button');
         copyButton.className = 'copy-code-btn';
         copyButton.textContent = 'Copy';
         wrapper.appendChild(copyButton);
-
         copyButton.addEventListener('click', (e) => {
             e.stopPropagation();
             const code = pre.querySelector('code');
@@ -52,7 +50,10 @@ export function renderChatMessages(){
     updateContextInspector();
 
     const clearBtn = document.getElementById('clear-summary-btn');
-    if (clearBtn) clearBtn.style.display = (session?.summaryState?.activeSummaryId) ? 'block' : 'none';
+    if (clearBtn) {
+        const isSummaryActive = session?.summaryState?.activeSummaryId;
+        clearBtn.style.display = isSummaryActive ? 'block' : 'none';
+    }
 }
 
 export function addMessageToUI(role, content, index, speakerName = null, isLoading = false) {
@@ -88,7 +89,6 @@ export function addMessageToUI(role, content, index, speakerName = null, isLoadi
         let agentForMarkdown = project.activeEntity.type === 'agent' 
             ? project.agentPresets[project.activeEntity.name]
             : project.agentPresets[speakerName] || {};
-
         const useMarkdown = agentForMarkdown?.useMarkdown !== false;
         const contentArray = Array.isArray(content) ? content : [{ type: 'text', text: content }];
         
@@ -120,7 +120,6 @@ export function addMessageToUI(role, content, index, speakerName = null, isLoadi
     if (!isLoading && role !== 'system') {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
-        
         const createActionButton = (icon, title, eventName) => {
             const btn = document.createElement('button');
             btn.innerHTML = icon;
@@ -130,20 +129,17 @@ export function addMessageToUI(role, content, index, speakerName = null, isLoadi
             });
             return btn;
         };
-
         actionsDiv.appendChild(createActionButton('&#9998;', 'Edit', 'chat:editMessage'));
         actionsDiv.appendChild(createActionButton('&#128203;', 'Copy', 'chat:copyMessage'));
         if (role === 'assistant') {
             actionsDiv.appendChild(createActionButton('&#x21bb;', 'Regenerate', 'chat:regenerate'));
         }
         actionsDiv.appendChild(createActionButton('&#128465;', 'Delete', 'chat:deleteMessage'));
-        
         msgDiv.appendChild(actionsDiv);
     }
     
     turnWrapper.appendChild(msgDiv);
     container.appendChild(turnWrapper);
-    
     container.scrollTop = container.scrollHeight;
     return msgDiv;
 }
@@ -229,17 +225,19 @@ export function initChatUI() {
     stateManager.bus.subscribe('ui:renderChatMessages', renderChatMessages);
     stateManager.bus.subscribe('ui:addMessage', (data) => addMessageToUI(data.role, data.content, data.index, data.speakerName, data.isLoading));
     stateManager.bus.subscribe('ui:renderFilePreviews', renderFilePreviews);
+    
+    // [MODIFIED] Using classList.add/remove with the '.hidden' class for robust toggling
     stateManager.bus.subscribe('ui:showLoadingIndicator', () => {
-        document.getElementById('sendBtn').style.display = 'none';
-        document.getElementById('stopBtn').style.display = 'flex';
+        document.getElementById('sendBtn').classList.add('hidden');
+        document.getElementById('stopBtn').classList.remove('hidden');
     });
     stateManager.bus.subscribe('ui:hideLoadingIndicator', () => {
-        document.getElementById('sendBtn').style.display = 'flex';
-        document.getElementById('stopBtn').style.display = 'none';
+        document.getElementById('sendBtn').classList.remove('hidden');
+        document.getElementById('stopBtn').classList.add('hidden');
     });
+    
     stateManager.bus.subscribe('entity:selected', () => updateContextInspector());
     stateManager.bus.subscribe('ui:enhanceCodeBlocks', enhanceCodeBlocks);
-
 
     // --- Setup Event Listeners ---
     const chatInput = document.getElementById('chatInput');
@@ -260,19 +258,30 @@ export function initChatUI() {
     document.getElementById('context-inspector-trigger-btn').addEventListener('click', showContextInspector);
     document.querySelector('#context-inspector-modal .btn-secondary').addEventListener('click', hideContextInspector);
     
+    const chatActionsContainer = document.getElementById('chat-actions-container');
     const chatActionsBtn = document.getElementById('chat-actions-btn');
-    const chatActionsMenu = document.getElementById('chat-actions-menu');
+    
     chatActionsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        chatActionsMenu.classList.toggle('active');
+        chatActionsContainer.classList.toggle('open');
     });
 
-    document.getElementById('manual-summarize-btn').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('chat:summarize'); });
-    document.getElementById('clear-summary-btn').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('chat:clearSummary'); });
-    document.getElementById('menu-upload-file-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        document.getElementById('file-input').click();
-    });
+    const handleMenuAction = (selector, callback) => {
+        const element = document.getElementById(selector);
+        if (element) {
+            element.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                callback(e);
+                chatActionsContainer.classList.remove('open');
+            });
+        }
+    };
+
+    handleMenuAction('manual-summarize-btn', () => stateManager.bus.publish('chat:summarize'));
+    handleMenuAction('clear-summary-btn', () => stateManager.bus.publish('chat:clearSummary'));
+    handleMenuAction('menu-upload-file-btn', () => document.getElementById('file-input').click());
+
     document.getElementById('file-input').addEventListener('change', (e) => stateManager.bus.publish('chat:fileUpload', e));
     
     console.log("Chat UI Initialized.");

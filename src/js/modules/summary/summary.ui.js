@@ -1,18 +1,18 @@
 // ===============================================
-// FILE: src/js/modules/summary/summary.ui.js (ไฟล์ใหม่)
-// DESCRIPTION: UI Module สำหรับจัดการการแสดงผลของ Summary Logs
+// FILE: src/js/modules/summary/summary.ui.js (แก้ไขแล้ว)
+// DESCRIPTION: แก้ไขการสร้าง UI ของ Summary Log ให้มีปุ่มควบคุมครบถ้วน
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
 
 // --- Private Helper Functions ---
 
+// [MODIFIED] แก้ไขให้สร้างปุ่มควบคุม (Load, View, Delete) และผูก Event กับ Event Bus
 function createSummaryLogElement(log) {
     const item = document.createElement('div');
     item.className = 'summary-log-item';
     item.dataset.logId = log.id;
 
-    // Check if this log is the active one for the current session
     const project = stateManager.getProject();
     const activeSession = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (activeSession && activeSession.summaryState?.activeSummaryId === log.id) {
@@ -26,7 +26,9 @@ function createSummaryLogElement(log) {
         <div class="summary-log-item-header">
             <span class="summary-log-item-title" title="${log.summary}">${log.summary}</span>
             <div class="summary-log-item-actions">
-                <button class="btn-icon btn-small" data-action="view" title="View Summary">&#128269;</button>
+                <button class="btn-icon btn-small" data-action="load" title="Load as context">&#11139;</button>
+                <button class="btn-icon btn-small" data-action="view" title="View content">&#128269;</button>
+                <button class="btn-icon btn-small danger" data-action="delete" title="Delete summary">&#128465;</button>
             </div>
         </div>
         <div class="summary-log-item-meta">
@@ -34,16 +36,20 @@ function createSummaryLogElement(log) {
         </div>
     `;
 
-    // Add event listener to load the summary into context when clicked
-    item.addEventListener('click', (e) => {
-        if (!e.target.closest('[data-action="view"]')) {
-             stateManager.bus.publish('summary:load', { logId: log.id });
-        }
+    // ใช้ Event Bus แทน onclick โดยตรง
+    item.querySelector('[data-action="load"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        stateManager.bus.publish('summary:load', { logId: log.id });
     });
 
     item.querySelector('[data-action="view"]').addEventListener('click', (e) => {
         e.stopPropagation();
         stateManager.bus.publish('summary:view', { logId: log.id });
+    });
+
+    item.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        stateManager.bus.publish('summary:delete', { logId: log.id });
     });
 
     return item;
@@ -61,46 +67,42 @@ export function renderSummaryLogs() {
     // Group logs by session ID to display them neatly
     const logsBySession = project.summaryLogs.reduce((acc, log) => {
         const key = log.sourceSessionId;
+        const session = project.chatSessions.find(s => s.id === key);
         if (!acc[key]) {
-            acc[key] = [];
+            acc[key] = {
+                name: session ? session.name : "Unknown Session",
+                logs: []
+            };
         }
-        acc[key].push(log);
+        acc[key].logs.push(log);
         return acc;
     }, {});
 
     const activeSessionId = project.activeSessionId;
 
-    // Ensure the active session's logs are displayed, even if it has no logs yet
-    if (activeSessionId && !logsBySession[activeSessionId]) {
-        logsBySession[activeSessionId] = [];
+    if (Object.keys(logsBySession).length === 0) {
+        container.innerHTML = `<p class="no-logs-message">No summaries yet.</p>`;
+        return;
     }
-    
-    for (const sessionId in logsBySession) {
-        const session = project.chatSessions.find(s => s.id === sessionId);
-        if (!session) continue; // Skip logs for deleted sessions
 
-        const sessionLogs = logsBySession[sessionId].sort((a, b) => b.timestamp - a.timestamp);
+    for (const sessionId in logsBySession) {
+        const group = logsBySession[sessionId];
+        const sessionLogs = group.logs.sort((a, b) => b.timestamp - a.timestamp);
         
         const details = document.createElement('details');
         details.className = 'summary-group';
-        // Open the details for the currently active session
-        if(sessionId === activeSessionId) {
-            details.open = true;
-        }
-
+        
         const summary = document.createElement('summary');
-        summary.textContent = `For: ${session.name}`;
+        summary.textContent = `For: ${group.name}`;
         details.appendChild(summary);
 
-        if (sessionLogs.length > 0) {
-            sessionLogs.forEach(log => {
-                details.appendChild(createSummaryLogElement(log));
-            });
-        } else {
-            const noLogsEl = document.createElement('p');
-            noLogsEl.className = 'no-logs-message';
-            noLogsEl.textContent = 'No summaries yet.';
-            details.appendChild(noLogsEl);
+        sessionLogs.forEach(log => {
+            details.appendChild(createSummaryLogElement(log));
+        });
+
+        // Auto-open the details for the currently active session if it has logs
+        if(sessionId === activeSessionId && sessionLogs.length > 0) {
+            details.open = true;
         }
 
         container.appendChild(details);
@@ -112,7 +114,7 @@ export function showSummaryModal(logId) {
     const log = project.summaryLogs.find(l => l.id === logId);
     if (!log) return;
 
-    document.getElementById('view-summary-title').textContent = `Summary from ${new Date(log.timestamp).toLocaleString()}`;
+    document.getElementById('view-summary-title').textContent = log.summary;
     document.getElementById('view-summary-content').textContent = log.content;
     document.getElementById('view-summary-modal').style.display = 'flex';
 }

@@ -1,6 +1,6 @@
 /* ===============================================
-   FILE: src/styles/features/_chat.css
-   DESCRIPTION: All styles related to the chat interface, including messages and the input area.
+   FILE: src/styles/features/_chat.css (Definitive Fix)
+   DESCRIPTION: Ensures all chat input buttons are correctly styled and aligned.
    =============================================== */
 
 /* --- Chat Messages Area --- */
@@ -12,29 +12,24 @@
     flex-direction: column;
     gap: 20px;
 }
-
 .message-turn-wrapper {
     display: flex;
     flex-direction: column;
     max-width: 100%;
 }
-
 .message-turn-wrapper.user-turn {
     align-self: flex-end;
     align-items: flex-end;
     max-width: 85%;
 }
-
 .message-turn-wrapper.assistant-turn {
     align-self: flex-start;
     align-items: flex-start;
 }
-
 .speaker-label-wrapper {
     margin-bottom: 5px;
     padding: 0 10px;
 }
-
 .speaker-label {
     font-weight: bold;
     font-size: 0.9em;
@@ -43,7 +38,6 @@
     align-items: center;
     gap: 6px;
 }
-
 .message {
     padding: 12px 18px;
     border-radius: 18px;
@@ -51,9 +45,8 @@
     white-space: pre-wrap;
     line-height: 1.6;
     word-wrap: break-word;
-    outline: none; /* Remove focus outline from editable content */
+    outline: none;
 }
-
 .message.user {
     background: var(--background-gradient);
     color: white;
@@ -61,14 +54,12 @@
     width: fit-content;
     max-width: 100%;
 }
-
 .message.assistant {
     background: white;
     border: 1px solid var(--border-color);
     border-bottom-left-radius: 5px;
     width: 100%;
 }
-
 .message.system {
     align-self: center;
     max-width: 80%;
@@ -81,7 +72,6 @@
     border-radius: 15px;
     border: 1px solid var(--border-color);
 }
-
 .message-actions {
     position: absolute;
     bottom: -25px;
@@ -93,13 +83,11 @@
     padding: 4px;
     border: 1px solid rgba(0,0,0,0.05);
 }
-
 .message:hover .message-actions, .message.is-editing .message-actions {
     display: flex;
 }
 .message.user .message-actions { left: auto; right: 4px; }
 .message.assistant .message-actions { left: 4px; }
-
 .message-actions button {
     background: transparent;
     border: none;
@@ -113,19 +101,14 @@
 .message.user .message-actions button { color: rgba(255, 255, 255, 0.7); }
 .message-actions button:hover { background: #e2e8f0; color: var(--text-dark); }
 .message.user .message-actions button:hover { background: rgba(0, 0, 0, 0.3); color: white; }
-
 .message-content img.multimodal-image {
     max-width: 100%;
     max-height: 300px;
     border-radius: 8px;
     margin-top: 10px;
 }
-
-/* --- Inline Editing --- */
 .message.is-editing { max-width: 95% !important; }
-
 .inline-edit-container { width: 100%; }
-
 .inline-edit-textarea {
     width: 100%;
     min-height: 50px;
@@ -140,13 +123,11 @@
     line-height: 1.6;
     color: var(--text-dark);
 }
-
 .message.user .inline-edit-textarea {
     background-color: rgba(0, 0, 0, 0.1);
     color: var(--text-light);
     border-color: var(--text-light);
 }
-
 .inline-edit-actions {
     display: flex;
     gap: 10px;
@@ -154,15 +135,13 @@
     justify-content: flex-end;
 }
 
-
-/* --- Chat Input Area --- */
+/* --- [REFACTORED] Chat Input Area --- */
 .chat-input-wrapper {
     background: transparent;
     padding: 0 20px 15px;
     border-top: none;
     flex-shrink: 0;
 }
-
 .input-container-seamless {
     position: relative;
     width: 100%;
@@ -170,14 +149,16 @@
     border: 1px solid var(--border-color);
     border-radius: 24px;
     transition: background-color 0.3s ease, border-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    padding: 5px;
 }
-
 .input-container-seamless:focus-within {
     box-shadow: 0 0 0 3px var(--shadow-light);
     border-color: var(--primary-color);
 }
-
 #chatInput {
+    flex-grow: 1;
     width: 100%;
     background-color: transparent;
     border: none;
@@ -188,8 +169,8 @@
     max-height: 200px;
     overflow-y: auto;
     margin: 0;
-    min-height: auto;
-    padding: 8px 45px 8px 45px;
+    min-height: 38px;
+    padding: 8px 10px;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -197,42 +178,65 @@
 #chatInput:focus { outline: none; box-shadow: none; }
 
 .input-adornment {
-    position: absolute;
-    bottom: 5px;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 34px;
+    flex-shrink: 0;
 }
-.input-adornment.left { left: 8px; }
-.input-adornment.right { right: 8px; }
+.input-adornment.left { margin-right: 5px; }
+.input-adornment.right { margin-left: 5px; }
 
 #chat-actions-btn {
-    width: 34px; height: 34px; font-size: 16px;
-    color: #5f6368; background: none !important; border: none !important;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+    padding: 0;
+    color: #5f6368;
+    background: none !important;
+    border: none !important;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-#sendBtn, #stopBtn { width: 34px; height: 34px; font-size: 16px; }
-#stopBtn { display: none; }
+#sendBtn, #stopBtn {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* The #stopBtn is now hidden by the .hidden class in index.html, not here */
 
 #chat-actions-menu {
-    display: none; position: absolute; bottom: 110%; left: 0;
-    background-color: white; min-width: 250px;
+    position: absolute;
+    bottom: 110%;
+    left: 0;
+    background-color: white;
+    min-width: 250px;
     box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.15);
-    z-index: 100; border-radius: 8px; overflow: hidden;
-    padding: 5px 0; border: 1px solid var(--border-color);
+    z-index: 100;
+    border-radius: 8px;
+    overflow: hidden;
+    padding: 5px 0;
+    border: 1px solid var(--border-color);
 }
-#chat-actions-menu.active { display: block; }
-
 #chat-actions-menu a {
-    color: var(--text-dark); padding: 8px 14px;
-    text-decoration: none; display: block;
-    font-size: 0.95rem; cursor: pointer;
+    color: var(--text-dark);
+    padding: 8px 14px;
+    text-decoration: none;
+    display: block;
+    font-size: 0.95rem;
+    cursor: pointer;
 }
 #chat-actions-menu a:hover { background-color: #f1f1f1; }
 
 /* --- File Previews --- */
 #file-preview-container {
-    display: none; /* Hidden by default, shown by JS */
+    display: none;
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 12px; margin-bottom: 12px; padding: 0;
     background: transparent; width: 100%;

@@ -123,3 +123,14 @@ export const stateManager = {
 
     bus: eventBus
 };
+// --- markProjectDirty Functions ---
+export function markProjectDirty() {
+    if (stateManager && stateManager.bus && typeof stateManager.bus.publish === 'function') {
+        stateManager.bus.publish('dirty:changed', true);
+    } else {
+        console.warn('[WARN] EventBus not ready. Dirty state not set.');
+    }
+};
+export function markProjectDirtyDeferred() {
+    setTimeout(() => markProjectDirty(), 0);
+};

@@ -1,12 +1,13 @@
 // ===============================================
 // FILE: src/js/modules/project/project.handlers.js (แก้ไขแล้ว)
-// DESCRIPTION: เพิ่มฟังก์ชัน persistProjectMetadata และแก้ไขการเรียกใช้ DB_NAME_PREFIX
+// DESCRIPTION: แก้ไขฟังก์ชัน loadGlobalSettings ให้โหลดค่าเริ่มต้นของ System Utility Agent
 // ===============================================
 
 import {
     stateManager, defaultAgentSettings, defaultMemories, defaultSystemUtilityAgent,
     defaultSummarizationPresets, METADATA_KEY, SESSIONS_STORE_NAME, METADATA_STORE_NAME
 } from '../../core/core.state.js';
+import { markProjectDirty } from '../../core/core.state.js';
 import { openDb, dbRequest, clearObjectStores, getDb } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showSaveProjectModal, hideSaveProjectModal, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
@@ -30,6 +31,7 @@ export function initializeFirstProject() {
             apiKey: "",
             ollamaBaseUrl: "http://localhost:11434",
             allModels: [],
+            // This is where the default values are correctly assigned to a new project
             systemUtilityAgent: { ...defaultSystemUtilityAgent },
             summarizationPromptPresets: JSON.parse(JSON.stringify(defaultSummarizationPresets))
         }
@@ -42,6 +44,7 @@ export async function proceedWithCreatingNewProject() {
 }
 
 export function createNewProject() {
+    markProjectDirty();
     if (stateManager.isDirty()) {
         stateManager.setState('pendingActionAfterSave', 'new');
         showUnsavedChangesModal();
@@ -117,7 +120,7 @@ export async function handleUnsavedChanges(choice) {
     hideUnsavedChangesModal();
     switch (choice) {
         case 'save':
-            const saved = await saveProject(false); // Should save with current name
+            const saved = await saveProject(false); 
             if (saved) performPendingAction();
             break;
         case 'discard':
@@ -188,7 +191,7 @@ export async function loadProjectData(projectData, overwriteDb = false) {
         await rewriteDatabaseWithProjectData(migratedProject);
     }
     stateManager.setProject(migratedProject);
-    await loadGlobalSettings();
+    await loadGlobalSettings(); // This now correctly populates the UI
     const project = stateManager.getProject();
     if (project.globalSettings.apiKey || project.globalSettings.ollamaBaseUrl) {
         await loadAllProviderModels();
@@ -228,10 +231,6 @@ export async function rewriteDatabaseWithProjectData(projectData) {
     });
 }
 
-/**
- * [NEW] Persists the current project's metadata (everything except chat history)
- * to IndexedDB. This is called whenever a change makes the project "dirty".
- */
 export async function persistProjectMetadata() {
     try {
         const project = stateManager.getProject();
@@ -253,18 +252,30 @@ export async function persistProjectMetadata() {
     }
 }
 
-
+// [MODIFIED] แก้ไขฟังก์ชันนี้ให้สมบูรณ์
 export async function loadGlobalSettings() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
+    
     const gs = project.globalSettings;
     
+    // API and Font settings
     document.getElementById('apiKey').value = gs.apiKey || "";
     document.getElementById('ollamaBaseUrl').value = gs.ollamaBaseUrl || "";
-    
-    stateManager.bus.publish('ui:renderSummarizationSelector');
     stateManager.bus.publish('ui:applyFontSettings');
+
+    // System Utility Agent Settings
+    const sysAgent = gs.systemUtilityAgent || defaultSystemUtilityAgent;
+    document.getElementById('system-utility-model-select').value = sysAgent.model || '';
+    document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
+    document.getElementById('system-utility-summary-prompt').value = sysAgent.summarizationPrompt || '';
+    document.getElementById('system-utility-temperature').value = sysAgent.temperature ?? 1.0;
+    document.getElementById('system-utility-topP').value = sysAgent.topP ?? 1.0;
+
+    // Trigger UI update for the summarization preset selector to match the loaded prompt
+    stateManager.bus.publish('ui:renderSummarizationSelector');
 }
+
 
 export function handleFontChange(font) {
     const project = stateManager.getProject();
@@ -301,9 +312,12 @@ export function saveSystemUtilityAgentSettings() {
 
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
+    // After saving, re-render the preset selector to check if the current prompt matches a preset
+    stateManager.bus.publish('ui:renderSummarizationSelector');
 }
 
 export function migrateProjectData(projectData) {
+    // This is a placeholder for future migrations.
     return projectData;
 }
 

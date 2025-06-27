@@ -1,6 +1,6 @@
 // ===============================================
-// FILE: src/js/core/core.api.js (Refactored)
-// DESCRIPTION: All communication with external LLM APIs.
+// FILE: src/js/core/core.api.js (แก้ไขแล้ว)
+// DESCRIPTION: เปลี่ยน Model เริ่มต้นเป็น Gemma 3 27B
 // ===============================================
 
 import { stateManager } from './core.state.js';
@@ -30,7 +30,7 @@ async function fetchOllamaModels(baseUrl) {
 
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-    const project = stateManager.getProject();
+    let project = stateManager.getProject(); // Get the project state at the beginning
     if (!project || !project.globalSettings) {
         stateManager.bus.publish('status:update', { message: 'Project not loaded', state: 'error' });
         return;
@@ -52,16 +52,58 @@ export async function loadAllProviderModels() {
         }
         const results = await Promise.all(fetchPromises);
         const allModels = results.flat();
-        stateManager.setAllModels(allModels);
         
+        // --- Logic to set default model ---
         if (allModels.length > 0) {
+            // [MODIFIED] Set the desired default model to Gemma 3 27B
+            const defaultModelId = 'google/gemma-3-27b-it'; 
+            const defaultModelExists = allModels.some(m => m.id === defaultModelId);
+            
+            let projectChanged = false;
+            if (defaultModelExists) {
+                // 1. Update the project object IN MEMORY FIRST
+                
+                // Set for System Utility Agent if it's still the initial default or empty
+                const oldDefaults = ['openai/gpt-4o-mini', 'google/gemma-2-27b-it'];
+                if (!project.globalSettings.systemUtilityAgent.model || oldDefaults.includes(project.globalSettings.systemUtilityAgent.model)) {
+                    project.globalSettings.systemUtilityAgent.model = defaultModelId;
+                    projectChanged = true;
+                }
+                
+                // Set for the "Default Agent" preset if it's empty
+                const defaultAgent = project.agentPresets['Default Agent'];
+                if (defaultAgent && !defaultAgent.model) {
+                    defaultAgent.model = defaultModelId;
+                    projectChanged = true;
+                }
+            }
+
+            // 2. If changes were made, update the central state BEFORE updating the model list
+            if (projectChanged) {
+                stateManager.setProject(project);
+            }
+            
+            // 3. NOW, update the model list. This will trigger 'models:loaded' event.
+            stateManager.setAllModels(allModels);
+            
+            // 4. If changes were made, persist them to the database
+            if(projectChanged) {
+                await stateManager.updateAndPersistState();
+            }
+
             finalStatus = { message: `Loaded ${allModels.length} models successfully.`, state: 'connected' };
         }
     } catch (error) {
         finalStatus = { message: `Error loading models: ${error.message}`, state: 'error' };
     }
+    
+    // Publish the final status update
     stateManager.bus.publish('status:update', finalStatus);
+    
+    // Trigger a final re-render to ensure all UI is in sync
+    stateManager.bus.publish('project:loaded', { projectData: stateManager.getProject() });
 }
+
 
 export async function callLLM(agent, messages) {
     const allModels = stateManager.getState().allProviderModels;
@@ -185,9 +227,6 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
 
             if (token) {
                 fullResponseText += token;
-                // The UI update is now delegated to the chat.ui.js module
-                // which will receive this fullResponseText at the end.
-                // We just need to update the text content here for live streaming.
                 if (agent.useMarkdown) {
                     streamingContentSpan.innerHTML = marked.parse(fullResponseText);
                 } else {
@@ -197,7 +236,6 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
         }
     }
     
-    // Publish an event to enhance code blocks after streaming is complete.
     stateManager.bus.publish('ui:enhanceCodeBlocks', contentDiv);
     return fullResponseText;
 }
@@ -214,16 +252,12 @@ export async function generateAndRenameSession(history){
         const titlePrompt = `Based on the conversation, generate a concise title (3-5 words) and a single relevant emoji. Respond with a JSON object like {"title": "your title", "emoji": "👍"}.`;
         
         const messages = [{ role: "user", content: titlePrompt }];
-        const allModels = stateManager.getState().allProviderModels;
-        
-        // This is a utility call, it can use the helper function directly
         const responseText = await callLLM({ ...agent, temperature: 0.2 }, messages);
         
         let newTitleData = {};
         try { newTitleData = JSON.parse(responseText.match(/{.*}/s)[0]); } 
         catch(e) { 
             console.error("Failed to parse title JSON:", responseText); 
-            // Fallback if JSON parsing fails
             const titlePart = responseText.replace(/"/g, '').substring(0, 30);
             newTitleData = { title: titlePart, emoji: '💬' };
         }
