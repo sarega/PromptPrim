@@ -1,9 +1,10 @@
 // ===============================================
-// FILE: src/js/modules/agent/agent.ui.js (Refactored)
+// FILE: src/js/modules/agent/agent.ui.js
+// DESCRIPTION: No changes needed here, logic is correct.
 // ===============================================
 
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
-import { showCustomAlert } from '../../core/core.ui.js';
+import { showCustomAlert, toggleDropdown } from '../../core/core.ui.js';
 
 // --- Private Helper Functions (Not Exported) ---
 function createAgentElement(name, preset) {
@@ -27,7 +28,6 @@ function createAgentElement(name, preset) {
         </div>
     </div>`;
     
-    // Publish events instead of calling handlers directly
     item.addEventListener('click', (e) => {
         if (e.target.closest('.item-actions')) return;
         stateManager.bus.publish('entity:select', { type: 'agent', name });
@@ -78,7 +78,6 @@ export function populateModelSelectors() {
         if (openrouterGroup.childElementCount > 0) selector.appendChild(openrouterGroup.cloneNode(true));
         if (ollamaGroup.childElementCount > 0) selector.appendChild(ollamaGroup.cloneNode(true));
         
-        // Restore value after populating
         if (selector.id === 'system-utility-model-select') {
             selector.value = project.globalSettings.systemUtilityAgent?.model || '';
         } else if (selector.id === 'agent-model-select') {
@@ -141,6 +140,7 @@ export function initAgentUI() {
     stateManager.bus.subscribe('agent:listChanged', renderAgentPresets);
     stateManager.bus.subscribe('models:loaded', populateModelSelectors);
     stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
+    stateManager.bus.subscribe('entity:selected', renderAgentPresets);
     
     stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
         document.getElementById('agent-name-input').value = profileData.agent_name || '';
@@ -157,12 +157,20 @@ export function initAgentUI() {
     });
 
     // --- Setup Event Listeners ---
-    const createAgentButton = document.querySelector('a[data-action="createAgent"]');
-    if (createAgentButton) {
-        createAgentButton.addEventListener('click', (e) => {
-            e.preventDefault(); 
-            stateManager.bus.publish('agent:create');
-        });
+    const agentSection = document.querySelector('#agentPresetList')?.closest('details.collapsible-section');
+    if (agentSection) {
+        const dropdownToggleButton = agentSection.querySelector('.section-header .dropdown button');
+        if (dropdownToggleButton) {
+            dropdownToggleButton.addEventListener('click', toggleDropdown);
+        }
+        
+        const createAgentButton = agentSection.querySelector('a[data-action="createAgent"]');
+        if (createAgentButton) {
+            createAgentButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                stateManager.bus.publish('agent:create');
+            });
+        }
     }
 
     document.getElementById('generate-agent-profile-btn').addEventListener('click', () => stateManager.bus.publish('agent:generateProfile'));

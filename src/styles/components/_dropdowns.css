@@ -1,6 +1,6 @@
 /* ===============================================
-   FILE: src/styles/components/_dropdowns.css
-   DESCRIPTION: Styles for dropdown menus.
+   FILE: src/styles/components/_dropdowns.css (แก้ไขแล้ว)
+   DESCRIPTION: เพิ่ม positioning ให้กับ .align-left
    =============================================== */
 
 /* --- Standard Dropdown --- */
@@ -23,7 +23,7 @@
     background-color: white;
     min-width: max-content;
     box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-    z-index: 100;
+    z-index: 1100; /* Increased z-index */
     border-radius: 8px;
     overflow: hidden;
 }
@@ -32,9 +32,12 @@
     display: block;
 }
 
+/* [FIXED] Added top and margin-top to correctly position left-aligned dropdowns */
 .dropdown.align-left .dropdown-content {
     left: 0;
     right: auto;
+    top: 100%;
+    margin-top: 4px;
 }
 
 .dropdown.align-right .dropdown-content {

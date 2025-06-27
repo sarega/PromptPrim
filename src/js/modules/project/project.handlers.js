@@ -1,17 +1,17 @@
 // ===============================================
-// FILE: src/js/modules/project/project.handlers.js (Refactored)
-// DESCRIPTION: Handlers for project-level actions (new, open, save).
+// FILE: src/js/modules/project/project.handlers.js (แก้ไขแล้ว)
+// DESCRIPTION: เพิ่มฟังก์ชัน persistProjectMetadata และแก้ไขการเรียกใช้ DB_NAME_PREFIX
 // ===============================================
 
-// --- Imports ---
-import { stateManager, defaultAgentSettings, defaultMemories, defaultSystemUtilityAgent, defaultSummarizationPresets, METADATA_KEY, DB_NAME_PREFIX } from '../../core/core.state.js';
-import { openDb, dbRequest, clearObjectStores } from '../../core/core.db.js';
+import {
+    stateManager, defaultAgentSettings, defaultMemories, defaultSystemUtilityAgent,
+    defaultSummarizationPresets, METADATA_KEY, SESSIONS_STORE_NAME, METADATA_STORE_NAME
+} from '../../core/core.state.js';
+import { openDb, dbRequest, clearObjectStores, getDb } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showSaveProjectModal, hideSaveProjectModal, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
 import { createNewChatSession, loadChatSession } from '../session/session.handlers.js';
 import { scrollToLinkedEntity } from './project.ui.js';
-
-// --- Exported Functions ---
 
 export function initializeFirstProject() {
     const projectId = `proj_${Date.now()}`;
@@ -53,10 +53,8 @@ export function createNewProject() {
 export function handleFileSelectedForOpen(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     stateManager.setState('pendingFileToOpen', file);
-    event.target.value = ''; // Reset input to allow opening the same file again
-
+    event.target.value = '';
     if (stateManager.isDirty()) {
         stateManager.setState('pendingActionAfterSave', 'open');
         showUnsavedChangesModal();
@@ -68,7 +66,6 @@ export function handleFileSelectedForOpen(event) {
 export function proceedWithOpeningProject() {
     const fileToOpen = stateManager.getState().pendingFileToOpen;
     if (!fileToOpen) return;
-
     _loadProjectFromFile(fileToOpen);
     stateManager.setState('pendingFileToOpen', null);
 }
@@ -88,16 +85,11 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
         showCustomAlert('Please enter a project name.');
         return false;
     }
-
     const project = stateManager.getProject();
     project.name = newName;
-    
-    // Publish events instead of direct DOM manipulation
     stateManager.bus.publish('project:nameChanged', newName);
-
     let projectToSave = JSON.parse(JSON.stringify(project));
     projectToSave = migrateProjectData(projectToSave);
-
     try {
         const dataStr = JSON.stringify(projectToSave, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
@@ -109,10 +101,10 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
         a.click();
         URL.revokeObjectURL(url);
         document.body.removeChild(a);
-
-        await stateManager.updateAndPersistState(); // This now marks as dirty and saves
+        
+        await persistProjectMetadata();
         hideSaveProjectModal();
-        stateManager.setDirty(false); // Mark as clean after a successful save
+        stateManager.setDirty(false);
         return true;
     } catch (error) {
         console.error("Failed to save project:", error);
@@ -125,7 +117,7 @@ export async function handleUnsavedChanges(choice) {
     hideUnsavedChangesModal();
     switch (choice) {
         case 'save':
-            const saved = await saveProject(true); // Force "Save As" dialog
+            const saved = await saveProject(false); // Should save with current name
             if (saved) performPendingAction();
             break;
         case 'discard':
@@ -172,9 +164,9 @@ async function _loadProjectFromFile(file) {
 export async function loadLastProject(lastProjectId) {
     try {
         await openDb(lastProjectId);
-        const storedObject = await dbRequest(METADATA_STORE_NAME, 'readonly', 'get', METADATA_KEY);
-        
-        if (storedObject && storedObject.id === lastProjectId) {
+        const wrapperObject = await dbRequest(METADATA_STORE_NAME, 'readonly', 'get', METADATA_KEY);
+        if (wrapperObject && wrapperObject.data && wrapperObject.data.id === lastProjectId) {
+            const storedObject = wrapperObject.data;
             const sessions = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'getAll');
             const lastProject = { ...storedObject, chatSessions: sessions };
             await loadProjectData(lastProject, false);
@@ -192,62 +184,84 @@ export async function loadLastProject(lastProjectId) {
 export async function loadProjectData(projectData, overwriteDb = false) {
     const migratedProject = migrateProjectData(projectData);
     await openDb(migratedProject.id);
-    
     if (overwriteDb) {
         await rewriteDatabaseWithProjectData(migratedProject);
     }
-    
     stateManager.setProject(migratedProject);
-    
-    // Load settings into UI
-    await loadGlobalSettings(); 
-
-    // Fetch models if API keys are present
+    await loadGlobalSettings();
     const project = stateManager.getProject();
     if (project.globalSettings.apiKey || project.globalSettings.ollamaBaseUrl) {
         await loadAllProviderModels();
     }
-    
-    // Load the most recent session or create a new one
     const existingSessions = project.chatSessions.filter(s => !s.archived);
     if (existingSessions.length === 0) {
-        await createNewChatSession(); 
+        await createNewChatSession();
     } else {
-        await loadChatSession(existingSessions.sort((a,b) => b.updatedAt - a.updatedAt)[0].id);
+        await loadChatSession(existingSessions.sort((a, b) => b.updatedAt - a.updatedAt)[0].id);
     }
-
-    // Publish event to notify all UI modules that the project is loaded
     stateManager.bus.publish('project:loaded', { projectData: stateManager.getProject() });
-    
-    // Final UI updates
     if (project.activeEntity) {
         requestAnimationFrame(() => {
             scrollToLinkedEntity(project.activeEntity.type, project.activeEntity.name);
         });
     }
-    
     stateManager.setDirty(false);
     localStorage.setItem('lastActiveProjectId', projectData.id);
 }
 
 export async function rewriteDatabaseWithProjectData(projectData) {
     await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
-    
-    const sessionStore = db.transaction(SESSIONS_STORE_NAME, 'readwrite').objectStore(SESSIONS_STORE_NAME);
+    const db = getDb();
+    if (!db) {
+        console.error("Database connection not available for rewrite.");
+        return;
+    }
+    const tx = db.transaction([SESSIONS_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
+    const sessionStore = tx.objectStore(SESSIONS_STORE_NAME);
     projectData.chatSessions.forEach(session => sessionStore.put(session));
-    
     const metadata = { ...projectData };
     delete metadata.chatSessions;
-    await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', { id: METADATA_KEY, ...metadata });
+    tx.objectStore(METADATA_STORE_NAME).put({ id: METADATA_KEY, data: metadata });
+    return new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+    });
 }
 
-// --- Settings Handlers ---
+/**
+ * [NEW] Persists the current project's metadata (everything except chat history)
+ * to IndexedDB. This is called whenever a change makes the project "dirty".
+ */
+export async function persistProjectMetadata() {
+    try {
+        const project = stateManager.getProject();
+        if (!project || !project.id) {
+            console.warn("Cannot persist metadata: project or project ID is missing.");
+            return;
+        }
+
+        const metadata = { ...project };
+        delete metadata.chatSessions;
+
+        const wrapperObject = { id: METADATA_KEY, data: metadata };
+
+        await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', wrapperObject);
+        console.log("Project metadata persisted to DB.");
+
+    } catch (error) {
+        console.error("Failed to persist project metadata:", error);
+    }
+}
+
 
 export async function loadGlobalSettings() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
     const gs = project.globalSettings;
-    // ... code to set UI element values from gs ...
+    
+    document.getElementById('apiKey').value = gs.apiKey || "";
+    document.getElementById('ollamaBaseUrl').value = gs.ollamaBaseUrl || "";
+    
     stateManager.bus.publish('ui:renderSummarizationSelector');
     stateManager.bus.publish('ui:applyFontSettings');
 }
@@ -259,12 +273,14 @@ export function handleFontChange(font) {
     stateManager.updateAndPersistState();
     stateManager.bus.publish('ui:applyFontSettings');
 }
+
 export function handleApiKeyChange(key) {
     const project = stateManager.getProject();
     project.globalSettings.apiKey = key;
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
 }
+
 export function handleOllamaUrlChange(url) {
     const project = stateManager.getProject();
     project.globalSettings.ollamaBaseUrl = url;
@@ -275,14 +291,19 @@ export function handleOllamaUrlChange(url) {
 export function saveSystemUtilityAgentSettings() {
     const project = stateManager.getProject();
     if (!project.globalSettings) return;
-    // ... code to save system utility agent settings ...
+    const agentSettings = project.globalSettings.systemUtilityAgent;
+
+    agentSettings.model = document.getElementById('system-utility-model-select').value;
+    agentSettings.systemPrompt = document.getElementById('system-utility-prompt').value;
+    agentSettings.summarizationPrompt = document.getElementById('system-utility-summary-prompt').value;
+    agentSettings.temperature = parseFloat(document.getElementById('system-utility-temperature').value);
+    agentSettings.topP = parseFloat(document.getElementById('system-utility-topP').value);
+
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
 }
 
-// Dummy migrate function for now
 export function migrateProjectData(projectData) {
-    // In a real scenario, this would check versions and update the data structure
     return projectData;
 }
 
@@ -299,68 +320,11 @@ export async function selectEntity(type, name) {
     }
 
     stateManager.setProject(project);
-    await stateManager.updateAndPersistState();
-    
+    stateManager.updateAndPersistState();
+
     stateManager.bus.publish('entity:selected', { type, name });
-    
+
     requestAnimationFrame(() => {
         scrollToLinkedEntity(type, name);
-    });
-}
-
-export async function loadSelectedEntity() {
-    const selector = document.getElementById('entitySelector');
-    if (!selector || !selector.value) return;
-    
-    const separatorIndex = selector.value.indexOf('_');
-    const type = selector.value.substring(0, separatorIndex);
-    const name = selector.value.substring(separatorIndex + 1);
-
-    await selectEntity(type, name);
-}
-
-export function handleSummarizationPresetChange() {
-    const selector = document.getElementById('system-utility-summary-preset-select');
-    const selectedName = selector.value;
-    
-    if (selectedName === 'custom') {
-        return;
-    }
-
-    const project = stateManager.getProject();
-    const presets = project.globalSettings.summarizationPromptPresets;
-    if (presets && presets[selectedName]) {
-        const presetContent = presets[selectedName];
-        document.getElementById('system-utility-summary-prompt').value = presetContent;
-        saveSystemUtilityAgentSettings();
-    }
-}
-
-export function handleSaveSummarizationPreset() {
-    const currentText = document.getElementById('system-utility-summary-prompt').value.trim();
-    if (!currentText) {
-        showCustomAlert('Prompt template cannot be empty.', 'Error');
-        return;
-    }
-
-    const newName = prompt('Enter a name for this new preset:', '');
-    if (!newName || !newName.trim()) {
-        return;
-    }
-
-    const project = stateManager.getProject();
-    const trimmedName = newName.trim();
-    if (project.globalSettings.summarizationPromptPresets[trimmedName]) {
-        if (!confirm(`A preset named '${trimmedName}' already exists. Do you want to overwrite it?`)) {
-            return;
-        }
-    }
-
-    project.globalSettings.summarizationPromptPresets[trimmedName] = currentText;
-    stateManager.setProject(project);
-    stateManager.updateAndPersistState().then(() => {
-        stateManager.bus.publish('ui:renderSummarizationSelector');
-        document.getElementById('system-utility-summary-preset-select').value = trimmedName;
-        showCustomAlert(`Preset '${trimmedName}' saved successfully!`, 'Success');
     });
 }

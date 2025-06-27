@@ -1,7 +1,12 @@
 /* ===============================================
-   FILE: src/styles/base/_forms.css
-   DESCRIPTION: Default styles for all form elements.
+   FILE: src/styles/base/_forms.css (แก้ไขแล้ว)
+   DESCRIPTION: เพิ่มคลาส .hidden เพื่อซ่อน element
    =============================================== */
+
+/* [FIX] Added the .hidden utility class */
+.hidden {
+    display: none !important;
+}
 
 .form-group {
     margin-bottom: 15px;

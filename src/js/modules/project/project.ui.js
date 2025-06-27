@@ -1,12 +1,12 @@
 // ===============================================
-// FILE: src/js/modules/project/project.ui.js (Refactored)
-// DESCRIPTION: UI rendering and event listeners for the project-level components.
+// FILE: src/js/modules/project/project.ui.js (แก้ไขแล้ว)
+// DESCRIPTION: แก้ไขการผูก Event Listener ของปุ่ม Project ให้ถูกต้อง
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
 import { toggleDropdown } from '../../core/core.ui.js';
 
-// --- Exported UI Functions ---
+// --- (All other functions remain the same) ---
 
 export function updateProjectTitle(projectName) {
     const projectTitleEl = document.getElementById('project-title');
@@ -34,10 +34,9 @@ export function selectCustomEntity(value) {
     const separatorIndex = value.indexOf('_');
     const type = value.substring(0, separatorIndex);
     const name = value.substring(separatorIndex + 1);
-    
-    // Publish an event for the handler to process
+
     stateManager.bus.publish('entity:select', { type, name });
-    
+
     document.getElementById('custom-entity-selector-wrapper').classList.remove('open');
 }
 
@@ -135,6 +134,9 @@ export function renderSummarizationPresetSelector() {
     }
 }
 
+/**
+ * [FIXED] Corrected the event listener setup for the project dropdown menu.
+ */
 export function initProjectUI() {
     // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', (eventData) => {
@@ -148,12 +150,24 @@ export function initProjectUI() {
     stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
 
     // --- Setup Event Listeners that PUBLISH events ---
-    const projectDropdown = document.querySelector('.sidebar-bottom-row .dropdown-content');
-    projectDropdown.querySelector('a[data-action="newProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:new'); });
-    projectDropdown.querySelector('a[data-action="openProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:open'); });
-    projectDropdown.querySelector('a[data-action="saveProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:save', false); });
-    projectDropdown.querySelector('a[data-action="saveProjectAs"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:save', true); });
-    projectDropdown.querySelector('a[data-action="exportChat"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:exportChat'); });
+    const projectDropdownWrapper = document.querySelector('.sidebar-bottom-row .dropdown');
+    if (projectDropdownWrapper) {
+        // Attach listener to the button to toggle the menu
+        const toggleButton = projectDropdownWrapper.querySelector('button');
+        if (toggleButton) {
+            toggleButton.addEventListener('click', toggleDropdown);
+        }
+
+        // Attach listeners to the links inside the dropdown content
+        const dropdownContent = projectDropdownWrapper.querySelector('.dropdown-content');
+        if (dropdownContent) {
+            dropdownContent.querySelector('a[data-action="newProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:new'); });
+            dropdownContent.querySelector('a[data-action="openProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:open'); });
+            dropdownContent.querySelector('a[data-action="saveProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:save', false); });
+            dropdownContent.querySelector('a[data-action="saveProjectAs"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:save', true); });
+            dropdownContent.querySelector('a[data-action="exportChat"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:exportChat'); });
+        }
+    }
     
     document.getElementById('load-project-input').addEventListener('change', (e) => stateManager.bus.publish('project:fileSelectedForOpen', e));
     document.getElementById('custom-entity-selector-trigger').addEventListener('click', toggleCustomEntitySelector);

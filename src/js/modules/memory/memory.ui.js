@@ -1,5 +1,6 @@
 // ===============================================
-// FILE: src/js/modules/memory/memory.ui.js (Refactored)
+// FILE: src/js/modules/memory/memory.ui.js (แก้ไขแล้ว)
+// DESCRIPTION: แก้ไขการแสดงผลของ Inactive Memories
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -31,7 +32,6 @@ function createMemoryElement(memory, isActive) {
             </div>
         </div>`;
 
-    // Publish events for handlers
     itemDiv.querySelector('.memory-toggle').addEventListener('click', (e) => stateManager.bus.publish('memory:toggle', { name: memory.name, event: e }));
     itemDiv.querySelector('[data-action="toggle-menu"]').addEventListener('click', toggleDropdown);
     itemDiv.querySelector('[data-action="edit"]').addEventListener('click', (e) => stateManager.bus.publish('memory:edit', { index: memoryIndex, event: e }));
@@ -44,6 +44,7 @@ function createMemoryElement(memory, isActive) {
 
 export function loadAndRenderMemories() {
     const project = stateManager.getProject();
+    if (!project) return;
     const container = document.getElementById('memories-container');
     const activeList = document.getElementById('activeMemoriesList');
     const inactiveList = document.getElementById('inactiveMemoriesList');
@@ -53,7 +54,7 @@ export function loadAndRenderMemories() {
     inactiveList.innerHTML = '';
     
     let activeAgentPreset = null;
-    if(project.activeEntity?.type === 'agent') {
+    if(project.activeEntity?.type === 'agent' && project.agentPresets && project.agentPresets[project.activeEntity.name]) {
         container.style.display = 'block';
         activeAgentPreset = project.agentPresets[project.activeEntity.name];
     } else {
@@ -85,7 +86,12 @@ export function loadAndRenderMemories() {
         if(memory) inactiveList.appendChild(createMemoryElement(memory, false));
     });
 
-    inactiveSection.style.display = inactiveMemories.length > 0 ? 'block' : 'none';
+    // [FIX] Use classList to toggle visibility, respecting the CSS `!important` rule.
+    if (inactiveMemories.length > 0) {
+        inactiveSection.classList.remove('hidden');
+    } else {
+        inactiveSection.classList.add('hidden');
+    }
     
     if (memorySortable) memorySortable.destroy();
     memorySortable = new Sortable(activeList, {
@@ -96,8 +102,8 @@ export function loadAndRenderMemories() {
             const movedMemoryName = evt.item.dataset.name;
             agent.activeMemories.splice(evt.oldDraggableIndex, 1);
             agent.activeMemories.splice(evt.newDraggableIndex, 0, movedMemoryName);
-            stateManager.updateAndPersistState(); // Save the new order
-            loadAndRenderMemories(); // Re-render to reflect changes
+            stateManager.updateAndPersistState();
+            loadAndRenderMemories();
         }
     });
 }
@@ -134,22 +140,32 @@ export function initMemoryUI() {
     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
 
     // --- Setup Event Listeners ---
-    const dropdown = document.querySelector('.memories-frame details').querySelector('.dropdown-content');
+    // [FIX] Use a more robust selector to find the correct dropdown menu
+    const memorySection = document.querySelector('#memories-container')?.closest('details.collapsible-section');
+    if (memorySection) {
+        const dropdownToggleButton = memorySection.querySelector('.section-header .dropdown button');
+        if (dropdownToggleButton) {
+            dropdownToggleButton.addEventListener('click', toggleDropdown);
+        }
 
-    dropdown.querySelector('a[data-action="createMemory"]').addEventListener('click', (e) => {
-        e.preventDefault();
-        stateManager.bus.publish('memory:create');
-    });
-    
-    dropdown.querySelector('a[data-action="exportMemories"]').addEventListener('click', (e) => {
-        e.preventDefault();
-        stateManager.bus.publish('memory:exportPackage');
-    });
+        const dropdownContent = memorySection.querySelector('.dropdown-content');
+        if (dropdownContent) {
+            dropdownContent.querySelector('a[data-action="createMemory"]').addEventListener('click', (e) => {
+                e.preventDefault();
+                stateManager.bus.publish('memory:create');
+            });
+            
+            dropdownContent.querySelector('a[data-action="exportMemories"]').addEventListener('click', (e) => {
+                e.preventDefault();
+                stateManager.bus.publish('memory:exportPackage');
+            });
 
-    dropdown.querySelector('a[data-action="importMemories"]').addEventListener('click', (e) => {
-        e.preventDefault();
-        stateManager.bus.publish('memory:importPackage');
-    });
+            dropdownContent.querySelector('a[data-action="importMemories"]').addEventListener('click', (e) => {
+                e.preventDefault();
+                stateManager.bus.publish('memory:importPackage');
+            });
+        }
+    }
     
     document.getElementById('load-memory-package-input').addEventListener('change', (e) => {
         stateManager.bus.publish('memory:fileSelectedForImport', e)

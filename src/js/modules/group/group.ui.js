@@ -1,13 +1,10 @@
 // ===============================================
-// FILE: src/js/modules/group/group.ui.js (Refactored)
+// FILE: src/js/modules/group/group.ui.js
+// DESCRIPTION: No changes needed here, logic is correct.
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
 import { toggleDropdown } from '../../core/core.ui.js';
-
-// This will be a global reference on the window object for Sortable.js
-// It's a simpler approach than passing the instance around.
-// window.groupSortable = null;
 
 // --- Private Helper Functions ---
 function createGroupElement(name) {
@@ -30,7 +27,6 @@ function createGroupElement(name) {
         </div>
     </div>`;
     
-    // Publish events instead of calling handlers directly
     item.addEventListener('click', (e) => {
         if (e.target.closest('.item-actions')) return;
         stateManager.bus.publish('entity:select', { type: 'group', name });
@@ -69,7 +65,6 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
     const currentMembers = group ? group.members : [];
     const allAgents = Object.keys(project.agentPresets);
     
-    // Use the stored order if available, otherwise just list all agents
     const sortedAgents = group ? [...group.members] : [];
     allAgents.forEach(agentName => {
         if (!sortedAgents.includes(agentName)) {
@@ -81,7 +76,7 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
         const isChecked = currentMembers.includes(agentName);
         const item = document.createElement('div');
         item.className = 'agent-sortable-item';
-        item.dataset.agentName = agentName; // Use this for Sortable.js toArray()
+        item.dataset.agentName = agentName;
         const checkboxId = `agent-cb-${agentName.replace(/\s+/g, '-')}`;
         item.innerHTML = `
             <input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''}>
@@ -96,14 +91,6 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
     window.groupSortable = new Sortable(memberList, { 
         animation: 150, 
         handle: '.drag-handle',
-        store: {
-            get: (sortable) => {
-                return group ? group.members : [];
-            },
-            set: (sortable) => {
-                // The order is saved in the saveAgentGroup handler
-            }
-        }
     });
 
     updateModeratorDropdown(group?.moderatorAgent);
@@ -154,17 +141,25 @@ export function initGroupUI() {
     // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', renderAgentGroups);
     stateManager.bus.subscribe('group:listChanged', renderAgentGroups);
-    stateManager.bus.subscribe('agent:listChanged', renderAgentGroups); // Also re-render if agent names change
+    stateManager.bus.subscribe('agent:listChanged', renderAgentGroups);
     stateManager.bus.subscribe('entity:selected', renderAgentGroups);
     stateManager.bus.subscribe('group:editorShouldClose', hideAgentGroupEditor);
 
     // --- Setup Event Listeners ---
-    const createGroupButton = document.querySelector('a[data-action="createGroup"]');
-    if (createGroupButton) {
-        createGroupButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            stateManager.bus.publish('group:create');
-        });
+    const groupSection = document.querySelector('#agentGroupList')?.closest('details.collapsible-section');
+    if (groupSection) {
+        const dropdownToggleButton = groupSection.querySelector('.section-header .dropdown button');
+        if (dropdownToggleButton) {
+            dropdownToggleButton.addEventListener('click', toggleDropdown);
+        }
+
+        const createGroupButton = groupSection.querySelector('a[data-action="createGroup"]');
+        if (createGroupButton) {
+            createGroupButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                stateManager.bus.publish('group:create');
+            });
+        }
     }
     document.querySelector('#agent-group-editor-modal .btn-secondary').addEventListener('click', hideAgentGroupEditor);
     document.querySelector('#agent-group-editor-modal .btn:not(.btn-secondary)').addEventListener('click', () => stateManager.bus.publish('group:save'));

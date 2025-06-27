@@ -1,12 +1,19 @@
 // ===============================================
-// FILE: src/js/core/core.db.js (Corrected)
-// DESCRIPTION: IndexedDB wrapper functions with correct imports.
+// FILE: src/js/core/core.db.js (แก้ไขแล้ว)
+// DESCRIPTION: เพิ่มฟังก์ชัน getDb() เพื่อให้เข้าถึง instance ของ DB ได้
 // ===============================================
 
-// [FIX] Importing all necessary constants from the central state file.
 import { DB_NAME_PREFIX, SESSIONS_STORE_NAME, METADATA_STORE_NAME } from './core.state.js';
 
 let db; // This remains a private variable within this module.
+
+/**
+ * Returns the currently active database instance.
+ * @returns {IDBDatabase | null} The database instance or null if not open.
+ */
+export function getDb() {
+    return db;
+}
 
 export async function openDb(projectId) {
     if (db && db.name === `${DB_NAME_PREFIX}${projectId}`) {

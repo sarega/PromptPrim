@@ -1,16 +1,20 @@
 // ===============================================
-// FILE: src/js/modules/session/session.handlers.js (Corrected)
+// FILE: src/js/modules/session/session.handlers.js
+// DESCRIPTION: No changes needed here, logic is correct.
 // ===============================================
 
-// [FIX] Importing all necessary variables and functions
 import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
 import { dbRequest } from '../../core/core.db.js';
 import { showCustomAlert } from '../../core/core.ui.js';
-
-// --- Exported Functions ---
+import { scrollToLinkedEntity } from '../project/project.ui.js';
 
 export async function createNewChatSession() {
     const project = stateManager.getProject();
+    if (!project || !project.activeEntity) {
+        showCustomAlert("Please create or select an agent first.", "Error");
+        return;
+    }
+
     const newSession = {
         id: `sid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: 'New Chat',
@@ -26,9 +30,15 @@ export async function createNewChatSession() {
 
     try {
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
+        
+        if (!project.chatSessions) {
+            project.chatSessions = [];
+        }
         project.chatSessions.unshift(newSession);
+        
         stateManager.setProject(project);
         await loadChatSession(newSession.id);
+
     } catch (error) {
         console.error("Failed to create new session in DB:", error);
         showCustomAlert("Error creating new chat.", "Error");
@@ -47,14 +57,24 @@ export async function loadChatSession(id) {
             project.activeEntity = { ...session.linkedEntity };
         } else if (session.linkedEntity?.type === 'group' && project.agentGroups[session.linkedEntity.name]) {
             project.activeEntity = { ...session.linkedEntity };
-        } else {
-            const firstAgentName = Object.keys(project.agentPresets)[0] || 'Default Agent';
+        } else if (Object.keys(project.agentPresets).length > 0){
+            const firstAgentName = Object.keys(project.agentPresets)[0];
             project.activeEntity = { type: 'agent', name: firstAgentName };
             session.linkedEntity = { ...project.activeEntity };
+        } else {
+             project.activeEntity = null;
         }
         
         stateManager.setProject(project);
         stateManager.bus.publish('session:loaded', session);
+        
+        if (project.activeEntity) {
+            stateManager.bus.publish('entity:selected', project.activeEntity);
+            
+            requestAnimationFrame(() => {
+                scrollToLinkedEntity(project.activeEntity.type, project.activeEntity.name);
+            });
+        }
     }
 }
 

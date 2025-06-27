@@ -1,9 +1,9 @@
 // ===============================================
-// FILE: src/main.js (Refactored)
-// DESCRIPTION: Main application entry point, orchestrator, and event hub.
+// FILE: src/main.js (แก้ไขแล้ว)
+// DESCRIPTION: เพิ่มการ subscribe event 'project:persistRequired'
 // ===============================================
 
-// 1. Import CSS (This must be the first import)
+// 1. Import CSS
 import './styles/main.css';
 
 // 2. Import Core Modules
@@ -12,7 +12,6 @@ import { loadAllProviderModels } from './js/core/core.api.js';
 import { initCoreUI, showCustomAlert } from './js/core/core.ui.js';
 
 // 3. Import ALL other module initializers and handlers
-// We use 'import * as ...' to group all exported functions from a file.
 import * as ProjectUI from './js/modules/project/project.ui.js';
 import * as ProjectHandlers from './js/modules/project/project.handlers.js';
 import * as SessionUI from './js/modules/session/session.ui.js';
@@ -25,16 +24,13 @@ import * as MemoryUI from './js/modules/memory/memory.ui.js';
 import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
 import * as ChatUI from './js/modules/chat/chat.ui.js';
 import * as ChatHandlers from './js/modules/chat/chat.handlers.js';
+import * as SummaryUI from './js/modules/summary/summary.ui.js';
 
 
-/**
- * Main application initialization function.
- */
 async function init() {
     try {
         console.log("Application initialization started.");
 
-        // --- Library Setup ---
         if (window.marked) {
             marked.setOptions({
                 highlight: (code, lang) => hljs.highlight(code, { language: hljs.getLanguage(lang) ? lang : 'plaintext' }).value,
@@ -50,17 +46,25 @@ async function init() {
         GroupUI.initGroupUI();
         MemoryUI.initMemoryUI();
         ChatUI.initChatUI();
+        SummaryUI.initSummaryUI();
 
-        // --- Setup Event Bus Connections (The "Brain") ---
         setupEventSubscriptions();
 
-        // --- Theme Initialization ---
         const savedTheme = localStorage.getItem('theme') || 'system';
-        document.querySelector(`#theme-switcher input[value="${savedTheme}"]`)?.setAttribute('checked', 'true');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.body.classList.toggle('dark-mode', savedTheme === 'dark' || (savedTheme === 'system' && prefersDark));
+        const themeRadio = document.querySelector(`#theme-switcher input[value="${savedTheme}"]`);
+        if(themeRadio) themeRadio.checked = true;
+        
+        const applyTheme = () => {
+            const currentTheme = document.querySelector('#theme-switcher input[name="theme"]:checked').value;
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.body.classList.toggle('dark-mode', currentTheme === 'dark' || (currentTheme === 'system' && prefersDark));
+            localStorage.setItem('theme', currentTheme);
+        };
+        document.querySelectorAll('#theme-switcher input[name="theme"]').forEach(radio => {
+            radio.addEventListener('change', applyTheme);
+        });
+        applyTheme();
 
-        // --- Initial Project Load ---
         const lastProjectId = localStorage.getItem('lastActiveProjectId');
         if (lastProjectId) {
             await ProjectHandlers.loadLastProject(lastProjectId);
@@ -74,10 +78,6 @@ async function init() {
     }
 }
 
-/**
- * Connects events published by the UI to the handler functions.
- * This is where we break the circular dependencies.
- */
 function setupEventSubscriptions() {
     const bus = stateManager.bus;
 
@@ -98,6 +98,8 @@ function setupEventSubscriptions() {
     bus.subscribe('project:fileSelectedForOpen', (event) => ProjectHandlers.handleFileSelectedForOpen(event));
     bus.subscribe('project:saveConfirm', ({ projectName }) => ProjectHandlers.handleProjectSaveConfirm(projectName));
     bus.subscribe('project:unsavedChangesChoice', ProjectHandlers.handleUnsavedChanges);
+    // [FIXED] This subscription is the crucial link to make auto-saving work.
+    bus.subscribe('project:persistRequired', ProjectHandlers.persistProjectMetadata);
 
     // --- Session ---
     bus.subscribe('session:new', SessionHandlers.createNewChatSession);
@@ -135,20 +137,26 @@ function setupEventSubscriptions() {
     bus.subscribe('memory:importPackage', () => document.getElementById('load-memory-package-input').click());
     bus.subscribe('memory:fileSelectedForImport', MemoryHandlers.loadMemoryPackage);
     
-    // --- Chat ---
+    // --- Chat & Summary ---
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
     bus.subscribe('chat:stopGeneration', ChatHandlers.stopGeneration);
     bus.subscribe('chat:fileUpload', (event) => ChatHandlers.handleFileUpload(event));
     bus.subscribe('chat:summarize', ChatHandlers.handleManualSummarize);
+    bus.subscribe('chat:removeFile', ({ index }) => {
+        if (ChatHandlers.attachedFiles && ChatHandlers.attachedFiles[index]) {
+            ChatHandlers.attachedFiles.splice(index, 1);
+            ChatUI.renderFilePreviews(ChatHandlers.attachedFiles);
+        }
+    });
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
     bus.subscribe('chat:copyMessage', ({index, event}) => ChatHandlers.copyMessageToClipboard(index, event));
     bus.subscribe('chat:editMessage', ({index}) => ChatHandlers.editMessage(index));
     bus.subscribe('chat:regenerate', ({index}) => ChatHandlers.regenerateMessage(index));
     bus.subscribe('chat:deleteMessage', ({index}) => ChatHandlers.deleteMessage(index));
-
+    bus.subscribe('summary:view', ({ logId }) => SummaryUI.showSummaryModal(logId));
+    bus.subscribe('summary:load', ({ logId }) => ChatHandlers.loadSummaryIntoContext(logId));
 
     console.log("Event bus subscriptions are set up.");
 }
 
-// Start the application
 document.addEventListener('DOMContentLoaded', init);

@@ -1,5 +1,6 @@
 // ===============================================
-// FILE: src/js/modules/session/session.ui.js (Refactored)
+// FILE: src/js/modules/session/session.ui.js (แก้ไขแล้ว)
+// DESCRIPTION: แก้ไขการแสดงผลของ Archived Sessions section
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -13,10 +14,8 @@ function createSessionElement(session) {
     item.className = `item session-item ${session.id === project.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
     item.dataset.sessionId = session.id;
 
-    // Main item click handler
     item.addEventListener('click', () => {
         if (project.activeSessionId !== session.id) {
-            // Publish event to load session
             stateManager.bus.publish('session:load', { sessionId: session.id });
         }
         if (window.innerWidth <= 1024) {
@@ -49,7 +48,6 @@ function createSessionElement(session) {
         </div>
     `;
 
-    // Attach event listeners that publish events
     const actions = item.querySelector('.dropdown-content');
     item.querySelector('[data-action="toggle-menu"]').addEventListener('click', toggleDropdown);
     actions.querySelector('[data-action="pin"]').addEventListener('click', (e) => stateManager.bus.publish('session:pin', { sessionId: session.id, event: e }));
@@ -75,7 +73,6 @@ export function renderSessionList() {
     const archivedList = document.getElementById('archivedSessionList');
     const archivedSection = document.getElementById('archivedSessionsSection');
     
-    // Clear previous content
     pinnedContainer.innerHTML = ''; 
     recentContainer.innerHTML = ''; 
     archivedList.innerHTML = '';
@@ -88,12 +85,12 @@ export function renderSessionList() {
     recentSessions.forEach(session => recentContainer.appendChild(createSessionElement(session)));
     archivedSessions.forEach(session => archivedList.appendChild(createSessionElement(session)));
 
-    archivedSection.style.display = archivedSessions.length > 0 ? 'block' : 'none';
+    // [FIX] Use classList.toggle() to correctly show/hide the section, respecting the CSS `!important` rule.
+    archivedSection.classList.toggle('hidden', archivedSessions.length === 0);
 }
 
 export function initSessionUI() {
     // --- Subscribe to Events ---
-    // Re-render the list whenever the project data changes, or a session is loaded/changed.
     stateManager.bus.subscribe('project:loaded', renderSessionList);
     stateManager.bus.subscribe('session:loaded', renderSessionList);
     stateManager.bus.subscribe('session:changed', renderSessionList); 
