@@ -245,3 +245,8 @@ export function initCoreUI() {
     
     console.log("Core UI Initialized.");
 }
+
+// Expose commonly used UI helpers to the global object for inline handlers
+window.toggleDropdown = toggleDropdown;
+window.showCustomAlert = showCustomAlert;
+window.hideCustomAlert = hideCustomAlert;

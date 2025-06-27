@@ -46,3 +46,8 @@ export async function clearObjectStores(storeNames) {
         } catch(error) { reject(error); }
     });
 }
+
+// Expose DB helpers on the global object for legacy modules
+window.openDb = openDb;
+window.dbRequest = dbRequest;
+window.clearObjectStores = clearObjectStores;

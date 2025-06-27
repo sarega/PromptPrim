@@ -12,14 +12,14 @@ import '../js/core/core.state.js';
 // Note: You must add 'export' to these functions in their original files.
 import { openDb, dbRequest } from '../js/core/core.db.js';
 import { loadAllProviderModels } from '../js/core/core.api.js';
-import { initCoreUI } from '../js/core/core.ui.js';
+import { initCoreUI, showCustomAlert } from '../js/core/core.ui.js';
 import { initProjectUI } from '../js/modules/project/project.ui.js';
 import { loadProjectData, proceedWithCreatingNewProject } from '../js/modules/project/project.handlers.js';
 import { initSessionUI } from '../js/modules/session/session.ui.js';
 import { initAgentUI } from '../js/modules/agent/agent.ui.js';
 import { initGroupUI } from '../js/modules/group/group.ui.js';
 import { initMemoryUI } from '../js/modules/memory/memory.ui.js';
-import { initChatUI, showCustomAlert } from '../js/modules/chat/chat.ui.js'; // Assuming showCustomAlert is in chat.ui.js
+import { initChatUI } from '../js/modules/chat/chat.ui.js';
 
 /**
  * ฟังก์ชันหลักในการเริ่มต้นการทำงานของแอปพลิเคชันทั้งหมด
