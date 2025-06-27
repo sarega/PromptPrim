@@ -1,6 +1,48 @@
-// js/modules/group/group.ui.js
+// ===============================================
+// FILE: src/js/modules/group/group.ui.js (Refactored)
+// ===============================================
 
-var groupSortable = null;
+import { stateManager } from '../../core/core.state.js';
+import { toggleDropdown } from '../../core/core.ui.js';
+
+// This will be a global reference on the window object for Sortable.js
+// It's a simpler approach than passing the instance around.
+// window.groupSortable = null;
+
+// --- Private Helper Functions ---
+function createGroupElement(name) {
+    const project = stateManager.getProject();
+    const activeEntity = project.activeEntity;
+    const item = document.createElement('div');
+    item.className = 'item';
+    item.dataset.groupName = name;
+
+    if (activeEntity && activeEntity.type === 'group' && activeEntity.name === name) {
+        item.classList.add('active');
+    }
+
+    item.innerHTML = `
+    <div class="item-header">
+        <span class="item-name"><span class="item-icon">🤝</span> ${name}</span>
+        <div class="item-actions">
+             <button class="btn-icon" data-action="edit" title="Edit Group">&#9998;</button>
+             <button class="btn-icon danger" data-action="delete" title="Delete Group">&#128465;</button>
+        </div>
+    </div>`;
+    
+    // Publish events instead of calling handlers directly
+    item.addEventListener('click', (e) => {
+        if (e.target.closest('.item-actions')) return;
+        stateManager.bus.publish('entity:select', { type: 'group', name });
+    });
+    item.querySelector('[data-action="edit"]').addEventListener('click', () => stateManager.bus.publish('group:edit', { groupName: name }));
+    item.querySelector('[data-action="delete"]').addEventListener('click', () => stateManager.bus.publish('group:delete', { groupName: name }));
+    
+    return item;
+}
+
+
+// --- Exported UI Functions ---
 
 export function renderAgentGroups() {
     const project = stateManager.getProject();
@@ -8,32 +50,9 @@ export function renderAgentGroups() {
     const container = document.getElementById('agentGroupList');
     container.innerHTML = '';
     const groups = project.agentGroups;
-    const activeEntity = project.activeEntity;
 
     for (const name in groups) {
-        const item = document.createElement('div');
-        item.className = 'item';
-        item.dataset.groupName = name;
-        if (activeEntity && activeEntity.type === 'group' && activeEntity.name === name) {
-            item.classList.add('active');
-        }
-        item.innerHTML = `
-        <div class="item-header">
-            <span class="item-name"><span class="item-icon">🤝</span> ${name}</span>
-            <div class="item-actions">
-                 <button class="btn-icon" data-action="edit" title="Edit Group">&#9998;</button>
-                 <button class="btn-icon danger" data-action="delete" title="Delete Group">&#128465;</button>
-            </div>
-        </div>`;
-        
-        item.addEventListener('click', (e) => {
-            if (e.target.closest('.item-actions')) return;
-            selectEntity('group', name);
-        });
-        item.querySelector('[data-action="edit"]').addEventListener('click', () => showAgentGroupEditor(true, name));
-        item.querySelector('[data-action="delete"]').addEventListener('click', () => deleteAgentGroup(name));
-        
-        container.appendChild(item);
+        container.appendChild(createGroupElement(name));
     }
 }
 
@@ -50,7 +69,8 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
     const currentMembers = group ? group.members : [];
     const allAgents = Object.keys(project.agentPresets);
     
-    const sortedAgents = [...currentMembers];
+    // Use the stored order if available, otherwise just list all agents
+    const sortedAgents = group ? [...group.members] : [];
     allAgents.forEach(agentName => {
         if (!sortedAgents.includes(agentName)) {
             sortedAgents.push(agentName);
@@ -61,7 +81,7 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
         const isChecked = currentMembers.includes(agentName);
         const item = document.createElement('div');
         item.className = 'agent-sortable-item';
-        item.dataset.agentName = agentName;
+        item.dataset.agentName = agentName; // Use this for Sortable.js toArray()
         const checkboxId = `agent-cb-${agentName.replace(/\s+/g, '-')}`;
         item.innerHTML = `
             <input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''}>
@@ -73,7 +93,18 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
     });
 
     if (window.groupSortable) window.groupSortable.destroy();
-    window.groupSortable = new Sortable(memberList, { animation: 150, handle: '.drag-handle' });
+    window.groupSortable = new Sortable(memberList, { 
+        animation: 150, 
+        handle: '.drag-handle',
+        store: {
+            get: (sortable) => {
+                return group ? group.members : [];
+            },
+            set: (sortable) => {
+                // The order is saved in the saveAgentGroup handler
+            }
+        }
+    });
 
     updateModeratorDropdown(group?.moderatorAgent);
     document.getElementById('group-flow-select').value = group?.flowType || 'auto-moderator';
@@ -99,11 +130,13 @@ export function updateModeratorDropdown(selectedModerator = null) {
     const selectedMembers = Array.from(memberItems)
         .filter(item => item.querySelector('input[type="checkbox"]').checked)
         .map(item => item.dataset.agentName);
+    
     const currentModerator = moderatorSelect.value;
-    moderatorSelect.innerHTML = '';
+    moderatorSelect.innerHTML = '<option value="">-- Select Moderator --</option>';
     selectedMembers.forEach(name => {
         moderatorSelect.add(new Option(name, name));
     });
+
     if (selectedModerator && selectedMembers.includes(selectedModerator)) {
         moderatorSelect.value = selectedModerator;
     } else if (selectedMembers.includes(currentModerator)) {
@@ -117,24 +150,24 @@ export function toggleMaxTurnsInput() {
     maxTurnsGroup.style.display = (flowSelect.value === 'auto-moderator') ? 'none' : 'block';
 }
 
-
 export function initGroupUI() {
-    // [FIX] เพิ่มบรรทัดนี้เข้ามา
-    stateManager.bus.subscribe('entity:selected', renderAgentGroups);
-
+    // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', renderAgentGroups);
     stateManager.bus.subscribe('group:listChanged', renderAgentGroups);
-    stateManager.bus.subscribe('session:loaded', renderAgentGroups);
+    stateManager.bus.subscribe('agent:listChanged', renderAgentGroups); // Also re-render if agent names change
+    stateManager.bus.subscribe('entity:selected', renderAgentGroups);
+    stateManager.bus.subscribe('group:editorShouldClose', hideAgentGroupEditor);
 
+    // --- Setup Event Listeners ---
     const createGroupButton = document.querySelector('a[data-action="createGroup"]');
     if (createGroupButton) {
         createGroupButton.addEventListener('click', (e) => {
             e.preventDefault();
-            showAgentGroupEditor(false);
+            stateManager.bus.publish('group:create');
         });
     }
     document.querySelector('#agent-group-editor-modal .btn-secondary').addEventListener('click', hideAgentGroupEditor);
-    document.querySelector('#agent-group-editor-modal .btn:not(.btn-secondary)').addEventListener('click', saveAgentGroup);
+    document.querySelector('#agent-group-editor-modal .btn:not(.btn-secondary)').addEventListener('click', () => stateManager.bus.publish('group:save'));
     document.getElementById('group-flow-select').addEventListener('change', toggleMaxTurnsInput);
 
     console.log("Group UI Initialized.");

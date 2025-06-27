@@ -1,15 +1,56 @@
-// js/modules/chat/ui.js
+// ===============================================
+// FILE: src/js/modules/chat/chat.ui.js (Refactored)
+// ===============================================
+
+import { stateManager } from '../../core/core.state.js';
+import { estimateTokens, getFullSystemPrompt } from './chat.handlers.js';
+
+// --- Private Helper Functions ---
+
+function enhanceCodeBlocks(messageElement) {
+    const codeBlocks = messageElement.querySelectorAll('pre');
+    codeBlocks.forEach(pre => {
+        if (pre.parentNode.classList.contains('code-block-wrapper')) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-code-btn';
+        copyButton.textContent = 'Copy';
+        wrapper.appendChild(copyButton);
+
+        copyButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const code = pre.querySelector('code');
+            if (code) {
+                navigator.clipboard.writeText(code.textContent).then(() => {
+                    copyButton.textContent = 'Copied!';
+                    setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
+                });
+            }
+        });
+    });
+}
+
+// --- Exported UI Functions ---
 
 export function renderChatMessages(){
     const project = stateManager.getProject();
+    if (!project || !project.chatSessions) return;
+
     const container = document.getElementById('chatMessages');
-    container.innerHTML=''; 
+    container.innerHTML = ''; 
     const session = project.chatSessions.find(s => s.id === project.activeSessionId); 
     if(session) {
-        session.history.forEach((m,i)=>addMessageToUI(m.role, m.content, i, m.speaker));
+        session.history.forEach((m,i)=> addMessageToUI(m.role, m.content, i, m.speaker));
     }
     container.scrollTop = container.scrollHeight; 
+    
     updateContextInspector();
+
     const clearBtn = document.getElementById('clear-summary-btn');
     if (clearBtn) clearBtn.style.display = (session?.summaryState?.activeSummaryId) ? 'block' : 'none';
 }
@@ -28,41 +69,37 @@ export function addMessageToUI(role, content, index, speakerName = null, isLoadi
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
-    const speakerAgent = project.agentPresets[speakerName];
+    const speakerAgent = project.agentPresets?.[speakerName];
     const speakerIcon = speakerAgent ? speakerAgent.icon : (role === 'user' ? '🧑' : '🤖');
 
-    // [FIX] ย้ายการสร้าง Speaker Label ออกมาข้างนอกเพื่อให้ใช้ร่วมกัน
-    if (role === 'assistant' || (role === 'user' && speakerName)) { // Show label for assistant or named user
+    if (role === 'assistant' || (role === 'user' && speakerName)) {
         const speakerLabelWrapper = document.createElement('div');
         speakerLabelWrapper.className = 'speaker-label-wrapper';
         speakerLabelWrapper.innerHTML = `<span class="speaker-label">${speakerIcon} ${speakerName || 'User'}</span>`;
         turnWrapper.appendChild(speakerLabelWrapper);
     }
     
-    // [FIX] ปรับโครงสร้างของ contentDiv ให้เหมือนกันทั้งสองกรณี
     const streamingContentSpan = document.createElement('span');
     streamingContentSpan.className = 'streaming-content';
     
     if (isLoading) {
         streamingContentSpan.innerHTML = `<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>`;
     } else {
-        let agentForMarkdown = project.agentPresets[project.activeEntity.name];
-        if (project.activeEntity.type === 'group') {
-            agentForMarkdown = project.agentPresets[speakerName] || {};
-        }
+        let agentForMarkdown = project.activeEntity.type === 'agent' 
+            ? project.agentPresets[project.activeEntity.name]
+            : project.agentPresets[speakerName] || {};
 
         const useMarkdown = agentForMarkdown?.useMarkdown !== false;
         const contentArray = Array.isArray(content) ? content : [{ type: 'text', text: content }];
         
         contentArray.forEach(part => {
             if (part.type === 'text') {
-                const textSpan = document.createElement('span');
-                if (role === 'assistant' && useMarkdown) {
-                     textSpan.innerHTML = marked.parse(part.text || '');
+                if (role === 'assistant' && useMarkdown && window.marked) {
+                     streamingContentSpan.innerHTML += marked.parse(part.text || '');
                 } else {
-                     textSpan.textContent = part.text || '';
+                     const textNode = document.createTextNode(part.text || '');
+                     streamingContentSpan.appendChild(textNode);
                 }
-                streamingContentSpan.appendChild(textSpan);
             } else if (part.type === 'image_url' && part.url) {
                 const img = document.createElement('img');
                 img.src = part.url;
@@ -73,32 +110,33 @@ export function addMessageToUI(role, content, index, speakerName = null, isLoadi
     }
     
     contentDiv.appendChild(streamingContentSpan);
-    contentDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
-    enhanceCodeBlocks(contentDiv);
+    if (!isLoading) {
+        contentDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
+        enhanceCodeBlocks(contentDiv);
+    }
+    
     msgDiv.appendChild(contentDiv);
     
     if (!isLoading && role !== 'system') {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions';
         
-        const createActionButton = (icon, title, handler) => {
+        const createActionButton = (icon, title, eventName) => {
             const btn = document.createElement('button');
             btn.innerHTML = icon;
             btn.title = title;
             btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handler(index, e);
+                stateManager.bus.publish(eventName, { index: index, event: e });
             });
             return btn;
         };
 
-        actionsDiv.appendChild(createActionButton('&#9998;', 'Edit', editMessage));
-        actionsDiv.appendChild(createActionButton('&#128203;', 'Copy', copyMessageToClipboard));
-        
+        actionsDiv.appendChild(createActionButton('&#9998;', 'Edit', 'chat:editMessage'));
+        actionsDiv.appendChild(createActionButton('&#128203;', 'Copy', 'chat:copyMessage'));
         if (role === 'assistant') {
-            actionsDiv.appendChild(createActionButton('&#x21bb;', 'Regenerate', regenerateMessage));
+            actionsDiv.appendChild(createActionButton('&#x21bb;', 'Regenerate', 'chat:regenerate'));
         }
-        actionsDiv.appendChild(createActionButton('&#128465;', 'Delete', deleteMessage));
+        actionsDiv.appendChild(createActionButton('&#128465;', 'Delete', 'chat:deleteMessage'));
         
         msgDiv.appendChild(actionsDiv);
     }
@@ -128,41 +166,15 @@ export function renderFilePreviews(files) {
         }
         item.innerHTML = `${previewContent}<span class="file-preview-name">${file.name}</span><button class="remove-file-btn">&times;</button>`;
         item.querySelector('.remove-file-btn').addEventListener('click', () => {
-            if (typeof attachedFiles !== 'undefined') attachedFiles.splice(index, 1);
-            renderFilePreviews(attachedFiles);
+             stateManager.bus.publish('chat:removeFile', { index });
         });
         container.appendChild(item);
     });
 }
 
-export function enhanceCodeBlocks(messageElement) {
-    const codeBlocks = messageElement.querySelectorAll('pre');
-    codeBlocks.forEach(pre => {
-        if (pre.parentNode.classList.contains('code-block-wrapper')) return;
-        const wrapper = document.createElement('div');
-        wrapper.className = 'code-block-wrapper';
-        pre.parentNode.insertBefore(wrapper, pre);
-        wrapper.appendChild(pre);
-        const copyButton = document.createElement('button');
-        copyButton.className = 'copy-code-btn';
-        copyButton.textContent = 'Copy';
-        wrapper.appendChild(copyButton);
-        copyButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const code = pre.querySelector('code');
-            if (code) {
-                navigator.clipboard.writeText(code.textContent).then(() => {
-                    copyButton.textContent = 'Copied!';
-                    setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
-                });
-            }
-        });
-    });
-}
-
 export function updateContextInspector(isModal = false) {
     const project = stateManager.getProject();
-    if (!project.activeEntity) return;
+    if (!project || !project.activeEntity) return;
 
     const { type, name } = project.activeEntity;
     let agent, agentNameForDisplay;
@@ -180,7 +192,7 @@ export function updateContextInspector(isModal = false) {
     const finalSystemPrompt = getFullSystemPrompt(type === 'agent' ? name : project.agentGroups[name]?.moderatorAgent);
     const systemTokens = estimateTokens(finalSystemPrompt);
     
-    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    const session = project.chatSessions?.find(s => s.id === project.activeSessionId);
     let historyTokens = 0;
     if (session) historyTokens = estimateTokens(JSON.stringify(session.history));
     
@@ -198,7 +210,6 @@ export function updateContextInspector(isModal = false) {
     }
 }
 
-
 export function showContextInspector() {
     updateContextInspector(true);
     document.getElementById('context-inspector-modal').style.display = 'flex';
@@ -209,6 +220,7 @@ export function hideContextInspector() {
 }
 
 export function initChatUI() {
+    // --- Subscribe to Events ---
     stateManager.bus.subscribe('session:loaded', (session) => {
         document.getElementById('chat-title').textContent = session.name;
         renderChatMessages();
@@ -226,11 +238,15 @@ export function initChatUI() {
         document.getElementById('stopBtn').style.display = 'none';
     });
     stateManager.bus.subscribe('entity:selected', () => updateContextInspector());
+    stateManager.bus.subscribe('ui:enhanceCodeBlocks', enhanceCodeBlocks);
 
+
+    // --- Setup Event Listeners ---
     const chatInput = document.getElementById('chatInput');
     chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault(); sendMessage();
+        if (e.key === 'Enter' && !e.shiftKey && !(e.metaKey || e.ctrlKey)) {
+            e.preventDefault(); 
+            stateManager.bus.publish('chat:sendMessage');
         }
     });
     chatInput.addEventListener('input', () => {
@@ -238,8 +254,9 @@ export function initChatUI() {
         chatInput.style.height = (chatInput.scrollHeight) + 'px';
         updateContextInspector();
     });
-    document.getElementById('sendBtn').addEventListener('click', () => sendMessage());
-    document.getElementById('stopBtn').addEventListener('click', stopGeneration);
+    document.getElementById('sendBtn').addEventListener('click', () => stateManager.bus.publish('chat:sendMessage'));
+    document.getElementById('stopBtn').addEventListener('click', () => stateManager.bus.publish('chat:stopGeneration'));
+    
     document.getElementById('context-inspector-trigger-btn').addEventListener('click', showContextInspector);
     document.querySelector('#context-inspector-modal .btn-secondary').addEventListener('click', hideContextInspector);
     
@@ -249,15 +266,14 @@ export function initChatUI() {
         e.stopPropagation();
         chatActionsMenu.classList.toggle('active');
     });
-    document.addEventListener('click', () => chatActionsMenu.classList.remove('active'));
 
-    document.getElementById('manual-summarize-btn').addEventListener('click', (e) => { e.preventDefault(); handleManualSummarize(); });
-    document.getElementById('clear-summary-btn').addEventListener('click', (e) => { e.preventDefault(); unloadSummaryFromActiveSession(); });
+    document.getElementById('manual-summarize-btn').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('chat:summarize'); });
+    document.getElementById('clear-summary-btn').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('chat:clearSummary'); });
     document.getElementById('menu-upload-file-btn').addEventListener('click', (e) => {
         e.preventDefault();
         document.getElementById('file-input').click();
     });
-    document.getElementById('file-input').addEventListener('change', handleFileUpload);
+    document.getElementById('file-input').addEventListener('change', (e) => stateManager.bus.publish('chat:fileUpload', e));
     
     console.log("Chat UI Initialized.");
 }

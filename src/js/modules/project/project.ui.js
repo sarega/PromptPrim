@@ -1,10 +1,18 @@
-// js/modules/project/project.ui.js
+// ===============================================
+// FILE: src/js/modules/project/project.ui.js (Refactored)
+// DESCRIPTION: UI rendering and event listeners for the project-level components.
+// ===============================================
+
+import { stateManager } from '../../core/core.state.js';
+import { toggleDropdown } from '../../core/core.ui.js';
+
+// --- Exported UI Functions ---
 
 export function updateProjectTitle(projectName) {
     const projectTitleEl = document.getElementById('project-title');
     if (projectTitleEl) projectTitleEl.textContent = projectName;
 }
-// FIX: เพิ่มฟังก์ชันที่ขาดหายไปนี้
+
 export function toggleCustomEntitySelector(event) {
     if (event) event.stopPropagation();
     document.getElementById('custom-entity-selector-wrapper').classList.toggle('open');
@@ -20,14 +28,16 @@ export function scrollToLinkedEntity(type, name) {
     if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    console.log(`Scrolled to linked entity: ${type} - ${name}`);    
 }
 
 export function selectCustomEntity(value) {
     const separatorIndex = value.indexOf('_');
     const type = value.substring(0, separatorIndex);
     const name = value.substring(separatorIndex + 1);
-    selectEntity(type, name);
+    
+    // Publish an event for the handler to process
+    stateManager.bus.publish('entity:select', { type, name });
+    
     document.getElementById('custom-entity-selector-wrapper').classList.remove('open');
 }
 
@@ -48,8 +58,6 @@ export function renderEntitySelector() {
         const optionDiv = document.createElement('div');
         optionDiv.className = 'custom-select-option';
         optionDiv.innerHTML = `<span class="item-icon">${icon}</span> <span>${name}</span>`;
-
-        // FIX: เปลี่ยนจากการใช้ .onclick มาเป็น addEventListener
         optionDiv.addEventListener('click', () => selectCustomEntity(optionValue));
 
         container.appendChild(new Option(`${icon} ${name}`, optionValue));
@@ -65,7 +73,6 @@ export function renderEntitySelector() {
         agentGroupDiv.className = 'custom-select-group';
         agentGroupDiv.textContent = 'Agent Presets';
         optionsContainer.appendChild(agentGroupDiv);
-
         Object.keys(agentPresets).forEach(name => {
             createOption('agent', name, agentPresets[name].icon || '🤖', agentOptgroup);
         });
@@ -80,7 +87,6 @@ export function renderEntitySelector() {
         groupGroupDiv.className = 'custom-select-group';
         groupGroupDiv.textContent = 'Agent Groups';
         optionsContainer.appendChild(groupGroupDiv);
-
         Object.keys(agentGroups).forEach(name => {
             createOption('group', name, '🤝', groupOptgroup);
         });
@@ -95,6 +101,9 @@ export function renderEntitySelector() {
         } else if (type === 'group') {
             triggerIcon.textContent = '🤝';
             triggerText.textContent = name;
+        } else {
+             triggerIcon.textContent = '❔';
+             triggerText.textContent = 'Select...';
         }
     }
 }
@@ -107,13 +116,15 @@ export function renderSummarizationPresetSelector() {
     const presets = project.globalSettings.summarizationPromptPresets || {};
     const currentPromptText = document.getElementById('system-utility-summary-prompt').value;
     let matchingPresetName = null;
-    selector.innerHTML = ''; 
+    selector.innerHTML = '';
+    
     for (const presetName in presets) {
         selector.add(new Option(presetName, presetName));
         if (presets[presetName].trim() === currentPromptText.trim()) {
             matchingPresetName = presetName;
         }
     }
+    
     if (!matchingPresetName) {
         const customOption = new Option('--- Custom ---', 'custom', true, true);
         customOption.disabled = true;
@@ -125,35 +136,26 @@ export function renderSummarizationPresetSelector() {
 }
 
 export function initProjectUI() {
+    // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', (eventData) => {
         updateProjectTitle(eventData.projectData.name);
         renderEntitySelector();
-        stateManager.setDirty(false);
     });
     stateManager.bus.subscribe('project:nameChanged', (newName) => updateProjectTitle(newName));
-    stateManager.bus.subscribe('dirty:changed', (isDirty) => {
-        const projectTitleEl = document.getElementById('project-title');
-        if (projectTitleEl) {
-            const baseName = projectTitleEl.textContent.replace(' *', '');
-            projectTitleEl.textContent = isDirty ? `${baseName} *` : baseName;
-        }
-    });
-
-    // --- นี่คือส่วนที่สำคัญ ---
     stateManager.bus.subscribe('entity:selected', renderEntitySelector);
-    // [FIX] เพิ่มบรรทัดนี้เพื่อทำให้ Scroll ทำงาน
-    stateManager.bus.subscribe('entity:selected', (data) => scrollToLinkedEntity(data.type, data.name));
-
+    stateManager.bus.subscribe('agent:listChanged', renderEntitySelector);
+    stateManager.bus.subscribe('group:listChanged', renderEntitySelector);
     stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
 
+    // --- Setup Event Listeners that PUBLISH events ---
     const projectDropdown = document.querySelector('.sidebar-bottom-row .dropdown-content');
-    projectDropdown.querySelector('a[data-action="newProject"]').addEventListener('click', (e) => { e.preventDefault(); createNewProject(); });
-    projectDropdown.querySelector('a[data-action="openProject"]').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('load-project-input').click(); });
-    projectDropdown.querySelector('a[data-action="saveProject"]').addEventListener('click', (e) => { e.preventDefault(); saveProject(false); });
-    projectDropdown.querySelector('a[data-action="saveProjectAs"]').addEventListener('click', (e) => { e.preventDefault(); saveProject(true); });
-    projectDropdown.querySelector('a[data-action="exportChat"]').addEventListener('click', (e) => { e.preventDefault(); exportChat(); });
-    document.getElementById('load-project-input').addEventListener('change', handleFileSelectedForOpen);
-    // FIX: เพิ่ม Event Listener นี้เข้าไปในฟังก์ชัน initProjectUI
+    projectDropdown.querySelector('a[data-action="newProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:new'); });
+    projectDropdown.querySelector('a[data-action="openProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:open'); });
+    projectDropdown.querySelector('a[data-action="saveProject"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:save', false); });
+    projectDropdown.querySelector('a[data-action="saveProjectAs"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:save', true); });
+    projectDropdown.querySelector('a[data-action="exportChat"]').addEventListener('click', (e) => { e.preventDefault(); stateManager.bus.publish('project:exportChat'); });
+    
+    document.getElementById('load-project-input').addEventListener('change', (e) => stateManager.bus.publish('project:fileSelectedForOpen', e));
     document.getElementById('custom-entity-selector-trigger').addEventListener('click', toggleCustomEntitySelector);
 
     console.log("Project UI Initialized.");

@@ -1,9 +1,10 @@
 // ===============================================
-// FILE: src/js/core/core.state.js (Complete)
+// FILE: src/js/core/core.state.js (Corrected Export)
 // DESCRIPTION: Central state management as a true ES Module.
 // ===============================================
 
-// --- Global Constants are defined here and will be available to any file that imports them ---
+// --- Global Constants & Defaults ---
+// [FIX] All constants are now exported correctly.
 export const APP_VERSION = 'v0.9-modular';
 export const DB_NAME_PREFIX = 'AIChatbotDB_Project_';
 export const SESSIONS_STORE_NAME = 'chatSessions';
@@ -18,11 +19,12 @@ export const ALL_AGENT_SETTINGS_IDS = {
     'agent-max-tokens': 'max_tokens', 'agent-seed': 'seed', 'agent-stop-sequences': 'stop_sequences',
 };
 
+
 // Default values are also exported so other modules can use them.
 export const defaultSummarizationPresets = {
-    'Standard': `You are a professional summarizer...`, // (Content omitted for brevity)
-    'Literary Analyst': `You are a meticulous literary analyst...`,
-    'Continuity Editor': `You are a continuity editor...`
+    'Standard': `You are a professional summarizer. Your task is to create a dense, context-rich summary of a conversation. Include all key entities, character names, locations, critical events, and important emotional states. The summary should be detailed enough for another AI to pick up the conversation and understand all necessary context.\n\nHere is the summary of the conversation so far:\n--- PREVIOUS SUMMARY ---\n\${previousSummary}\n--- END PREVIOUS SUMMARY ---\n\nNow, here are the new messages that have occurred since that summary:\n--- NEW MESSAGES ---\n\${newMessages}\n--- END NEW MESSAGES ---\n\nPlease provide a new, single, cohesive summary that integrates the key points from the new messages into the previous one. Respond with ONLY the new, complete summary text.`,
+    'Literary Analyst': `You are a meticulous literary analyst tasked with creating a detailed narrative digest. Your primary goal is to preserve the story's integrity, character development, and emotional nuances. Do NOT sacrifice important details for the sake of brevity.\n\nYour digest must include:\n- Plot Progression: Every significant event and the causal links between them.\n- Character Arcs: Any changes in a character's state of mind, motivation, decisions, or relationships.\n- Key Dialogue: Capture the essence and subtext of crucial conversations.\n- Atmosphere & Setting: Mention key descriptions of the environment if they contribute to the mood or plot.\n- New Elements: Note the introduction of any new characters, significant objects, or unresolved questions (foreshadowing).\n\nHere is the narrative digest so far:\n--- PREVIOUS DIGEST ---\n\${previousSummary}\n--- END PREVIOUS DIGEST ---\n\nNow, here are the new scenes and dialogues that have occurred:\n--- NEW MESSAGES ---\n\${newMessages}\n--- END NEW MESSAGES ---\n\nPlease provide a new, single, cohesive narrative digest that seamlessly integrates the key points from the new messages into the previous one. Write in a third-person, past-tense narrative style. Respond with ONLY the new, complete digest text.`,
+    'Continuity Editor': `You are a continuity editor for a novel series. Your job is to create a 'Previously On...' document that ensures no plot points are ever lost. The output must be extremely detailed, acting as a perfect memory for another AI to continue the story without missing a single beat.\n\nThe document must retain:\n- All character actions and their immediate consequences.\n- The full names of any character or location mentioned.\n- The specifics of any plans made or secrets revealed.\n- Emotional state of each character at the end of the scene.\n- Any objects that were acquired, lost, or noted as important.\n\nThe goal is maximum information retention, not summarization. Think of this as expanding upon the previous summary with new, detailed information.\n\nHere is the continuity document so far:\n--- PREVIOUS SUMMARY ---\n\${previousSummary}\n--- END PREVIOUS SUMMARY ---\n\nNow, here are the new events to be added:\n--- NEW MESSAGES ---\n\${newMessages}\n--- END NEW MESSAGES ---\n\nPlease provide the updated, complete continuity document, integrating the new events chronologically. Your response should be a single block of text containing only the updated document.`
 };
 export const defaultSystemUtilityAgent = {
     model: 'openai/gpt-4o-mini',
@@ -56,15 +58,13 @@ const _appState = {
     pendingActionAfterSave: null
 };
 
-// --- Event Bus (Publisher/Subscriber) ---
+// --- Event Bus ---
 const eventBus = {
     events: {},
     subscribe(eventName, fn) {
         this.events[eventName] = this.events[eventName] || [];
         this.events[eventName].push(fn);
-        return () => {
-            this.events[eventName] = this.events[eventName].filter(eventFn => fn !== eventFn);
-        };
+        return () => { this.events[eventName] = this.events[eventName].filter(eventFn => fn !== eventFn); };
     },
     publish(eventName, data) {
         if (this.events[eventName]) {
@@ -74,7 +74,6 @@ const eventBus = {
 };
 
 // --- Public State Manager ---
-// This is the single exported object that the rest of the app will use.
 export const stateManager = {
     // Getters
     getState: () => _appState,
@@ -100,7 +99,7 @@ export const stateManager = {
     },
     setAllModels: (models) => {
         _appState.allProviderModels = models.sort((a, b) => a.name.localeCompare(b.name));
-        if (_appState.currentProject.globalSettings) {
+        if (_appState.currentProject && _appState.currentProject.globalSettings) {
             _appState.currentProject.globalSettings.allModels = _appState.allProviderModels;
         }
         eventBus.publish('models:loaded', _appState.allProviderModels);

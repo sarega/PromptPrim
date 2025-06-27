@@ -1,27 +1,44 @@
-// js/modules/group/group.handlers.js
+// ===============================================
+// FILE: src/js/modules/group/group.handlers.js (Refactored)
+// ===============================================
+
+import { stateManager } from '../../core/core.state.js';
+import { showCustomAlert } from '../../core/core.ui.js';
 
 export function saveAgentGroup() {
     const newName = document.getElementById('group-name-input').value.trim();
     const oldName = stateManager.getState().editingGroupName;
     if (!newName) {
-        showCustomAlert("Please enter a name for the group.", "Error"); return;
+        showCustomAlert("Please enter a name for the group.", "Error");
+        return;
     }
 
     const project = stateManager.getProject();
     if (newName !== oldName && project.agentGroups[newName]) {
-        showCustomAlert("A group with this name already exists.", "Error"); return;
+        showCustomAlert("A group with this name already exists.", "Error");
+        return;
     }
 
-    const members = Array.from(document.querySelectorAll('#group-member-list .agent-sortable-item'))
-        .filter(item => item.querySelector('input[type="checkbox"]').checked)
-        .map(item => item.dataset.agentName);
+    // Use Sortable's 'toArray' method to get the correct order of members
+    const sortableInstance = window.groupSortable;
+    const memberOrder = sortableInstance ? sortableInstance.toArray() : [];
+    
+    const checkedMembers = new Set(
+        Array.from(document.querySelectorAll('#group-member-list input[type="checkbox"]:checked'))
+             .map(cb => cb.closest('.agent-sortable-item').dataset.agentName)
+    );
+
+    // Filter the sorted list to include only checked members, preserving order.
+    const members = memberOrder.filter(name => checkedMembers.has(name));
 
     if (members.length === 0) {
-        showCustomAlert("A group must have at least one member.", "Error"); return;
+        showCustomAlert("A group must have at least one member.", "Error");
+        return;
     }
     const moderatorAgent = document.getElementById('group-moderator-select').value;
     if (!moderatorAgent || !members.includes(moderatorAgent)) {
-        showCustomAlert("Please select a valid moderator from the group members.", "Error"); return;
+        showCustomAlert("Please select a valid moderator from the group members.", "Error");
+        return;
     }
 
     const newGroupData = {
@@ -53,7 +70,8 @@ export function saveAgentGroup() {
         stateManager.bus.publish('entity:selected', project.activeEntity);
     }
     
-    hideAgentGroupEditor();
+    // Announce that the editor should close
+    stateManager.bus.publish('group:editorShouldClose');
 }
 
 export function deleteAgentGroup(groupName) {
@@ -64,6 +82,7 @@ export function deleteAgentGroup(groupName) {
          
          project.chatSessions.forEach(session => {
              if (session.linkedEntity?.type === 'group' && session.linkedEntity.name === groupName) {
+                 // Fallback to the first available agent
                  session.linkedEntity = {type: 'agent', name: Object.keys(project.agentPresets)[0]};
              }
          });

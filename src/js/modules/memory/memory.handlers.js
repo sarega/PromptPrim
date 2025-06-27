@@ -1,7 +1,12 @@
-// js/modules/memory/memory.handlers.js
+// ===============================================
+// FILE: src/js/modules/memory/memory.handlers.js (Refactored)
+// ===============================================
+
+import { stateManager } from '../../core/core.state.js';
+import { showCustomAlert } from '../../core/core.ui.js';
 
 export function toggleMemory(name, event) {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
     const project = stateManager.getProject();
     if (project.activeEntity.type !== 'agent') return;
     
@@ -27,40 +32,42 @@ export function saveMemory() {
     const indexStr = document.getElementById('memory-edit-index').value;
 
     if(!name || !content){
-        showCustomAlert('กรุณากรอกข้อมูลให้ครบ');
+        showCustomAlert('Please fill in all fields.');
         return;
     }
     
     const project = stateManager.getProject();
-    if(indexStr !== ''){
-        const index = parseInt(indexStr, 10);
-        // Prevent renaming to an existing memory name
-        if (project.memories.some((m, i) => m.name === name && i !== index)) {
-            showCustomAlert('A memory with this name already exists.');
-            return;
-        }
+    const index = indexStr !== '' ? parseInt(indexStr, 10) : -1;
+
+    // Check for duplicate names
+    const isDuplicate = project.memories.some((m, i) => m.name === name && i !== index);
+    if (isDuplicate) {
+        showCustomAlert('A memory with this name already exists.');
+        return;
+    }
+
+    if(index !== -1){ // Editing existing memory
         project.memories[index] = {...project.memories[index], name: name, content: content};
-    } else {
-        if (project.memories.some(m => m.name === name)) {
-            showCustomAlert('A memory with this name already exists.');
-            return;
-        }
+    } else { // Creating new memory
         project.memories.push({name: name, content: content});
     }
     
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
     stateManager.bus.publish('memory:listChanged');
-    hideMemoryEditor();
+    stateManager.bus.publish('memory:editorShouldClose');
 }
 
 export function deleteMemory(index, e) {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     const project = stateManager.getProject();
-    if(confirm(`ลบ '${project.memories[index].name}'?`)){
+    if (!project.memories[index]) return;
+
+    if(confirm(`Are you sure you want to delete the memory '${project.memories[index].name}'?`)){
         const nameToDelete = project.memories[index].name;
         project.memories.splice(index, 1);
         
+        // Remove this memory from any agent that was using it
         Object.values(project.agentPresets).forEach(agent => {
             if (agent.activeMemories) {
                 const memIndex = agent.activeMemories.indexOf(nameToDelete);
@@ -74,8 +81,6 @@ export function deleteMemory(index, e) {
     }
 }
 
-
-// [FIXED] เพิ่มฟังก์ชันที่ขาดหายไป
 export function saveMemoryPackage() {
     try {
         const project = stateManager.getProject();
@@ -101,7 +106,6 @@ export function saveMemoryPackage() {
     }
 }
 
-// [FIXED] เพิ่มฟังก์ชันที่ขาดหายไป
 export function loadMemoryPackage(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -137,4 +141,51 @@ export function loadMemoryPackage(event) {
     };
     reader.readAsText(file);
     event.target.value = ''; // Clear the input so the same file can be loaded again
+}
+
+export function handleSummarizationPresetChange() {
+    const selector = document.getElementById('system-utility-summary-preset-select');
+    const selectedName = selector.value;
+    
+    if (selectedName === 'custom') {
+        return;
+    }
+
+    const project = stateManager.getProject();
+    const presets = project.globalSettings.summarizationPromptPresets;
+    if (presets && presets[selectedName]) {
+        const presetContent = presets[selectedName];
+        document.getElementById('system-utility-summary-prompt').value = presetContent;
+        // Announce change to save settings
+        stateManager.bus.publish('settings:systemAgentChanged');
+    }
+}
+
+export function handleSaveSummarizationPreset() {
+    const currentText = document.getElementById('system-utility-summary-prompt').value.trim();
+    if (!currentText) {
+        showCustomAlert('Prompt template cannot be empty.', 'Error');
+        return;
+    }
+
+    const newName = prompt('Enter a name for this new preset:', '');
+    if (!newName || !newName.trim()) {
+        return;
+    }
+
+    const project = stateManager.getProject();
+    const trimmedName = newName.trim();
+    if (project.globalSettings.summarizationPromptPresets[trimmedName]) {
+        if (!confirm(`A preset named '${trimmedName}' already exists. Do you want to overwrite it?`)) {
+            return;
+        }
+    }
+
+    project.globalSettings.summarizationPromptPresets[trimmedName] = currentText;
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState().then(() => {
+        stateManager.bus.publish('ui:renderSummarizationSelector');
+        document.getElementById('system-utility-summary-preset-select').value = trimmedName;
+        showCustomAlert(`Preset '${trimmedName}' saved successfully!`, 'Success');
+    });
 }

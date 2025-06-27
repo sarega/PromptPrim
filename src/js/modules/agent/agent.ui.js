@@ -1,4 +1,44 @@
-// js/modules/agent/agent.ui.js
+// ===============================================
+// FILE: src/js/modules/agent/agent.ui.js (Refactored)
+// ===============================================
+
+import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
+import { showCustomAlert } from '../../core/core.ui.js';
+
+// --- Private Helper Functions (Not Exported) ---
+function createAgentElement(name, preset) {
+    const project = stateManager.getProject();
+    const activeEntity = project.activeEntity;
+
+    const item = document.createElement('div');
+    item.className = 'item';
+    item.dataset.agentName = name;
+
+    if (activeEntity && activeEntity.type === 'agent' && activeEntity.name === name) {
+        item.classList.add('active');
+    }
+
+    item.innerHTML = `
+    <div class="item-header">
+        <span class="item-name"><span class="item-icon">${preset.icon || '🤖'}</span> ${name}</span>
+        <div class="item-actions">
+             <button class="btn-icon" data-action="edit" title="Edit Agent">&#9998;</button>
+             <button class="btn-icon danger" data-action="delete" title="Delete Agent">&#128465;</button>
+        </div>
+    </div>`;
+    
+    // Publish events instead of calling handlers directly
+    item.addEventListener('click', (e) => {
+        if (e.target.closest('.item-actions')) return;
+        stateManager.bus.publish('entity:select', { type: 'agent', name });
+    });
+    item.querySelector('[data-action="edit"]').addEventListener('click', () => stateManager.bus.publish('agent:edit', { agentName: name }));
+    item.querySelector('[data-action="delete"]').addEventListener('click', () => stateManager.bus.publish('agent:delete', { agentName: name }));
+    
+    return item;
+}
+
+// --- Exported UI Functions ---
 
 export function renderAgentPresets() {
     const project = stateManager.getProject();
@@ -7,39 +47,11 @@ export function renderAgentPresets() {
     container.innerHTML = '';
     const presets = project.agentPresets;
     
-    const activeEntity = project.activeEntity;
-
     for (const name in presets) {
-        const preset = presets[name];
-        const item = document.createElement('div');
-        item.className = 'item';
-        item.dataset.agentName = name;
-
-        if (activeEntity && activeEntity.type === 'agent' && activeEntity.name === name) {
-            item.classList.add('active');
-        }
-
-        item.innerHTML = `
-        <div class="item-header">
-            <span class="item-name"><span class="item-icon">${preset.icon || '🤖'}</span> ${name}</span>
-            <div class="item-actions">
-                 <button class="btn-icon" data-action="edit" title="Edit Agent">&#9998;</button>
-                 <button class="btn-icon danger" data-action="delete" title="Delete Agent">&#128465;</button>
-            </div>
-        </div>`;
-        
-        item.addEventListener('click', (e) => {
-            if (e.target.closest('.item-actions')) return;
-            selectEntity('agent', name);
-        });
-        item.querySelector('[data-action="edit"]').addEventListener('click', () => showAgentEditor(true, name));
-        item.querySelector('[data-action="delete"]').addEventListener('click', () => deleteAgentPreset(name));
-        
-        container.appendChild(item);
+        container.appendChild(createAgentElement(name, presets[name]));
     }
 }
 
-// [FIX 1] แก้ไขฟังก์ชันนี้ให้เลือก Model ที่บันทึกไว้ได้อย่างถูกต้อง
 export function populateModelSelectors() {
     const allModels = stateManager.getState().allProviderModels || [];
     const project = stateManager.getProject();
@@ -61,26 +73,24 @@ export function populateModelSelectors() {
     });
 
     selectors.forEach(selector => {
-        const savedValue = selector.value; // บันทึกค่าที่อาจจะถูกเลือกไว้ชั่วคราว
+        const savedValue = selector.value;
         selector.innerHTML = '<option value="">-- Select a Model --</option>';
         if (openrouterGroup.childElementCount > 0) selector.appendChild(openrouterGroup.cloneNode(true));
         if (ollamaGroup.childElementCount > 0) selector.appendChild(ollamaGroup.cloneNode(true));
         
-        // ตรวจสอบและตั้งค่าจาก State ของโปรเจกต์
+        // Restore value after populating
         if (selector.id === 'system-utility-model-select') {
             selector.value = project.globalSettings.systemUtilityAgent?.model || '';
         } else if (selector.id === 'agent-model-select') {
-             // ถ้ากำลังแก้ไข Agent อยู่ ให้ใช้ค่าจาก Agent นั้น
             const editingAgentName = stateManager.getState().editingAgentName;
             if (editingAgentName && project.agentPresets[editingAgentName]) {
                 selector.value = project.agentPresets[editingAgentName].model;
             } else {
-                selector.value = savedValue; // ใช้ค่าเดิมถ้าไม่ได้แก้ไข
+                selector.value = savedValue;
             }
         }
     });
 }
-
 
 export function showAgentEditor(isEditing = false, agentName = null) {
     stateManager.setState('editingAgentName', isEditing ? agentName : null);
@@ -96,29 +106,27 @@ export function showAgentEditor(isEditing = false, agentName = null) {
         const agent = project.agentPresets[agentName];
         if (!agent) { showCustomAlert("Agent not found."); return; }
         
+        document.getElementById('agent-name-input').value = agentName;
         Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
             const element = document.getElementById(elId);
-            if(element) {
+            if(element && elId !== 'agent-name-input') {
                  const value = agent[ALL_AGENT_SETTINGS_IDS[elId]];
                  element[element.type === 'checkbox' ? 'checked' : 'value'] = value !== undefined ? value : '';
             }
         });
-        document.getElementById('agent-name-input').value = agentName;
     } else {
+        document.getElementById('agent-name-input').value = '';
         Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
             const element = document.getElementById(elId);
-            if(element) {
+            if(element && elId !== 'agent-name-input') {
                 const value = defaultAgentSettings[ALL_AGENT_SETTINGS_IDS[elId]];
                 element[element.type === 'checkbox' ? 'checked' : 'value'] = value !== undefined ? value : '';
             }
         });
-        document.getElementById('agent-name-input').value = '';
+        document.getElementById('enhancer-prompt-input').value = '';
     }
     
-    // ต้องเรียก populateModelSelectors อีกครั้งหลังจากตั้งค่าทุกอย่างเสร็จ
-    // เพื่อให้มันเลือก model ที่ถูกต้องสำหรับ agent ที่กำลังแก้ไขอยู่
     populateModelSelectors();
-
     document.getElementById('agent-editor-modal').style.display = 'flex';
 }
 
@@ -128,11 +136,11 @@ export function hideAgentEditor() {
 }
 
 export function initAgentUI() {
-    stateManager.bus.subscribe('entity:selected', renderAgentPresets);
+    // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', renderAgentPresets);
     stateManager.bus.subscribe('agent:listChanged', renderAgentPresets);
-    stateManager.bus.subscribe('session:loaded', renderAgentPresets);
     stateManager.bus.subscribe('models:loaded', populateModelSelectors);
+    stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
     
     stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
         document.getElementById('agent-name-input').value = profileData.agent_name || '';
@@ -141,21 +149,24 @@ export function initAgentUI() {
         document.getElementById('agent-temperature').value = profileData.temperature ?? 1.0;
         document.getElementById('agent-topP').value = profileData.top_p ?? 1.0;
     });
+
     stateManager.bus.subscribe('agent:enhancerStatus', ({ text, color }) => {
         const statusDiv = document.getElementById('enhancer-status');
         statusDiv.textContent = text;
         statusDiv.style.color = color || 'var(--text-dark)';
     });
 
+    // --- Setup Event Listeners ---
     const createAgentButton = document.querySelector('a[data-action="createAgent"]');
     if (createAgentButton) {
         createAgentButton.addEventListener('click', (e) => {
-            e.preventDefault(); showAgentEditor(false);
+            e.preventDefault(); 
+            stateManager.bus.publish('agent:create');
         });
     }
 
-    document.getElementById('generate-agent-profile-btn').addEventListener('click', generateAgentProfile);
-    document.querySelector('#agent-editor-modal .modal-actions .btn:not(.btn-secondary)').addEventListener('click', saveAgentPreset);
+    document.getElementById('generate-agent-profile-btn').addEventListener('click', () => stateManager.bus.publish('agent:generateProfile'));
+    document.querySelector('#agent-editor-modal .modal-actions .btn:not(.btn-secondary)').addEventListener('click', () => stateManager.bus.publish('agent:save'));
     document.querySelector('#agent-editor-modal .btn-secondary').addEventListener('click', hideAgentEditor);
 
     console.log("Agent UI Initialized.");

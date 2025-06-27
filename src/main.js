@@ -1,5 +1,5 @@
 // ===============================================
-// FILE: src/main.js (Final Version)
+// FILE: src/main.js (Refactored)
 // DESCRIPTION: Main application entry point, orchestrator, and event hub.
 // ===============================================
 
@@ -8,7 +8,6 @@ import './styles/main.css';
 
 // 2. Import Core Modules
 import { stateManager } from './js/core/core.state.js';
-import { openDb } from './js/core/core.db.js';
 import { loadAllProviderModels } from './js/core/core.api.js';
 import { initCoreUI, showCustomAlert } from './js/core/core.ui.js';
 
@@ -58,7 +57,8 @@ async function init() {
         // --- Theme Initialization ---
         const savedTheme = localStorage.getItem('theme') || 'system';
         document.querySelector(`#theme-switcher input[value="${savedTheme}"]`)?.setAttribute('checked', 'true');
-        document.body.classList.toggle('dark-mode', savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.body.classList.toggle('dark-mode', savedTheme === 'dark' || (savedTheme === 'system' && prefersDark));
 
         // --- Initial Project Load ---
         const lastProjectId = localStorage.getItem('lastActiveProjectId');
@@ -87,8 +87,8 @@ function setupEventSubscriptions() {
     bus.subscribe('settings:apiKeyChanged', (key) => ProjectHandlers.handleApiKeyChange(key));
     bus.subscribe('settings:ollamaUrlChanged', (url) => ProjectHandlers.handleOllamaUrlChange(url));
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
-    bus.subscribe('settings:saveSummaryPreset', MemoryHandlers.handleSaveSummarizationPreset); // Mapped to memory handlers
-    bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange); // Mapped to memory handlers
+    bus.subscribe('settings:saveSummaryPreset', MemoryHandlers.handleSaveSummarizationPreset);
+    bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange);
 
     // --- Project ---
     bus.subscribe('project:new', ProjectHandlers.createNewProject);
@@ -101,6 +101,7 @@ function setupEventSubscriptions() {
 
     // --- Session ---
     bus.subscribe('session:new', SessionHandlers.createNewChatSession);
+    bus.subscribe('session:load', ({sessionId}) => SessionHandlers.loadChatSession(sessionId));
     bus.subscribe('session:pin', ({ sessionId, event }) => SessionHandlers.togglePinSession(sessionId, event));
     bus.subscribe('session:rename', ({ sessionId, event }) => SessionHandlers.renameChatSession(sessionId, event));
     bus.subscribe('session:clone', ({ sessionId, event }) => SessionHandlers.cloneSession(sessionId, event));
@@ -108,18 +109,28 @@ function setupEventSubscriptions() {
     bus.subscribe('session:delete', ({ sessionId, event }) => SessionHandlers.deleteChatSession(sessionId, event));
     bus.subscribe('session:autoRename', ({ sessionId, newName }) => SessionHandlers.renameChatSession(sessionId, null, newName));
 
+    // --- Entity (Agent/Group) Selection ---
+    bus.subscribe('entity:select', ({type, name}) => ProjectHandlers.selectEntity(type, name));
+
     // --- Agent ---
     bus.subscribe('agent:create', () => AgentUI.showAgentEditor(false));
+    bus.subscribe('agent:edit', ({agentName}) => AgentUI.showAgentEditor(true, agentName));
     bus.subscribe('agent:save', AgentHandlers.saveAgentPreset);
+    bus.subscribe('agent:delete', ({agentName}) => AgentHandlers.deleteAgentPreset(agentName));
     bus.subscribe('agent:generateProfile', AgentHandlers.generateAgentProfile);
     
     // --- Group ---
     bus.subscribe('group:create', () => GroupUI.showAgentGroupEditor(false));
+    bus.subscribe('group:edit', ({groupName}) => GroupUI.showAgentGroupEditor(true, groupName));
     bus.subscribe('group:save', GroupHandlers.saveAgentGroup);
+    bus.subscribe('group:delete', ({groupName}) => GroupHandlers.deleteAgentGroup(groupName));
     
     // --- Memory ---
     bus.subscribe('memory:create', () => MemoryUI.showMemoryEditor(null));
+    bus.subscribe('memory:edit', ({index, event}) => MemoryUI.showMemoryEditor(index, event));
     bus.subscribe('memory:save', MemoryHandlers.saveMemory);
+    bus.subscribe('memory:delete', ({index, event}) => MemoryHandlers.deleteMemory(index, event));
+    bus.subscribe('memory:toggle', ({name, event}) => MemoryHandlers.toggleMemory(name, event));
     bus.subscribe('memory:exportPackage', MemoryHandlers.saveMemoryPackage);
     bus.subscribe('memory:importPackage', () => document.getElementById('load-memory-package-input').click());
     bus.subscribe('memory:fileSelectedForImport', MemoryHandlers.loadMemoryPackage);
@@ -130,6 +141,11 @@ function setupEventSubscriptions() {
     bus.subscribe('chat:fileUpload', (event) => ChatHandlers.handleFileUpload(event));
     bus.subscribe('chat:summarize', ChatHandlers.handleManualSummarize);
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
+    bus.subscribe('chat:copyMessage', ({index, event}) => ChatHandlers.copyMessageToClipboard(index, event));
+    bus.subscribe('chat:editMessage', ({index}) => ChatHandlers.editMessage(index));
+    bus.subscribe('chat:regenerate', ({index}) => ChatHandlers.regenerateMessage(index));
+    bus.subscribe('chat:deleteMessage', ({index}) => ChatHandlers.deleteMessage(index));
+
 
     console.log("Event bus subscriptions are set up.");
 }

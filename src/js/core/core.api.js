@@ -1,5 +1,5 @@
 // ===============================================
-// FILE: src/js/core/core.api.js (Complete)
+// FILE: src/js/core/core.api.js (Refactored)
 // DESCRIPTION: All communication with external LLM APIs.
 // ===============================================
 
@@ -26,18 +26,30 @@ async function fetchOllamaModels(baseUrl) {
 }
 
 
+// --- Main Exported Functions ---
+
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
     const project = stateManager.getProject();
+    if (!project || !project.globalSettings) {
+        stateManager.bus.publish('status:update', { message: 'Project not loaded', state: 'error' });
+        return;
+    }
     const apiKey = project.globalSettings.apiKey?.trim() || '';
     const baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
     let finalStatus = { message: 'No models found. Please check API settings.', state: 'warning' };
     
     const fetchPromises = [];
-    if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error(e); return []; }));
-    if (baseUrl) fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error(e); return []; }));
+    if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
+    if (baseUrl) fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
 
     try {
+        if (fetchPromises.length === 0) {
+             stateManager.setAllModels([]);
+             finalStatus = { message: 'Ready', state: 'connected' };
+             stateManager.bus.publish('status:update', finalStatus);
+             return;
+        }
         const results = await Promise.all(fetchPromises);
         const allModels = results.flat();
         stateManager.setAllModels(allModels);
@@ -50,9 +62,6 @@ export async function loadAllProviderModels() {
     }
     stateManager.bus.publish('status:update', finalStatus);
 }
-
-
-
 
 export async function callLLM(agent, messages) {
     const allModels = stateManager.getState().allProviderModels;
@@ -98,7 +107,6 @@ export async function callLLM(agent, messages) {
     throw new Error("Invalid API response structure.");
 }
 
-// [FIXED] แก้ไขฟังก์ชันนี้ทั้งหมดเพื่ออัปเดต UI อย่างปลอดภัย
 export async function streamLLMResponse(contentDiv, agent, messages, speakerName = null) {
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
@@ -143,8 +151,7 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
 
     const streamingContentSpan = contentDiv.querySelector('.streaming-content');
     if (!streamingContentSpan) {
-        console.error("Streaming target '.streaming-content' not found in message bubble.");
-        contentDiv.innerHTML += " Error: UI render failed.";
+        contentDiv.innerHTML += " Error: UI render target not found.";
         return;
     }
     streamingContentSpan.innerHTML = ''; // Clear loading dots
@@ -178,6 +185,9 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
 
             if (token) {
                 fullResponseText += token;
+                // The UI update is now delegated to the chat.ui.js module
+                // which will receive this fullResponseText at the end.
+                // We just need to update the text content here for live streaming.
                 if (agent.useMarkdown) {
                     streamingContentSpan.innerHTML = marked.parse(fullResponseText);
                 } else {
@@ -187,10 +197,10 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
         }
     }
     
-    if (contentDiv) enhanceCodeBlocks(contentDiv);
+    // Publish an event to enhance code blocks after streaming is complete.
+    stateManager.bus.publish('ui:enhanceCodeBlocks', contentDiv);
     return fullResponseText;
 }
-
 
 export async function generateAndRenameSession(history){
      try{
@@ -204,31 +214,19 @@ export async function generateAndRenameSession(history){
         const titlePrompt = `Based on the conversation, generate a concise title (3-5 words) and a single relevant emoji. Respond with a JSON object like {"title": "your title", "emoji": "👍"}.`;
         
         const messages = [{ role: "user", content: titlePrompt }];
-        const body = { model: agent.model, messages: messages, stream: false, options: { temperature: 0.2, num_predict: 20 } };
-        
         const allModels = stateManager.getState().allProviderModels;
-        const modelData = allModels.find(m => m.id === agent.model);
-        const provider = modelData ? modelData.provider : null;
-        let url, headers;
-
-        if (provider === 'openrouter') {
-            url = 'https://openrouter.ai/api/v1/chat/completions';
-            headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
-            body.response_format = { "type": "json_object" };
-        } else {
-            url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
-            headers = { 'Content-Type': 'application/json' };
-            body.format = "json";
-        }
-
-        const response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
-        if (!response.ok) return;
-
-        let data = await response.json();
-        let content = data.choices ? data.choices[0].message.content : data.message.content;
+        
+        // This is a utility call, it can use the helper function directly
+        const responseText = await callLLM({ ...agent, temperature: 0.2 }, messages);
         
         let newTitleData = {};
-        try { newTitleData = JSON.parse(content); } catch(e) { console.error("Failed to parse title JSON:", content); }
+        try { newTitleData = JSON.parse(responseText.match(/{.*}/s)[0]); } 
+        catch(e) { 
+            console.error("Failed to parse title JSON:", responseText); 
+            // Fallback if JSON parsing fails
+            const titlePart = responseText.replace(/"/g, '').substring(0, 30);
+            newTitleData = { title: titlePart, emoji: '💬' };
+        }
         
         const newTitle = `${newTitleData.emoji || '💬'} ${newTitleData.title || 'Untitled'}`;
 

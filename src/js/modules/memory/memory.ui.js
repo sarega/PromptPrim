@@ -1,6 +1,46 @@
-// js/modules/memory/memory.ui.js
+// ===============================================
+// FILE: src/js/modules/memory/memory.ui.js (Refactored)
+// ===============================================
 
-var memorySortable = null;
+import { stateManager } from '../../core/core.state.js';
+import { toggleDropdown } from '../../core/core.ui.js';
+
+let memorySortable = null;
+
+// --- Private Helper Functions ---
+
+function createMemoryElement(memory, isActive) {
+    const project = stateManager.getProject();
+    const itemDiv = document.createElement('div');
+    itemDiv.className = `item memory-item`;
+    itemDiv.dataset.name = memory.name;
+    const memoryIndex = project.memories.findIndex(m => m.name === memory.name);
+
+    itemDiv.innerHTML = `
+        <div class="item-header">
+            <div class="memory-toggle ${isActive ? 'active' : ''}"></div>
+            <span class="item-name">${memory.name}</span>
+            <div class="item-actions">
+                <div class="dropdown align-right">
+                    <button class="btn-icon" data-action="toggle-menu">&#8942;</button>
+                    <div class="dropdown-content">
+                        <a href="#" data-action="edit">&#9998; Edit</a>
+                        <a href="#" data-action="delete">&#128465; Delete</a>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    // Publish events for handlers
+    itemDiv.querySelector('.memory-toggle').addEventListener('click', (e) => stateManager.bus.publish('memory:toggle', { name: memory.name, event: e }));
+    itemDiv.querySelector('[data-action="toggle-menu"]').addEventListener('click', toggleDropdown);
+    itemDiv.querySelector('[data-action="edit"]').addEventListener('click', (e) => stateManager.bus.publish('memory:edit', { index: memoryIndex, event: e }));
+    itemDiv.querySelector('[data-action="delete"]').addEventListener('click', (e) => stateManager.bus.publish('memory:delete', { index: memoryIndex, event: e }));
+
+    return itemDiv;
+}
+
+// --- Exported UI Functions ---
 
 export function loadAndRenderMemories() {
     const project = stateManager.getProject();
@@ -21,7 +61,7 @@ export function loadAndRenderMemories() {
         return;
     }
     
-    if (!activeAgentPreset) {
+    if (!activeAgentPreset || !project.memories) {
         container.style.display = 'none';
         return;
     }
@@ -56,40 +96,10 @@ export function loadAndRenderMemories() {
             const movedMemoryName = evt.item.dataset.name;
             agent.activeMemories.splice(evt.oldDraggableIndex, 1);
             agent.activeMemories.splice(evt.newDraggableIndex, 0, movedMemoryName);
-            stateManager.updateAndPersistState();
-            loadAndRenderMemories();
+            stateManager.updateAndPersistState(); // Save the new order
+            loadAndRenderMemories(); // Re-render to reflect changes
         }
     });
-}
-
-export function createMemoryElement(memory, isActive) {
-    const project = stateManager.getProject();
-    const itemDiv = document.createElement('div');
-    itemDiv.className = `item memory-item`;
-    itemDiv.dataset.name = memory.name;
-    const memoryIndex = project.memories.findIndex(m => m.name === memory.name);
-
-    itemDiv.innerHTML = `
-        <div class="item-header">
-            <div class="memory-toggle ${isActive ? 'active' : ''}"></div>
-            <span class="item-name">${memory.name}</span>
-            <div class="item-actions">
-                <div class="dropdown align-right">
-                    <button class="btn-icon" data-action="toggle-menu">&#8942;</button>
-                    <div class="dropdown-content">
-                        <a href="#" data-action="edit">&#9998; Edit</a>
-                        <a href="#" data-action="delete">&#128465; Delete</a>
-                    </div>
-                </div>
-            </div>
-        </div>`;
-
-    itemDiv.querySelector('.memory-toggle').addEventListener('click', (e) => toggleMemory(memory.name, e));
-    itemDiv.querySelector('[data-action="toggle-menu"]').addEventListener('click', toggleDropdown);
-    itemDiv.querySelector('[data-action="edit"]').addEventListener('click', (e) => showMemoryEditor(memoryIndex, e));
-    itemDiv.querySelector('[data-action="delete"]').addEventListener('click', (e) => deleteMemory(memoryIndex, e));
-
-    return itemDiv;
 }
 
 export function showMemoryEditor(index = null, event) {
@@ -97,14 +107,14 @@ export function showMemoryEditor(index = null, event) {
     const project = stateManager.getProject();
     const modal = document.getElementById('memory-editor-modal');
     
-    if(index !== null){
+    if(index !== null && project.memories[index]){
         const memory = project.memories[index];
-        document.getElementById('memory-modal-title').textContent = 'แก้ไข Memory';
+        document.getElementById('memory-modal-title').textContent = 'Edit Memory';
         document.getElementById('memory-name-input').value = memory.name;
         document.getElementById('memory-content-input').value = memory.content;
         document.getElementById('memory-edit-index').value = index;
     } else {
-        document.getElementById('memory-modal-title').textContent = 'เพิ่ม Memory ใหม่';
+        document.getElementById('memory-modal-title').textContent = 'Create New Memory';
         document.getElementById('memory-name-input').value = '';
         document.getElementById('memory-content-input').value = '';
         document.getElementById('memory-edit-index').value = '';
@@ -116,42 +126,40 @@ export function hideMemoryEditor() {
     document.getElementById('memory-editor-modal').style.display = 'none';
 }
 
-// [FIXED] อัปเดตทั้งฟังก์ชันนี้ในไฟล์ js/modules/memory/memory.ui.js
 export function initMemoryUI() {
     // --- Subscribe to Events ---
     stateManager.bus.subscribe('project:loaded', loadAndRenderMemories);
     stateManager.bus.subscribe('memory:listChanged', loadAndRenderMemories);
     stateManager.bus.subscribe('entity:selected', loadAndRenderMemories);
+    stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
 
     // --- Setup Event Listeners ---
-    const dropdown = document.querySelector('#memories-container').closest('details').querySelector('.dropdown-content');
+    const dropdown = document.querySelector('.memories-frame details').querySelector('.dropdown-content');
 
-    // Listener for 'Create New Memory'
     dropdown.querySelector('a[data-action="createMemory"]').addEventListener('click', (e) => {
         e.preventDefault();
-        showMemoryEditor(null);
+        stateManager.bus.publish('memory:create');
     });
     
-    // Listener for 'Export Package'
     dropdown.querySelector('a[data-action="exportMemories"]').addEventListener('click', (e) => {
         e.preventDefault();
-        // ฟังก์ชัน saveMemoryPackage() อยู่ใน memory.handlers.js และควรจะทำงานได้
-        saveMemoryPackage(); 
+        stateManager.bus.publish('memory:exportPackage');
     });
 
-    // Listener for 'Import Package'
     dropdown.querySelector('a[data-action="importMemories"]').addEventListener('click', (e) => {
         e.preventDefault();
-        // สั่งให้ input ที่ซ่อนอยู่ทำงาน
-        document.getElementById('load-memory-package-input').click();
+        stateManager.bus.publish('memory:importPackage');
     });
     
-    // Listener for when a file is chosen for import
-    document.getElementById('load-memory-package-input').addEventListener('change', loadMemoryPackage);
+    document.getElementById('load-memory-package-input').addEventListener('change', (e) => {
+        stateManager.bus.publish('memory:fileSelectedForImport', e)
+    });
 
     // Modal Buttons Listeners
     document.querySelector('#memory-editor-modal .btn-secondary').addEventListener('click', hideMemoryEditor);
-    document.querySelector('#memory-editor-modal .btn:not(.btn-secondary)').addEventListener('click', saveMemory);
+    document.querySelector('#memory-editor-modal .btn:not(.btn-secondary)').addEventListener('click', () => {
+        stateManager.bus.publish('memory:save');
+    });
     
     console.log("Memory UI Initialized.");
 }
