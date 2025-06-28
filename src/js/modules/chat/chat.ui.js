@@ -1,6 +1,6 @@
 // ===============================================
-// FILE: src/js/modules/chat/chat.ui.js (Definitive Fix)
-// DESCRIPTION: Ensures the Send/Stop button toggle logic is correctly implemented using classes.
+// FILE: src/js/modules/chat/chat.ui.js (แก้ไขแล้ว)
+// DESCRIPTION: เพิ่ม Logic สำหรับจัดการการซ่อน/แสดง Header และ Footer บนมือถือ
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -32,6 +32,40 @@ function enhanceCodeBlocks(messageElement) {
         });
     });
 }
+
+/**
+ * [NEW] Initializes behavior for hiding/showing header/footer on mobile scroll.
+ * This creates a more immersive chat experience on small screens.
+ */
+function initMobileScrollBehavior() {
+    const chatArea = document.querySelector('.main-chat-area');
+    const messagesContainer = document.getElementById('chatMessages');
+
+    if (!chatArea || !messagesContainer) {
+        console.warn("Mobile scroll behavior cannot be initialized: Elements not found.");
+        return;
+    }
+
+    messagesContainer.addEventListener('scroll', () => {
+        // Only apply this dynamic layout on mobile-sized screens
+        if (window.innerWidth > 768) {
+            chatArea.classList.remove('is-scrolled');
+            return;
+        }
+
+        const scrollTop = messagesContainer.scrollTop;
+
+        // Add 'is-scrolled' class if user has scrolled down at all (e.g., more than 10px)
+        // This class is used by CSS to hide the header and footer, reclaiming screen space.
+        if (scrollTop > 10) {
+            chatArea.classList.add('is-scrolled');
+        } else {
+            // Remove the class when scrolled back to the top
+            chatArea.classList.remove('is-scrolled');
+        }
+    }, { passive: true }); // Use passive listener for better scroll performance
+}
+
 
 // --- Exported UI Functions ---
 
@@ -226,7 +260,6 @@ export function initChatUI() {
     stateManager.bus.subscribe('ui:addMessage', (data) => addMessageToUI(data.role, data.content, data.index, data.speakerName, data.isLoading));
     stateManager.bus.subscribe('ui:renderFilePreviews', renderFilePreviews);
     
-    // [MODIFIED] Using classList.add/remove with the '.hidden' class for robust toggling
     stateManager.bus.subscribe('ui:showLoadingIndicator', () => {
         document.getElementById('sendBtn').classList.add('hidden');
         document.getElementById('stopBtn').classList.remove('hidden');
@@ -284,5 +317,8 @@ export function initChatUI() {
 
     document.getElementById('file-input').addEventListener('change', (e) => stateManager.bus.publish('chat:fileUpload', e));
     
+    // [NEW] Activate the mobile scrolling behavior
+    initMobileScrollBehavior();
+
     console.log("Chat UI Initialized.");
 }

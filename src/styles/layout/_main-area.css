@@ -1,6 +1,6 @@
 /* ===============================================
-   FILE: src/styles/layout/_main-area.css
-   DESCRIPTION: Styles for the main content area, header, and status panel.
+   FILE: src/styles/layout/_main-area.css (แก้ไขแล้ว)
+   DESCRIPTION: เพิ่ม Style สำหรับจัดการ Layout บนมือถือ
    =============================================== */
 
 .main-chat-area {
@@ -10,7 +10,8 @@
     background: var(--white-alpha-50);
     transition: width 0.3s ease-in-out;
     position: relative;
-    width: 100%; /* Take up remaining space */
+    width: 100%; 
+    overflow: hidden; /* Prevent scrollbars on the main area */
 }
 
 .chat-header {
@@ -20,7 +21,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: transform 0.3s ease-in-out; /* For mobile auto-hide */
+    transition: transform 0.3s ease-in-out;
     flex-shrink: 0;
 }
 
@@ -28,6 +29,15 @@
     font-size: 1.15rem;
     font-weight: 600;
     flex-grow: 1;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
 #status-panel {
@@ -108,11 +118,13 @@
     40% { transform: scale(1); }
 }
 
-/* For mobile auto-hide feature */
-.chat-header.is-hidden {
-    transform: translateY(-100%);
-}
-
-#status-panel.is-hidden {
-    transform: translateY(100%);
+/* [MODIFIED] New mobile-specific layout behavior.
+  The .is-scrolled class is added by chat.ui.js when the user scrolls down.
+*/
+@media (max-width: 768px) {
+    /* When scrolled, hide the header and status panel completely to reclaim space */
+    .main-chat-area.is-scrolled .chat-header,
+    .main-chat-area.is-scrolled #status-panel {
+        display: none;
+    }
 }
