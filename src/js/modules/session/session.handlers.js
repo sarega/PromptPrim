@@ -1,10 +1,10 @@
 // ===============================================
-// FILE: src/js/modules/session/session.handlers.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขฟังก์ชันการบันทึก Session ลง DB ให้ถูกต้อง
+// FILE: src/js/modules/session/session.handlers.js (แก้ไขสมบูรณ์)
+// DESCRIPTION: แก้ไขให้การสร้างและลบ session ทำให้โปรเจกต์ dirty เสมอ
 // ===============================================
 
 import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
-import { dbRequest, getDb } from '../../core/core.db.js'; // [MODIFIED] Import getDb
+import { dbRequest, getDb } from '../../core/core.db.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 import { scrollToLinkedEntity } from '../project/project.ui.js';
 
@@ -37,11 +37,13 @@ export async function createNewChatSession() {
         project.chatSessions.unshift(newSession);
         
         stateManager.setProject(project);
-        await loadChatSession(newSession.id);
+        
+        // [FIX] Creating a session is a dirtying action.
+        stateManager.updateAndPersistState(); 
 
-        // No need to call updateAndPersistState() here, as creating a new session should be saved immediately.
-        // The loadChatSession will handle necessary state updates.
-        stateManager.bus.publish('session:changed'); // Re-render the list
+        await loadChatSession(newSession.id);
+        
+        // No longer need a separate publish for session:changed as loadChatSession handles rendering.
 
     } catch (error) {
         console.error("Failed to create new session in DB:", error);
@@ -65,12 +67,12 @@ export async function loadChatSession(id) {
             const firstAgentName = Object.keys(project.agentPresets)[0];
             project.activeEntity = { type: 'agent', name: firstAgentName };
             session.linkedEntity = { ...project.activeEntity };
-            stateManager.updateAndPersistState(); // Mark dirty as we corrected the session
+            stateManager.updateAndPersistState();
         } else {
              project.activeEntity = null;
         }
         
-        stateManager.setProject(project); // Update state with new active session
+        stateManager.setProject(project);
         stateManager.bus.publish('session:loaded', session);
         
         if (project.activeEntity) {
@@ -94,7 +96,7 @@ export async function renameChatSession(id, e, newNameFromPrompt = null) {
         session.name = newName.trim();
         session.updatedAt = Date.now();
         stateManager.setProject(project);
-        stateManager.updateAndPersistState(); // Mark as dirty, auto-save will handle DB update
+        stateManager.updateAndPersistState();
         
         stateManager.bus.publish('session:changed');
         if (id === project.activeSessionId) {
@@ -111,9 +113,11 @@ export async function deleteChatSession(id, e) {
     const sessionIndex = project.chatSessions.findIndex(s => s.id === id);
     if (sessionIndex === -1) return;
 
-    // This action will be saved by the auto-save mechanism
     project.chatSessions.splice(sessionIndex, 1);
     await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'delete', id);
+    
+    // [FIX] Deleting a session is always a dirtying action.
+    stateManager.updateAndPersistState();
 
     if (project.activeSessionId === id) {
         project.activeSessionId = null;
@@ -124,11 +128,12 @@ export async function deleteChatSession(id, e) {
         if (nextSession) {
             await loadChatSession(nextSession.id);
         } else {
+            // createNewChatSession will handle setting state and dirtying
             await createNewChatSession();
         }
     } else {
         stateManager.setProject(project);
-        stateManager.updateAndPersistState(); // Mark as dirty
+        // The state is already marked dirty, just re-render the list
         stateManager.bus.publish('session:changed');
     }
 }
@@ -166,8 +171,10 @@ export async function cloneSession(id, event) {
     project.chatSessions.unshift(newSession);
     await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
     stateManager.setProject(project);
+    
+    // [FIX] Cloning a session is a dirtying action
+    stateManager.updateAndPersistState();
     await loadChatSession(newSession.id);
-    stateManager.bus.publish('session:changed');
 }
 
 export async function archiveSession(id, event) {
@@ -177,14 +184,15 @@ export async function archiveSession(id, event) {
     if (!session) return;
 
     session.archived = !session.archived;
-    if (session.archived) session.pinned = false; // Unpin if archiving
+    if (session.archived) session.pinned = false;
     session.updatedAt = Date.now();
     
+    stateManager.updateAndPersistState();
+
     if (project.activeSessionId === id && session.archived) {
         project.activeSessionId = null;
         const nextSession = project.chatSessions.find(s => !s.archived);
         stateManager.setProject(project);
-        stateManager.updateAndPersistState(); // Mark dirty
 
         if (nextSession) {
             await loadChatSession(nextSession.id);
@@ -193,7 +201,6 @@ export async function archiveSession(id, event) {
         }
     } else {
         stateManager.setProject(project);
-        stateManager.updateAndPersistState(); // Mark dirty
         stateManager.bus.publish('session:changed');
     }
 }
@@ -231,7 +238,6 @@ export function exportChat(sessionId) {
     URL.revokeObjectURL(url);
 }
 
-// [MODIFIED] Correctly saves all sessions to IndexedDB
 export async function saveAllSessions(sessionsToSave) {
     const sessions = sessionsToSave || stateManager.getProject()?.chatSessions;
     if (!sessions) return;
@@ -245,7 +251,6 @@ export async function saveAllSessions(sessionsToSave) {
     const tx = db.transaction(SESSIONS_STORE_NAME, "readwrite");
     const store = tx.objectStore(SESSIONS_STORE_NAME);
 
-    // Loop and put each session individually
     for (const session of sessions) {
         store.put(session);
     }

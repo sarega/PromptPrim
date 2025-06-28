@@ -1,6 +1,6 @@
 /* ===============================================
    FILE: src/styles/layout/_main-area.css (แก้ไขแล้ว)
-   DESCRIPTION: เพิ่ม Style สำหรับจัดการ Layout บนมือถือ
+   DESCRIPTION: ปรับปรุง Layout สำหรับมือถือให้เป็นแบบ Sticky Header
    =============================================== */
 
 .main-chat-area {
@@ -11,7 +11,7 @@
     transition: width 0.3s ease-in-out;
     position: relative;
     width: 100%; 
-    overflow: hidden; /* Prevent scrollbars on the main area */
+    overflow: hidden;
 }
 
 .chat-header {
@@ -21,8 +21,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: transform 0.3s ease-in-out;
+    transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
     flex-shrink: 0;
+    will-change: transform, max-height; /* Performance hint for browser */
+    position: relative;
+    z-index: 10;
 }
 
 .chat-title {
@@ -49,17 +52,18 @@
     justify-content: space-between;
     gap: 10px;
     flex-shrink: 0;
-    cursor: pointer;
     overflow: hidden;
-    transition: all 0.3s ease-in-out;
+    transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    will-change: transform, max-height;
 }
+
+/* --- Other styles remain unchanged --- */
 
 .status-left, .status-right {
     display: flex;
     align-items: center;
     gap: 10px;
 }
-
 .status-right {
     font-size: 12px;
     color: #718096;
@@ -70,61 +74,52 @@
     min-width: 0;
     margin-left: auto;
 }
-
 #context-inspector-trigger-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px 5px;
-    font-size: 16px;
-    line-height: 1;
+    background: none; border: none; cursor: pointer;
+    padding: 2px 5px; font-size: 16px; line-height: 1;
     color: var(--primary-color);
 }
-
-#context-inspector-trigger-btn:hover {
-    opacity: 0.7;
-}
-
+#context-inspector-trigger-btn:hover { opacity: 0.7; }
 .status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--warning-color);
-    transition: background 0.3s;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--warning-color); transition: background 0.3s;
 }
-
 .status-dot.connected { background: var(--success-color); }
 .status-dot.error { background: var(--error-color); }
-
-.loading {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
-
+.loading { display: flex; gap: 4px; align-items: center; }
 .loading-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+    width: 8px; height: 8px; border-radius: 50%;
     background: var(--primary-color);
     animation: loadingBounce 1.4s infinite ease-in-out both;
 }
-
 .loading-dot:nth-child(1) { animation-delay: -0.32s; }
 .loading-dot:nth-child(2) { animation-delay: -0.16s; }
-
 @keyframes loadingBounce {
     0%, 80%, 100% { transform: scale(0); }
     40% { transform: scale(1); }
 }
 
-/* [MODIFIED] New mobile-specific layout behavior.
-  The .is-scrolled class is added by chat.ui.js when the user scrolls down.
+/* [MODIFIED] New mobile scroll behavior styles.
+  The .header-visible class is controlled by chat.ui.js
 */
 @media (max-width: 768px) {
-    /* When scrolled, hide the header and status panel completely to reclaim space */
-    .main-chat-area.is-scrolled .chat-header,
-    .main-chat-area.is-scrolled #status-panel {
-        display: none;
+    /* When header is NOT visible (scrolling down) */
+    .main-chat-area:not(.header-visible) .chat-header {
+        transform: translateY(-100%);
+        max-height: 0px;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-bottom-width: 0;
+        overflow: hidden;
+    }
+
+    /* When header is NOT visible (scrolling down) */
+    .main-chat-area:not(.header-visible) #status-panel {
+        transform: translateY(100%);
+        max-height: 0px;
+        padding-top: 0;
+        padding-bottom: 0;
+        border-top-width: 0;
+        overflow: hidden;
     }
 }

@@ -1,6 +1,6 @@
 // ===============================================
-// FILE: src/js/modules/group/group.ui.js
-// DESCRIPTION: No changes needed here, logic is correct.
+// FILE: src/js/modules/group/group.ui.js (แก้ไขแล้ว)
+// DESCRIPTION: เพิ่ม class 'group-item' เพื่อการแยกสไตล์
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -11,7 +11,7 @@ function createGroupElement(name) {
     const project = stateManager.getProject();
     const activeEntity = project.activeEntity;
     const item = document.createElement('div');
-    item.className = 'item';
+    item.className = 'item group-item'; // [FIX] Add specific class for styling
     item.dataset.groupName = name;
 
     if (activeEntity && activeEntity.type === 'group' && activeEntity.name === name) {

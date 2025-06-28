@@ -1,6 +1,7 @@
 // ===============================================
 // FILE: src/js/core/core.state.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขฟังก์ชัน updateAndPersistState ให้ทำงานถูกต้อง
+// DESCRIPTION: Refactor isDirtyForUser to be part of the project state.
+// This ensures the dirty flag is persisted in IndexedDB with the project.
 // ===============================================
 
 // --- Global Constants & Defaults ---
@@ -44,10 +45,11 @@ export const defaultAgentSettings = {
 
 // --- Private State ---
 const _appState = {
-    currentProject: {},
+    currentProject: {}, // isDirtyForUser will now live inside this object
     allProviderModels: [],
     isLoading: false,
-    isDirty: false,
+    // isDirtyForUser has been moved into currentProject
+    isDirtyForAutoSave: false, // This remains a global, non-persisted flag
     abortController: null,
     editingAgentName: null,
     editingGroupName: null,
@@ -75,7 +77,10 @@ export const stateManager = {
     getState: () => _appState,
     getProject: () => _appState.currentProject,
     isLoading: () => _appState.isLoading,
-    isDirty: () => _appState.isDirty,
+    
+    // [MODIFIED] Read the user-facing dirty flag from the project object
+    isUserDirty: () => _appState.currentProject?.isDirtyForUser || false,
+    isAutoSaveDirty: () => _appState.isDirtyForAutoSave,
 
     setState: (key, value) => { _appState[key] = value; },
     setProject: (newProject) => {
@@ -87,11 +92,41 @@ export const stateManager = {
         _appState.isLoading = status;
         eventBus.publish('loading:changed', status);
     },
-    setDirty: (status) => {
-        if (_appState.isDirty === status) return;
-        _appState.isDirty = status;
-        eventBus.publish('dirty:changed', status);
+
+    /**
+     * [MODIFIED] Sets the user-facing dirty flag on the project object itself.
+     * @param {boolean} status The new dirty status for the user.
+     */
+    setUserDirty: (status) => {
+        if (!_appState.currentProject) return; // Guard against no project being loaded
+        if (_appState.currentProject.isDirtyForUser === status) return;
+        
+        _appState.currentProject.isDirtyForUser = status; // Set the flag on the project
+        
+        eventBus.publish('userDirty:changed', status);
     },
+
+    /**
+     * Sets the background auto-save dirty flag. This triggers the auto-save mechanism.
+     * @param {boolean} status The new dirty status for auto-save.
+     */
+    setAutoSaveDirty: (status) => {
+        if (_appState.isDirtyForAutoSave === status) return;
+        _appState.isDirtyForAutoSave = status;
+        if (status) {
+            eventBus.publish('autosave:required');
+        }
+    },
+    
+    /**
+     * This is now the main function to call when any data changes.
+     * It marks the project as dirty for both the user and the auto-save system.
+     */
+    updateAndPersistState: () => {
+        stateManager.setUserDirty(true);
+        stateManager.setAutoSaveDirty(true);
+    },
+    
     setAllModels: (models) => {
         _appState.allProviderModels = models.sort((a, b) => a.name.localeCompare(b.name));
         if (_appState.currentProject && _appState.currentProject.globalSettings) {
@@ -111,14 +146,5 @@ export const stateManager = {
         }
     },
     
-    /**
-     * [MODIFIED] This function now ONLY marks the project state as dirty.
-     * The actual saving is handled by a debounced listener in main.js
-     * which listens for the 'dirty:changed' event.
-     */
-    updateAndPersistState() {
-        this.setDirty(true);
-    },
-
     bus: eventBus
 };

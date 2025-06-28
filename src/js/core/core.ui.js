@@ -1,6 +1,6 @@
 // ===============================================
-// FILE: src/js/core/core.ui.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขฟังก์ชัน makeSidebarResizable ให้ทำงานได้อย่างถูกต้อง
+// FILE: src/js/core/core.ui.js (แก้ไขสมบูรณ์)
+// DESCRIPTION: เรียกใช้ makeSidebarResizable() เพื่อให้ resizer กลับมาทำงาน
 // ===============================================
 
 import { stateManager } from './core.state.js';
@@ -36,11 +36,9 @@ export function toggleSidebarCollapse() { document.querySelector('.app-wrapper')
 export function toggleDropdown(event) {
     event.stopPropagation();
     const dropdown = event.currentTarget.closest('.dropdown');
-    // This function can be called by elements not in an '.item' context
     const parentItem = event.currentTarget.closest('.item');
     const wasOpen = dropdown.classList.contains('open');
     
-    // Close all other dropdowns first
     document.querySelectorAll('.dropdown.open').forEach(d => {
         d.classList.remove('open');
         const parent = d.closest('.item');
@@ -49,7 +47,6 @@ export function toggleDropdown(event) {
 
     if (!wasOpen) {
         dropdown.classList.add('open');
-        // Add z-index class only if the dropdown is inside an item
         if (parentItem) {
             parentItem.classList.add('z-index-front');
         }
@@ -66,13 +63,11 @@ export function applyFontSettings() {
 export function updateStatus({ message, state }) {
     document.getElementById('statusText').textContent = message || 'Ready';
     const dot = document.getElementById('statusDot');
-    dot.className = 'status-dot'; // Reset classes
+    dot.className = 'status-dot';
     if (state === 'connected') dot.classList.add('connected');
     else if (state === 'error') dot.classList.add('error');
-    else if (state === 'loading') { /* Let the loading animation handle it */ }
 }
 
-// [REIMPLEMENTED] The full, correct logic for the resizable sidebar.
 export function makeSidebarResizable() {
     const verticalResizer = document.querySelector('.sidebar-resizer');
     const horizontalResizer = document.querySelector('.sidebar-horizontal-resizer');
@@ -88,7 +83,6 @@ export function makeSidebarResizable() {
     let isVerticalResizing = false;
     let isHorizontalResizing = false;
 
-    // --- Vertical Resizing (between sessions and memories) ---
     const verticalMoveHandler = (e) => {
         if (!isVerticalResizing) return;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -132,7 +126,6 @@ export function makeSidebarResizable() {
     verticalResizer.addEventListener('mousedown', startVerticalResizing);
     verticalResizer.addEventListener('touchstart', startVerticalResizing, { passive: false });
 
-    // --- Horizontal Resizing (the whole sidebar) ---
     const horizontalMoveHandler = (e) => {
         if (!isHorizontalResizing) return;
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -141,7 +134,6 @@ export function makeSidebarResizable() {
         if (newWidth < 250) newWidth = 250;
         if (newWidth > 600) newWidth = 600;
 
-        // THE FIX: Use flex-basis to work with the flexbox layout
         sidebar.style.flexBasis = `${newWidth}px`;
     };
 
@@ -170,7 +162,6 @@ export function makeSidebarResizable() {
     horizontalResizer.addEventListener('mousedown', startHorizontalResizing);
     horizontalResizer.addEventListener('touchstart', startHorizontalResizing, { passive: false });
 
-    // Load saved dimensions
     const savedHeight = localStorage.getItem('sidebarSplitHeight');
     if (savedHeight) {
         sessionsFrame.style.flex = savedHeight;
@@ -183,68 +174,43 @@ export function makeSidebarResizable() {
 
 
 export function initCoreUI() {
-    // --- Subscribe to events from the stateManager to update UI ---
+    // Subscriptions
     stateManager.bus.subscribe('ui:applyFontSettings', applyFontSettings);
     stateManager.bus.subscribe('status:update', updateStatus);
-    stateManager.bus.subscribe('dirty:changed', (isDirty) => {
-        const projectTitleEl = document.getElementById('project-title');
-        if (projectTitleEl) {
-            const baseName = projectTitleEl.textContent.replace(' *', '');
-            projectTitleEl.textContent = isDirty ? `${baseName} *` : baseName;
-        }
-    });
 
-    // --- Assign Event Listeners that PUBLISH events ---
+    // Core Event Listeners
     document.querySelector('#settings-btn').addEventListener('click', toggleSettingsPanel);
     document.querySelector('.close-settings-btn').addEventListener('click', toggleSettingsPanel);
-    
-    // Global click listener to close dropdowns
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.dropdown')) {
-            document.querySelectorAll('.dropdown.open').forEach(d => {
-                d.classList.remove('open');
-                const parentItem = d.closest('.item');
-                if (parentItem) parentItem.classList.remove('z-index-front');
-            });
-        }
-    });
-
-    document.querySelector('#save-project-modal .btn-secondary').addEventListener('click', hideSaveProjectModal);
-    document.getElementById('alert-modal').querySelector('.btn').addEventListener('click', hideCustomAlert);
-
-    document.querySelector('#save-project-modal .btn:not(.btn-secondary)').addEventListener('click', () => {
-        const projectName = document.getElementById('project-name-input').value;
-        stateManager.bus.publish('project:saveConfirm', { projectName });
-    });
-    
-    document.querySelector('#unsaved-changes-modal .btn-secondary').addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'cancel'));
-    document.querySelector('#unsaved-changes-modal .btn-danger').addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'discard'));
-    document.querySelector('#unsaved-changes-modal .btn:not(.btn-secondary):not(.btn-danger)').addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'save'));
-
-    document.getElementById('hamburger-btn').addEventListener('click', toggleMobileSidebar);
-    document.getElementById('mobile-overlay').addEventListener('click', toggleMobileSidebar);
     document.getElementById('collapse-sidebar-btn').addEventListener('click', toggleSidebarCollapse);
     
-    document.getElementById('load-models-btn').addEventListener('click', () => stateManager.bus.publish('api:loadModels'));
-    document.getElementById('fontFamilySelect').addEventListener('change', (e) => stateManager.bus.publish('settings:fontChanged', e.target.value));
-    document.getElementById('apiKey').addEventListener('change', (e) => stateManager.bus.publish('settings:apiKeyChanged', e.target.value));
-    document.getElementById('ollamaBaseUrl').addEventListener('change', (e) => stateManager.bus.publish('settings:ollamaUrlChanged', e.target.value));
-    
-    document.getElementById('system-utility-model-select').addEventListener('change', () => stateManager.bus.publish('settings:systemAgentChanged'));
-    document.getElementById('system-utility-prompt').addEventListener('change', () => stateManager.bus.publish('settings:systemAgentChanged'));
-    document.getElementById('system-utility-summary-prompt').addEventListener('change', () => stateManager.bus.publish('settings:systemAgentChanged'));
-    document.getElementById('system-utility-temperature').addEventListener('change', () => stateManager.bus.publish('settings:systemAgentChanged'));
-    document.getElementById('system-utility-topP').addEventListener('change', () => stateManager.bus.publish('settings:systemAgentChanged'));
-    
-    // Connect summarization preset events
-    document.getElementById('system-utility-summary-preset-select').addEventListener('change', () => stateManager.bus.publish('settings:summaryPresetChanged'));
-    
-    // [MODIFIED] Correctly connect the new menu buttons
-    const summaryMenuBtn = document.getElementById('summary-preset-menu-btn');
-    if (summaryMenuBtn) {
-        summaryMenuBtn.addEventListener('click', toggleDropdown);
+    // Mobile UI Listeners
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    if (hamburgerBtn) {
+        hamburgerBtn.addEventListener('click', toggleMobileSidebar);
+    }
+    const mobileOverlay = document.getElementById('mobile-overlay');
+    if (mobileOverlay) {
+        mobileOverlay.addEventListener('click', toggleMobileSidebar);
     }
     
+    // Modal Close Buttons
+    const alertCloseBtn = document.querySelector('#alert-modal .btn');
+    if(alertCloseBtn) {
+        alertCloseBtn.addEventListener('click', hideCustomAlert);
+    }
+    const unsavedModal = document.getElementById('unsaved-changes-modal');
+    if (unsavedModal) {
+        const saveBtn = unsavedModal.querySelector('.btn:not(.btn-secondary):not(.btn-danger)');
+        if(saveBtn) saveBtn.addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'save'));
+
+        const discardBtn = unsavedModal.querySelector('.btn-danger');
+        if(discardBtn) discardBtn.addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'discard'));
+
+        const cancelBtn = unsavedModal.querySelector('.btn-secondary');
+        if(cancelBtn) cancelBtn.addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'cancel'));
+    }
+    
+    // [FIX] Call the resizer setup function
     makeSidebarResizable();
     
     console.log("Core UI Initialized and Listeners Attached.");

@@ -1,6 +1,6 @@
 /* ===============================================
-   FILE: src/styles/layout/_sidebar.css
-   DESCRIPTION: Styles for the main sidebar container and its contents.
+   FILE: src/styles/layout/_sidebar.css (แก้ไขสมบูรณ์)
+   DESCRIPTION: ปรับสัดส่วนและดีไซน์ของ Resizer
    =============================================== */
 
 .sidebar {
@@ -78,7 +78,7 @@
 }
 
 .sessions-frame {
-    flex: 1 1 55%;
+    flex: 1 1 50%; /* [FIX] Set to 50% for an equal split */
     min-height: 100px;
     overflow-y: auto;
     display: flex;
@@ -86,7 +86,7 @@
 }
 
 .memories-frame {
-    flex: 1 1 45%;
+    flex: 1 1 50%; /* [FIX] Set to 50% for an equal split */
     min-height: 100px;
     overflow-y: auto;
     display: flex;
@@ -94,26 +94,27 @@
 }
 
 .sidebar-resizer {
-    flex: 0 0 8px;
+    flex: 0 0 5px; /* [FIX] Made the resizer thinner */
     cursor: ns-resize;
-    background: #e2e8f0;
-    border-top: 1px solid #d1d5db;
-    border-bottom: 1px solid #d1d5db;
+    background: transparent; /* [FIX] Make it invisible by default */
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
+    transition: background .2s ease;
 }
 
 .sidebar-resizer:hover {
     background: var(--primary-color);
-    opacity: 0.3;
+    opacity: 0.4;
 }
 
 .sidebar-horizontal-resizer {
-    width: 8px;
+    width: 5px; /* [FIX] Made the resizer thinner */
     cursor: ew-resize;
     background: transparent;
     position: absolute;
     top: 0;
-    right: -4px;
+    right: -2.5px; /* [FIX] Adjusted position */
     height: 100%;
     z-index: 1101;
     transition: background .2s ease;
@@ -121,6 +122,7 @@
 
 .sidebar-horizontal-resizer:hover {
     background: var(--primary-color);
+    opacity: 0.6;
 }
 
 .mobile-overlay {

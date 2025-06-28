@@ -1,13 +1,19 @@
 // ===============================================
-// FILE: src/js/modules/project/project.handlers.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขการบันทึกและโหลดโปรเจกต์ให้ถูกต้อง
+// FILE: src/js/modules/project/project.handlers.js (แก้ไขสมบูรณ์)
+// DESCRIPTION: แก้ไขการจัดการ Dirty State ให้ถูกบันทึกและโหลดอย่างถูกต้อง
 // ===============================================
 
 import {
-    stateManager, defaultAgentSettings, defaultMemories, defaultSystemUtilityAgent,
-    defaultSummarizationPresets, METADATA_KEY, SESSIONS_STORE_NAME, METADATA_STORE_NAME
+    stateManager,
+    defaultAgentSettings,
+    defaultMemories,
+    defaultSystemUtilityAgent,
+    defaultSummarizationPresets,
+    METADATA_KEY,
+    SESSIONS_STORE_NAME,
+    METADATA_STORE_NAME
 } from '../../core/core.state.js';
-import { openDb, dbRequest, clearObjectStores, getDb } from '../../core/core.db.js';
+import { openDb, dbRequest, clearObjectStores } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showSaveProjectModal, hideSaveProjectModal, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
 import { createNewChatSession, loadChatSession, saveAllSessions } from '../session/session.handlers.js';
@@ -19,18 +25,18 @@ export function initializeFirstProject() {
     return {
         id: projectId,
         name: "Untitled Project",
+        isDirtyForUser: false, // [FIX] Initialize the dirty flag within the project object
         activeEntity: { type: 'agent', name: defaultAgentName },
         agentPresets: { [defaultAgentName]: { ...defaultAgentSettings, model: '', activeMemories: [] } },
         agentGroups: {},
         memories: JSON.parse(JSON.stringify(defaultMemories)),
         chatSessions: [],
-        activeSessionId: null, // Start with no active session
+        activeSessionId: null,
         summaryLogs: [],
         globalSettings: {
             fontFamilySelect: "'Sarabun', sans-serif",
             apiKey: "",
             ollamaBaseUrl: "http://localhost:11434",
-            allModels: [],
             systemUtilityAgent: { ...defaultSystemUtilityAgent },
             summarizationPromptPresets: JSON.parse(JSON.stringify(defaultSummarizationPresets))
         }
@@ -38,14 +44,20 @@ export function initializeFirstProject() {
 }
 
 export async function proceedWithCreatingNewProject() {
-  const newProject = initializeFirstProject();
-  await openDb(newProject.id);
-  await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
-  await loadProjectData(newProject, true); // Pass true to write the new project to the DB
+  try {
+    const newProject = initializeFirstProject();
+    await openDb(newProject.id);
+    await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
+    // [FIX] Pass `isFromFile` as true to indicate this is a clean state
+    await loadProjectData(newProject, true);
+  } catch (error) {
+    console.error("Failed to proceed with creating new project:", error);
+    showCustomAlert("Could not create a new project. Please check console for errors.", "Error");
+  }
 }
 
 export function createNewProject() {
-    if (stateManager.isDirty()) {
+    if (stateManager.isUserDirty()) {
         stateManager.setState('pendingActionAfterSave', 'new');
         showUnsavedChangesModal();
     } else {
@@ -58,7 +70,7 @@ export function handleFileSelectedForOpen(event) {
     if (!file) return;
     stateManager.setState('pendingFileToOpen', file);
     event.target.value = '';
-    if (stateManager.isDirty()) {
+    if (stateManager.isUserDirty()) {
         stateManager.setState('pendingActionAfterSave', 'open');
         showUnsavedChangesModal();
     } else {
@@ -67,10 +79,15 @@ export function handleFileSelectedForOpen(event) {
 }
 
 export function proceedWithOpeningProject() {
-    const fileToOpen = stateManager.getState().pendingFileToOpen;
-    if (!fileToOpen) return;
-    _loadProjectFromFile(fileToOpen);
-    stateManager.setState('pendingFileToOpen', null);
+    try {
+        const fileToOpen = stateManager.getState().pendingFileToOpen;
+        if (!fileToOpen) return;
+        _loadProjectFromFile(fileToOpen);
+        stateManager.setState('pendingFileToOpen', null);
+    } catch(error) {
+        console.error("Failed to proceed with opening project:", error);
+        showCustomAlert("Could not open the project file.", "Error");
+    }
 }
 
 export async function saveProject(saveAs = false) {
@@ -92,11 +109,11 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
     project.name = newName;
     stateManager.bus.publish('project:nameChanged', newName);
     
-    // First, ensure the current state is saved to IndexedDB
-    await persistCurrentProject();
+    // We will set the dirty flag to false *before* saving the file,
+    // so the file itself contains `isDirtyForUser: false`.
+    stateManager.setUserDirty(false);
     
-    // Now, prepare the data for file download
-    let projectToSave = JSON.parse(JSON.stringify(project));
+    let projectToSave = JSON.parse(JSON.stringify(stateManager.getProject()));
     projectToSave = migrateProjectData(projectToSave);
     try {
         const dataStr = JSON.stringify(projectToSave, null, 2);
@@ -111,43 +128,66 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
         document.body.removeChild(a);
         
         hideSaveProjectModal();
-        // Since we just saved everything, the state is no longer dirty.
-        stateManager.setDirty(false);
+        
+        // Now that the project is successfully saved to a file,
+        // the auto-save state can also be considered clean.
+        stateManager.setAutoSaveDirty(false);
+
+        // [FIX] Persist the now-clean project state back to the database
+        await persistCurrentProject();
+
+        // [FIX] Check for and perform any pending action (like 'new' or 'open')
+        if (stateManager.getState().pendingActionAfterSave) {
+            await performPendingAction();
+        }
+
         return true;
     } catch (error) {
         console.error("Failed to save project:", error);
         showCustomAlert('Failed to save project file.', 'Error');
+        // If saving fails, revert the dirty flag back to true
+        stateManager.setUserDirty(true);
         return false;
     }
 }
 
 export async function handleUnsavedChanges(choice) {
     hideUnsavedChangesModal();
-    switch (choice) {
-        case 'save':
-            const saved = await saveProject(false); 
-            if (saved) performPendingAction();
-            break;
-        case 'discard':
-            stateManager.setDirty(false);
-            performPendingAction();
-            break;
-        case 'cancel':
-        default:
-            stateManager.setState('pendingFileToOpen', null);
-            stateManager.setState('pendingActionAfterSave', null);
-            break;
+    try {
+        switch (choice) {
+            case 'save':
+                // `saveProject` will pop a modal if needed, or save directly.
+                // The new logic in `handleProjectSaveConfirm` will then trigger the pending action.
+                await saveProject(false);
+                break;
+            case 'discard':
+                stateManager.setUserDirty(false);
+                // [FIX] Persist the clean state to DB *before* performing the next action
+                await persistCurrentProject();
+                await performPendingAction();
+                break;
+            case 'cancel':
+            default:
+                stateManager.setState('pendingFileToOpen', null);
+                stateManager.setState('pendingActionAfterSave', null);
+                break;
+        }
+    } catch (error) {
+        console.error("Error handling unsaved changes choice:", error);
+        showCustomAlert(`An error occurred while performing the action: ${error.message}`, "Error");
+        stateManager.setState('pendingFileToOpen', null);
+        stateManager.setState('pendingActionAfterSave', null);
     }
 }
 
-export function performPendingAction() {
+export async function performPendingAction() {
     const action = stateManager.getState().pendingActionAfterSave;
+    stateManager.setState('pendingActionAfterSave', null); // Clear action first
     if (action === 'open') {
-        proceedWithOpeningProject();
+        await proceedWithOpeningProject();
     } else if (action === 'new') {
-        proceedWithCreatingNewProject();
+        await proceedWithCreatingNewProject();
     }
-    stateManager.setState('pendingActionAfterSave', null);
 }
 
 async function _loadProjectFromFile(file) {
@@ -156,11 +196,10 @@ async function _loadProjectFromFile(file) {
         try {
             const data = JSON.parse(e.target.result);
             if (data && data.id && data.name && data.agentPresets) {
-                await loadProjectData(data, true); // Always overwrite DB when loading from file
+                // [FIX] Pass `isFromFile` as true to indicate a clean state
+                await loadProjectData(data, true); 
                 showCustomAlert(`Project '${data.name}' loaded successfully!`, 'Project Loaded');
-            } else {
-                throw new Error('Invalid project file format.');
-            }
+            } else { throw new Error('Invalid project file format.'); }
         } catch (error) {
             showCustomAlert(`Error loading project: ${error.message}`, 'Error');
             console.error(error);
@@ -169,41 +208,42 @@ async function _loadProjectFromFile(file) {
     reader.readAsText(file);
 }
 
-// [MODIFIED] This function now correctly loads a project from the DB.
 export async function loadLastProject(lastProjectId) {
     if (!lastProjectId) {
         throw new Error("Cannot load last project: Project ID is missing.");
     }
-    try {
-        await openDb(lastProjectId);
-        const wrapperObject = await dbRequest(METADATA_STORE_NAME, 'readonly', 'get', METADATA_KEY);
-        
-        if (wrapperObject && wrapperObject.data && wrapperObject.data.id === lastProjectId) {
-            const storedObject = wrapperObject.data;
-            const sessions = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'getAll');
-            const lastProject = { ...storedObject, chatSessions: sessions || [] };
-            await loadProjectData(lastProject, false); // false = don't overwrite DB, just load state
-            console.log("Successfully loaded the last active project from IndexedDB.");
-        } else {
-            throw new Error("Project data in DB is invalid or mismatched with last known ID.");
-        }
-    } catch (error) {
-        console.error("Failed to load last project from DB, creating a new one.", error);
-        localStorage.removeItem('lastActiveProjectId');
-        await proceedWithCreatingNewProject();
+    await openDb(lastProjectId);
+    const wrapperObject = await dbRequest(METADATA_STORE_NAME, 'readonly', 'get', METADATA_KEY);
+    
+    if (wrapperObject && wrapperObject.data && wrapperObject.data.id === lastProjectId) {
+        const storedObject = wrapperObject.data;
+        const sessions = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'getAll');
+        const lastProject = { ...storedObject, chatSessions: sessions || [] };
+        // [FIX] Pass `isFromFile` as false to preserve dirty state from DB
+        await loadProjectData(lastProject, false);
+        console.log("Successfully loaded the last active project from IndexedDB.");
+    } else {
+        throw new Error("Project data in DB is invalid or mismatched with last known ID.");
     }
 }
 
-export async function loadProjectData(projectData, overwriteDb = false) {
+export async function loadProjectData(projectData, isFromFile = false) {
     const migratedProject = migrateProjectData(projectData);
     await openDb(migratedProject.id);
 
-    if (overwriteDb) {
+    // If loading from a file, it's a clean save point.
+    if (isFromFile) {
+        migratedProject.isDirtyForUser = false;
         await rewriteDatabaseWithProjectData(migratedProject);
     }
 
     stateManager.setProject(migratedProject);
     await loadGlobalSettings();
+    
+    // [FIX] Publish the dirty status that was just loaded from the project object
+    stateManager.bus.publish('userDirty:changed', stateManager.isUserDirty());
+    // Auto-save state is clean because the DB and app state are now synced.
+    stateManager.setAutoSaveDirty(false); 
     
     if (migratedProject.globalSettings.apiKey || migratedProject.globalSettings.ollamaBaseUrl) {
         await loadAllProviderModels();
@@ -219,14 +259,6 @@ export async function loadProjectData(projectData, overwriteDb = false) {
     }
 
     stateManager.bus.publish('project:loaded', { projectData: migratedProject });
-    
-    if (migratedProject.activeEntity) {
-        requestAnimationFrame(() => {
-            scrollToLinkedEntity(migratedProject.activeEntity.type, migratedProject.activeEntity.name);
-        });
-    }
-
-    stateManager.setDirty(false); // Start with a clean state
     localStorage.setItem('lastActiveProjectId', migratedProject.id);
 }
 
@@ -249,21 +281,20 @@ export async function persistProjectMetadata(project) {
     await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', wrapperObject);
 }
 
-// [MODIFIED] This is the core auto-save function, now called via debounce
 export async function persistCurrentProject() {
     const project = stateManager.getProject();
-    if (!project || !project.id || !stateManager.isDirty()) {
-        return; // Don't save if there's no project or no changes
+    if (!project || !project.id) {
+        return false;
     }
     console.log('[AutoSave] Persisting project to IndexedDB...');
     try {
         await persistProjectMetadata();
         await saveAllSessions();
-        stateManager.setDirty(false); // Clear dirty state *after* successful save
         console.log('[AutoSave] Project state successfully persisted.');
+        return true;
     } catch (error) {
         console.error('[AutoSave] Failed to persist project state:', error);
-        // Optionally, show a non-intrusive error to the user
+        return false;
     }
 }
 
@@ -320,7 +351,10 @@ export function saveSystemUtilityAgentSettings() {
 }
 
 export function migrateProjectData(projectData) {
-    // This is a placeholder for future migrations.
+    // Ensure the isDirtyForUser flag exists
+    if (typeof projectData.isDirtyForUser === 'undefined') {
+        projectData.isDirtyForUser = true; // Assume dirty if flag is missing
+    }
     return projectData;
 }
 
@@ -332,7 +366,6 @@ export async function selectEntity(type, name) {
         if (activeSession.groupChatState) activeSession.groupChatState.isRunning = false;
         activeSession.linkedEntity = { ...project.activeEntity };
         activeSession.updatedAt = Date.now();
-        // The change to the session will be saved by the debounced auto-save
     }
     stateManager.setProject(project);
     stateManager.updateAndPersistState();

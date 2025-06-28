@@ -1,17 +1,18 @@
 /* ===============================================
-   FILE: src/styles/components/_item-list.css
-   DESCRIPTION: Shared styles for list items (Sessions, Agents, etc.).
+   FILE: src/styles/components/_item-list.css (แก้ไขสมบูรณ์)
+   DESCRIPTION: เพิ่มขนาด Font และปรับสไตล์สีสำหรับ Item ประเภทต่างๆ
    =============================================== */
 
 .item-list > .item {
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     margin-bottom: 4px;
     transition: all 0.2s ease;
     position: relative;
     cursor: pointer;
+    border-left-width: 1px; /* Default border width */
 }
 
 .item-list > .item.active {
@@ -24,8 +25,31 @@
     background-color: #f0e6ff;
 }
 
-/* This class temporarily raises the z-index of an item
-   so its dropdown menu appears above other items. */
+/* --- Archived Session Styling --- */
+.item-list > .session-item.archived {
+    background-color: #f8f9fa;
+}
+.session-item.archived .item-name {
+    color: #6c757d;
+}
+.session-item.archived .item-icon {
+    opacity: 0.6;
+}
+
+/* --- Agent Group Styling --- */
+.item-list > .group-item {
+    background-color: #f0f4f8;
+    border-left: 3px solid var(--primary-color);
+    padding-left: 8px; /* Adjust padding to compensate for border */
+}
+
+/* --- Inactive Memory Styling --- */
+.memory-item.inactive .item-name {
+    color: #6c757d;
+}
+
+
+/* --- Other Styles --- */
 .item.z-index-front {
     z-index: 1105;
 }
@@ -38,7 +62,7 @@
 
 .item-name {
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: 0.9rem; /* [FIX] Increased font size */
     flex-grow: 1;
     padding-right: 10px;
     overflow: hidden;
@@ -59,7 +83,6 @@
     align-items: center;
 }
 
-/* Specific item types */
 .collapsible-section summary {
     cursor: pointer;
     font-weight: 500;
@@ -78,7 +101,7 @@
 }
 
 .memory-item {
-    padding: 4px 8px;
+    padding: 3px 8px;
 }
 
 .memory-item .item-header {
@@ -87,7 +110,7 @@
 
 .memory-item .item-name {
     font-weight: normal;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     cursor: default;
 }
 

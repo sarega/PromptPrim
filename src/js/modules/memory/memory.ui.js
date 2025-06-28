@@ -1,6 +1,6 @@
 // ===============================================
 // FILE: src/js/modules/memory/memory.ui.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขการแสดงผลของ Inactive Memories
+// DESCRIPTION: เพิ่ม class 'inactive' สำหรับ memory ที่ไม่ได้ใช้งาน
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -14,6 +14,9 @@ function createMemoryElement(memory, isActive) {
     const project = stateManager.getProject();
     const itemDiv = document.createElement('div');
     itemDiv.className = `item memory-item`;
+    if (!isActive) {
+        itemDiv.classList.add('inactive'); // [FIX] Add class for inactive memories
+    }
     itemDiv.dataset.name = memory.name;
     const memoryIndex = project.memories.findIndex(m => m.name === memory.name);
 
@@ -86,12 +89,7 @@ export function loadAndRenderMemories() {
         if(memory) inactiveList.appendChild(createMemoryElement(memory, false));
     });
 
-    // [FIX] Use classList to toggle visibility, respecting the CSS `!important` rule.
-    if (inactiveMemories.length > 0) {
-        inactiveSection.classList.remove('hidden');
-    } else {
-        inactiveSection.classList.add('hidden');
-    }
+    inactiveSection.classList.toggle('hidden', inactiveMemories.length === 0);
     
     if (memorySortable) memorySortable.destroy();
     memorySortable = new Sortable(activeList, {
@@ -140,7 +138,6 @@ export function initMemoryUI() {
     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
 
     // --- Setup Event Listeners ---
-    // [FIX] Use a more robust selector to find the correct dropdown menu
     const memorySection = document.querySelector('#memories-container')?.closest('details.collapsible-section');
     if (memorySection) {
         const dropdownToggleButton = memorySection.querySelector('.section-header .dropdown button');
@@ -171,7 +168,6 @@ export function initMemoryUI() {
         stateManager.bus.publish('memory:fileSelectedForImport', e)
     });
 
-    // Modal Buttons Listeners
     document.querySelector('#memory-editor-modal .btn-secondary').addEventListener('click', hideMemoryEditor);
     document.querySelector('#memory-editor-modal .btn:not(.btn-secondary)').addEventListener('click', () => {
         stateManager.bus.publish('memory:save');

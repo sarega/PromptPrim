@@ -1,6 +1,6 @@
 /* ===============================================
-   FILE: src/styles/responsive/_main.css
-   DESCRIPTION: All media queries for responsive design.
+   FILE: src/styles/responsive/_main.css (แก้ไขสมบูรณ์)
+   DESCRIPTION: คืนค่าความกว้างของ Sidebar บน Mobile ให้เป็นค่าดั้งเดิม
    =============================================== */
 
 /* --- Tablet and Mobile Layout --- */
@@ -9,8 +9,8 @@
         position: fixed;
         left: 0;
         top: 0;
-        width: 320px;
-        max-width: 85vw;
+        width: 320px; /* [FIX] Reverted to original, wider value */
+        max-width: 85vw; /* [FIX] Reverted to original, wider value */
         min-width: unset;
         transform: translateX(-100%);
         box-shadow: 4px 0 15px rgba(0,0,0,0.1);
@@ -34,19 +34,6 @@
 
 /* --- Mobile Specific UX --- */
 @media (max-width: 768px) {
-    #status-panel.is-collapsed {
-        height: 32px;
-        padding-top: 0;
-        padding-bottom: 0;
-    }
-    #status-panel.is-collapsed .status-right,
-    #status-panel.is-collapsed #context-inspector-trigger-btn {
-        display: none;
-    }
-    #status-panel.is-collapsed .status-left {
-        flex-grow: 1;
-    }
-
     .custom-select-wrapper {
         min-width: 150px;
     }
@@ -54,6 +41,22 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    
+    #status-panel.is-collapsed {
+        height: 34px;
+        padding-top: 0;
+        padding-bottom: 0;
+        cursor: default;
+    }
+
+    #status-panel.is-collapsed .status-right,
+    #status-panel.is-collapsed #context-inspector-trigger-btn {
+        display: none;
+    }
+
+    #status-panel.is-collapsed .status-left {
+        flex-grow: 1;
     }
 }
 

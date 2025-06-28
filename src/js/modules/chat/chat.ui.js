@@ -1,6 +1,7 @@
 // ===============================================
-// FILE: src/js/modules/chat/chat.ui.js (แก้ไขแล้ว)
-// DESCRIPTION: เพิ่ม Logic สำหรับจัดการการซ่อน/แสดง Header และ Footer บนมือถือ
+// FILE: src/js/modules/chat/chat.ui.js (Smart UI)
+// DESCRIPTION: Implements a hybrid approach to UI visibility on mobile.
+// The system now checks if content is scrollable before enabling auto-hide.
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -34,36 +35,67 @@ function enhanceCodeBlocks(messageElement) {
 }
 
 /**
- * [NEW] Initializes behavior for hiding/showing header/footer on mobile scroll.
- * This creates a more immersive chat experience on small screens.
+ * Initializes behavior for hiding/showing header/footer on mobile scroll.
+ * This is the "automatic" mode that only runs when content is long enough.
  */
 function initMobileScrollBehavior() {
     const chatArea = document.querySelector('.main-chat-area');
     const messagesContainer = document.getElementById('chatMessages');
+    const statusPanel = document.getElementById('status-panel');
 
-    if (!chatArea || !messagesContainer) {
+    if (!chatArea || !messagesContainer || !statusPanel) {
         console.warn("Mobile scroll behavior cannot be initialized: Elements not found.");
         return;
     }
 
+    let lastScrollTop = 0;
+    const scrollThreshold = 10;
+    const deadZone = 40; 
+
+    // Add a flag to the element to indicate that the listener has been attached
+    if (messagesContainer.dataset.scrollListenerAttached) {
+        return;
+    }
+    messagesContainer.dataset.scrollListenerAttached = 'true';
+
     messagesContainer.addEventListener('scroll', () => {
-        // Only apply this dynamic layout on mobile-sized screens
-        if (window.innerWidth > 768) {
-            chatArea.classList.remove('is-scrolled');
+        // If the smart mode has disabled scrolling behavior, do nothing.
+        if (chatArea.classList.contains('no-autohide')) {
             return;
         }
 
-        const scrollTop = messagesContainer.scrollTop;
-
-        // Add 'is-scrolled' class if user has scrolled down at all (e.g., more than 10px)
-        // This class is used by CSS to hide the header and footer, reclaiming screen space.
-        if (scrollTop > 10) {
-            chatArea.classList.add('is-scrolled');
-        } else {
-            // Remove the class when scrolled back to the top
-            chatArea.classList.remove('is-scrolled');
+        if (window.innerWidth > 768) {
+             chatArea.classList.add('header-visible');
+             statusPanel.classList.remove('is-collapsed');
+            return;
         }
-    }, { passive: true }); // Use passive listener for better scroll performance
+
+        let st = messagesContainer.scrollTop;
+        const isAtBottom = messagesContainer.scrollHeight - st - messagesContainer.clientHeight < deadZone;
+
+        if (isAtBottom) {
+            if (chatArea.classList.contains('header-visible')) {
+                chatArea.classList.remove('header-visible');
+                statusPanel.classList.add('is-collapsed');
+            }
+            lastScrollTop = st;
+            return;
+        }
+        
+        if (Math.abs(st - lastScrollTop) <= scrollThreshold) {
+            return;
+        }
+
+        if (st > lastScrollTop) {
+            chatArea.classList.remove('header-visible');
+            statusPanel.classList.add('is-collapsed');
+        } else {
+            chatArea.classList.add('header-visible');
+            statusPanel.classList.remove('is-collapsed');
+        }
+
+        lastScrollTop = st <= 0 ? 0 : st;
+    }, { passive: true });
 }
 
 
@@ -79,7 +111,7 @@ export function renderChatMessages(){
     if(session) {
         session.history.forEach((m,i)=> addMessageToUI(m.role, m.content, i, m.speaker));
     }
-    container.scrollTop = container.scrollHeight; 
+    // Don't autoscroll yet, let addMessageToUI handle it
     
     updateContextInspector();
 
@@ -88,6 +120,35 @@ export function renderChatMessages(){
         const isSummaryActive = session?.summaryState?.activeSummaryId;
         clearBtn.style.display = isSummaryActive ? 'block' : 'none';
     }
+
+    // [MODIFIED] Smart UI check now happens here.
+    // Use setTimeout to ensure the DOM has updated before checking heights.
+    setTimeout(() => {
+        const chatArea = document.querySelector('.main-chat-area');
+        const statusPanel = document.getElementById('status-panel');
+        if (!chatArea || !statusPanel) return;
+
+        // Check if the content is scrollable
+        const isScrollable = container.scrollHeight > container.clientHeight;
+
+        if (isScrollable) {
+            // Content is long: Enable auto-hide behavior.
+            chatArea.classList.remove('no-autohide');
+            // Check current scroll position to set initial visibility
+            if(container.scrollTop < 10) {
+                 chatArea.classList.add('header-visible');
+                 statusPanel.classList.remove('is-collapsed');
+            } else {
+                 chatArea.classList.remove('header-visible');
+                 statusPanel.classList.add('is-collapsed');
+            }
+        } else {
+            // Content is short or empty: Disable auto-hide and force UI to be visible.
+            chatArea.classList.add('no-autohide'); // This class prevents the scroll listener from acting.
+            chatArea.classList.add('header-visible');
+            statusPanel.classList.remove('is-collapsed');
+        }
+    }, 0);
 }
 
 export function addMessageToUI(role, content, index, speakerName = null, isLoading = false) {
@@ -174,7 +235,10 @@ export function addMessageToUI(role, content, index, speakerName = null, isLoadi
     
     turnWrapper.appendChild(msgDiv);
     container.appendChild(turnWrapper);
+    
+    // Auto-scroll to the bottom when a new message is added.
     container.scrollTop = container.scrollHeight;
+    
     return msgDiv;
 }
 
@@ -251,13 +315,14 @@ export function hideContextInspector() {
 
 export function initChatUI() {
     // --- Subscribe to Events ---
-    stateManager.bus.subscribe('session:loaded', (session) => {
-        document.getElementById('chat-title').textContent = session.name;
-        renderChatMessages();
-    });
+    stateManager.bus.subscribe('session:loaded', renderChatMessages);
     stateManager.bus.subscribe('session:titleChanged', (newName) => { document.getElementById('chat-title').textContent = newName; });
     stateManager.bus.subscribe('ui:renderChatMessages', renderChatMessages);
-    stateManager.bus.subscribe('ui:addMessage', (data) => addMessageToUI(data.role, data.content, data.index, data.speakerName, data.isLoading));
+    stateManager.bus.subscribe('ui:addMessage', (data) => {
+        addMessageToUI(data.role, data.content, data.index, data.speakerName, data.isLoading);
+        // After adding a message, re-evaluate the UI mode
+        renderChatMessages(); 
+    });
     stateManager.bus.subscribe('ui:renderFilePreviews', renderFilePreviews);
     
     stateManager.bus.subscribe('ui:showLoadingIndicator', () => {
@@ -269,10 +334,9 @@ export function initChatUI() {
         document.getElementById('stopBtn').classList.add('hidden');
     });
     
-    stateManager.bus.subscribe('entity:selected', () => updateContextInspector());
+    stateManager.bus.subscribe('entity:selected', updateContextInspector);
     stateManager.bus.subscribe('ui:enhanceCodeBlocks', enhanceCodeBlocks);
 
-    // --- Setup Event Listeners ---
     const chatInput = document.getElementById('chatInput');
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !(e.metaKey || e.ctrlKey)) {
@@ -317,7 +381,6 @@ export function initChatUI() {
 
     document.getElementById('file-input').addEventListener('change', (e) => stateManager.bus.publish('chat:fileUpload', e));
     
-    // [NEW] Activate the mobile scrolling behavior
     initMobileScrollBehavior();
 
     console.log("Chat UI Initialized.");

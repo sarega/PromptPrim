@@ -1,6 +1,6 @@
 // ===============================================
 // FILE: src/js/modules/session/session.ui.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขการแสดงผลของ Archived Sessions section
+// DESCRIPTION: เพิ่ม class 'archived' ให้กับ session ที่ถูกพักไว้
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
@@ -11,7 +11,14 @@ import { toggleDropdown, toggleMobileSidebar } from '../../core/core.ui.js';
 function createSessionElement(session) {
     const project = stateManager.getProject();
     const item = document.createElement('div');
-    item.className = `item session-item ${session.id === project.activeSessionId ? 'active' : ''} ${session.pinned ? 'pinned' : ''}`;
+    // Add base class
+    item.className = 'item session-item';
+    
+    // Add state-specific classes
+    if(session.id === project.activeSessionId) item.classList.add('active');
+    if(session.pinned) item.classList.add('pinned');
+    if(session.archived) item.classList.add('archived'); // [FIX] Add class for archived items
+
     item.dataset.sessionId = session.id;
 
     item.addEventListener('click', () => {
@@ -85,7 +92,6 @@ export function renderSessionList() {
     recentSessions.forEach(session => recentContainer.appendChild(createSessionElement(session)));
     archivedSessions.forEach(session => archivedList.appendChild(createSessionElement(session)));
 
-    // [FIX] Use classList.toggle() to correctly show/hide the section, respecting the CSS `!important` rule.
     archivedSection.classList.toggle('hidden', archivedSessions.length === 0);
 }
 
