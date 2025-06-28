@@ -1,17 +1,16 @@
 // ===============================================
 // FILE: src/js/modules/project/project.handlers.js (แก้ไขแล้ว)
-// DESCRIPTION: แก้ไขฟังก์ชัน loadGlobalSettings ให้โหลดค่าเริ่มต้นของ System Utility Agent
+// DESCRIPTION: แก้ไขการบันทึกและโหลดโปรเจกต์ให้ถูกต้อง
 // ===============================================
 
 import {
     stateManager, defaultAgentSettings, defaultMemories, defaultSystemUtilityAgent,
     defaultSummarizationPresets, METADATA_KEY, SESSIONS_STORE_NAME, METADATA_STORE_NAME
 } from '../../core/core.state.js';
-import { markProjectDirty } from '../../core/core.state.js';
 import { openDb, dbRequest, clearObjectStores, getDb } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showSaveProjectModal, hideSaveProjectModal, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
-import { createNewChatSession, loadChatSession } from '../session/session.handlers.js';
+import { createNewChatSession, loadChatSession, saveAllSessions } from '../session/session.handlers.js';
 import { scrollToLinkedEntity } from './project.ui.js';
 
 export function initializeFirstProject() {
@@ -25,13 +24,13 @@ export function initializeFirstProject() {
         agentGroups: {},
         memories: JSON.parse(JSON.stringify(defaultMemories)),
         chatSessions: [],
+        activeSessionId: null, // Start with no active session
         summaryLogs: [],
         globalSettings: {
             fontFamilySelect: "'Sarabun', sans-serif",
             apiKey: "",
             ollamaBaseUrl: "http://localhost:11434",
             allModels: [],
-            // This is where the default values are correctly assigned to a new project
             systemUtilityAgent: { ...defaultSystemUtilityAgent },
             summarizationPromptPresets: JSON.parse(JSON.stringify(defaultSummarizationPresets))
         }
@@ -39,12 +38,13 @@ export function initializeFirstProject() {
 }
 
 export async function proceedWithCreatingNewProject() {
-    const newProject = initializeFirstProject();
-    await loadProjectData(newProject, true);
+  const newProject = initializeFirstProject();
+  await openDb(newProject.id);
+  await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
+  await loadProjectData(newProject, true); // Pass true to write the new project to the DB
 }
 
 export function createNewProject() {
-    markProjectDirty();
     if (stateManager.isDirty()) {
         stateManager.setState('pendingActionAfterSave', 'new');
         showUnsavedChangesModal();
@@ -91,6 +91,11 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
     const project = stateManager.getProject();
     project.name = newName;
     stateManager.bus.publish('project:nameChanged', newName);
+    
+    // First, ensure the current state is saved to IndexedDB
+    await persistCurrentProject();
+    
+    // Now, prepare the data for file download
     let projectToSave = JSON.parse(JSON.stringify(project));
     projectToSave = migrateProjectData(projectToSave);
     try {
@@ -105,8 +110,8 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
         URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        await persistProjectMetadata();
         hideSaveProjectModal();
+        // Since we just saved everything, the state is no longer dirty.
         stateManager.setDirty(false);
         return true;
     } catch (error) {
@@ -151,7 +156,7 @@ async function _loadProjectFromFile(file) {
         try {
             const data = JSON.parse(e.target.result);
             if (data && data.id && data.name && data.agentPresets) {
-                await loadProjectData(data, true);
+                await loadProjectData(data, true); // Always overwrite DB when loading from file
                 showCustomAlert(`Project '${data.name}' loaded successfully!`, 'Project Loaded');
             } else {
                 throw new Error('Invalid project file format.');
@@ -164,21 +169,26 @@ async function _loadProjectFromFile(file) {
     reader.readAsText(file);
 }
 
+// [MODIFIED] This function now correctly loads a project from the DB.
 export async function loadLastProject(lastProjectId) {
+    if (!lastProjectId) {
+        throw new Error("Cannot load last project: Project ID is missing.");
+    }
     try {
         await openDb(lastProjectId);
         const wrapperObject = await dbRequest(METADATA_STORE_NAME, 'readonly', 'get', METADATA_KEY);
+        
         if (wrapperObject && wrapperObject.data && wrapperObject.data.id === lastProjectId) {
             const storedObject = wrapperObject.data;
             const sessions = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'getAll');
-            const lastProject = { ...storedObject, chatSessions: sessions };
-            await loadProjectData(lastProject, false);
-            console.log("Successfully loaded the last active project.");
+            const lastProject = { ...storedObject, chatSessions: sessions || [] };
+            await loadProjectData(lastProject, false); // false = don't overwrite DB, just load state
+            console.log("Successfully loaded the last active project from IndexedDB.");
         } else {
-            throw new Error("Project data in DB is invalid or mismatched.");
+            throw new Error("Project data in DB is invalid or mismatched with last known ID.");
         }
     } catch (error) {
-        console.error("Failed to load last project, creating a new one.", error);
+        console.error("Failed to load last project from DB, creating a new one.", error);
         localStorage.removeItem('lastActiveProjectId');
         await proceedWithCreatingNewProject();
     }
@@ -187,95 +197,91 @@ export async function loadLastProject(lastProjectId) {
 export async function loadProjectData(projectData, overwriteDb = false) {
     const migratedProject = migrateProjectData(projectData);
     await openDb(migratedProject.id);
+
     if (overwriteDb) {
         await rewriteDatabaseWithProjectData(migratedProject);
     }
+
     stateManager.setProject(migratedProject);
-    await loadGlobalSettings(); // This now correctly populates the UI
-    const project = stateManager.getProject();
-    if (project.globalSettings.apiKey || project.globalSettings.ollamaBaseUrl) {
+    await loadGlobalSettings();
+    
+    if (migratedProject.globalSettings.apiKey || migratedProject.globalSettings.ollamaBaseUrl) {
         await loadAllProviderModels();
     }
-    const existingSessions = project.chatSessions.filter(s => !s.archived);
+
+    const existingSessions = (migratedProject.chatSessions || []).filter(s => !s.archived);
     if (existingSessions.length === 0) {
         await createNewChatSession();
     } else {
-        await loadChatSession(existingSessions.sort((a, b) => b.updatedAt - a.updatedAt)[0].id);
+        const lastActiveSessionId = migratedProject.activeSessionId;
+        const sessionToLoad = existingSessions.find(s => s.id === lastActiveSessionId) || existingSessions.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        await loadChatSession(sessionToLoad.id);
     }
-    stateManager.bus.publish('project:loaded', { projectData: stateManager.getProject() });
-    if (project.activeEntity) {
+
+    stateManager.bus.publish('project:loaded', { projectData: migratedProject });
+    
+    if (migratedProject.activeEntity) {
         requestAnimationFrame(() => {
-            scrollToLinkedEntity(project.activeEntity.type, project.activeEntity.name);
+            scrollToLinkedEntity(migratedProject.activeEntity.type, migratedProject.activeEntity.name);
         });
     }
-    stateManager.setDirty(false);
-    localStorage.setItem('lastActiveProjectId', projectData.id);
+
+    stateManager.setDirty(false); // Start with a clean state
+    localStorage.setItem('lastActiveProjectId', migratedProject.id);
 }
 
 export async function rewriteDatabaseWithProjectData(projectData) {
     await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
-    const db = getDb();
-    if (!db) {
-        console.error("Database connection not available for rewrite.");
+    await persistProjectMetadata(projectData);
+    await saveAllSessions(projectData.chatSessions);
+    console.log("Database has been rewritten with new project data.");
+}
+
+export async function persistProjectMetadata(project) {
+    const projectToPersist = project || stateManager.getProject();
+    if (!projectToPersist || !projectToPersist.id) {
+        console.warn("Cannot persist metadata: project or project ID is missing.");
         return;
     }
-    const tx = db.transaction([SESSIONS_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
-    const sessionStore = tx.objectStore(SESSIONS_STORE_NAME);
-    projectData.chatSessions.forEach(session => sessionStore.put(session));
-    const metadata = { ...projectData };
+    const metadata = { ...projectToPersist };
     delete metadata.chatSessions;
-    tx.objectStore(METADATA_STORE_NAME).put({ id: METADATA_KEY, data: metadata });
-    return new Promise((resolve, reject) => {
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-    });
+    const wrapperObject = { id: METADATA_KEY, data: metadata };
+    await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', wrapperObject);
 }
 
-export async function persistProjectMetadata() {
+// [MODIFIED] This is the core auto-save function, now called via debounce
+export async function persistCurrentProject() {
+    const project = stateManager.getProject();
+    if (!project || !project.id || !stateManager.isDirty()) {
+        return; // Don't save if there's no project or no changes
+    }
+    console.log('[AutoSave] Persisting project to IndexedDB...');
     try {
-        const project = stateManager.getProject();
-        if (!project || !project.id) {
-            console.warn("Cannot persist metadata: project or project ID is missing.");
-            return;
-        }
-
-        const metadata = { ...project };
-        delete metadata.chatSessions;
-
-        const wrapperObject = { id: METADATA_KEY, data: metadata };
-
-        await dbRequest(METADATA_STORE_NAME, 'readwrite', 'put', wrapperObject);
-        console.log("Project metadata persisted to DB.");
-
+        await persistProjectMetadata();
+        await saveAllSessions();
+        stateManager.setDirty(false); // Clear dirty state *after* successful save
+        console.log('[AutoSave] Project state successfully persisted.');
     } catch (error) {
-        console.error("Failed to persist project metadata:", error);
+        console.error('[AutoSave] Failed to persist project state:', error);
+        // Optionally, show a non-intrusive error to the user
     }
 }
 
-// [MODIFIED] แก้ไขฟังก์ชันนี้ให้สมบูรณ์
 export async function loadGlobalSettings() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
-    
     const gs = project.globalSettings;
-    
-    // API and Font settings
     document.getElementById('apiKey').value = gs.apiKey || "";
     document.getElementById('ollamaBaseUrl').value = gs.ollamaBaseUrl || "";
     stateManager.bus.publish('ui:applyFontSettings');
-
-    // System Utility Agent Settings
     const sysAgent = gs.systemUtilityAgent || defaultSystemUtilityAgent;
     document.getElementById('system-utility-model-select').value = sysAgent.model || '';
     document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
     document.getElementById('system-utility-summary-prompt').value = sysAgent.summarizationPrompt || '';
     document.getElementById('system-utility-temperature').value = sysAgent.temperature ?? 1.0;
     document.getElementById('system-utility-topP').value = sysAgent.topP ?? 1.0;
-
-    // Trigger UI update for the summarization preset selector to match the loaded prompt
     stateManager.bus.publish('ui:renderSummarizationSelector');
 }
-
 
 export function handleFontChange(font) {
     const project = stateManager.getProject();
@@ -303,16 +309,13 @@ export function saveSystemUtilityAgentSettings() {
     const project = stateManager.getProject();
     if (!project.globalSettings) return;
     const agentSettings = project.globalSettings.systemUtilityAgent;
-
     agentSettings.model = document.getElementById('system-utility-model-select').value;
     agentSettings.systemPrompt = document.getElementById('system-utility-prompt').value;
     agentSettings.summarizationPrompt = document.getElementById('system-utility-summary-prompt').value;
     agentSettings.temperature = parseFloat(document.getElementById('system-utility-temperature').value);
     agentSettings.topP = parseFloat(document.getElementById('system-utility-topP').value);
-
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-    // After saving, re-render the preset selector to check if the current prompt matches a preset
     stateManager.bus.publish('ui:renderSummarizationSelector');
 }
 
@@ -324,20 +327,16 @@ export function migrateProjectData(projectData) {
 export async function selectEntity(type, name) {
     const project = stateManager.getProject();
     project.activeEntity = { type, name };
-
     const activeSession = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (activeSession) {
         if (activeSession.groupChatState) activeSession.groupChatState.isRunning = false;
         activeSession.linkedEntity = { ...project.activeEntity };
         activeSession.updatedAt = Date.now();
-        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', activeSession);
+        // The change to the session will be saved by the debounced auto-save
     }
-
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-
     stateManager.bus.publish('entity:selected', { type, name });
-
     requestAnimationFrame(() => {
         scrollToLinkedEntity(type, name);
     });

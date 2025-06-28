@@ -1,10 +1,10 @@
 // ===============================================
-// FILE: src/js/modules/session/session.handlers.js
-// DESCRIPTION: No changes needed here, logic is correct.
+// FILE: src/js/modules/session/session.handlers.js (แก้ไขแล้ว)
+// DESCRIPTION: แก้ไขฟังก์ชันการบันทึก Session ลง DB ให้ถูกต้อง
 // ===============================================
 
 import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
-import { dbRequest } from '../../core/core.db.js';
+import { dbRequest, getDb } from '../../core/core.db.js'; // [MODIFIED] Import getDb
 import { showCustomAlert } from '../../core/core.ui.js';
 import { scrollToLinkedEntity } from '../project/project.ui.js';
 
@@ -39,6 +39,10 @@ export async function createNewChatSession() {
         stateManager.setProject(project);
         await loadChatSession(newSession.id);
 
+        // No need to call updateAndPersistState() here, as creating a new session should be saved immediately.
+        // The loadChatSession will handle necessary state updates.
+        stateManager.bus.publish('session:changed'); // Re-render the list
+
     } catch (error) {
         console.error("Failed to create new session in DB:", error);
         showCustomAlert("Error creating new chat.", "Error");
@@ -61,11 +65,12 @@ export async function loadChatSession(id) {
             const firstAgentName = Object.keys(project.agentPresets)[0];
             project.activeEntity = { type: 'agent', name: firstAgentName };
             session.linkedEntity = { ...project.activeEntity };
+            stateManager.updateAndPersistState(); // Mark dirty as we corrected the session
         } else {
              project.activeEntity = null;
         }
         
-        stateManager.setProject(project);
+        stateManager.setProject(project); // Update state with new active session
         stateManager.bus.publish('session:loaded', session);
         
         if (project.activeEntity) {
@@ -88,9 +93,9 @@ export async function renameChatSession(id, e, newNameFromPrompt = null) {
     if (newName && newName.trim()) {
         session.name = newName.trim();
         session.updatedAt = Date.now();
-        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-        
         stateManager.setProject(project);
+        stateManager.updateAndPersistState(); // Mark as dirty, auto-save will handle DB update
+        
         stateManager.bus.publish('session:changed');
         if (id === project.activeSessionId) {
             stateManager.bus.publish('session:titleChanged', newName);
@@ -106,6 +111,7 @@ export async function deleteChatSession(id, e) {
     const sessionIndex = project.chatSessions.findIndex(s => s.id === id);
     if (sessionIndex === -1) return;
 
+    // This action will be saved by the auto-save mechanism
     project.chatSessions.splice(sessionIndex, 1);
     await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'delete', id);
 
@@ -122,6 +128,7 @@ export async function deleteChatSession(id, e) {
         }
     } else {
         stateManager.setProject(project);
+        stateManager.updateAndPersistState(); // Mark as dirty
         stateManager.bus.publish('session:changed');
     }
 }
@@ -134,16 +141,15 @@ export async function togglePinSession(id, event) {
 
     session.pinned = !session.pinned;
     session.updatedAt = Date.now();
-    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-    
     stateManager.setProject(project);
+    stateManager.updateAndPersistState();
     stateManager.bus.publish('session:changed');
 }
 
 export async function cloneSession(id, event) {
     if (event) event.stopPropagation();
     const project = stateManager.getProject();
-    const sessionToClone = await dbRequest(SESSIONS_STORE_NAME, 'readonly', 'get', id);
+    const sessionToClone = project.chatSessions.find(s => s.id === id);
     if (!sessionToClone) {
         showCustomAlert("Error: Could not find session to clone.", "Error");
         return;
@@ -157,10 +163,11 @@ export async function cloneSession(id, event) {
     newSession.pinned = false;
     newSession.archived = false;
 
-    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
     project.chatSessions.unshift(newSession);
+    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
     stateManager.setProject(project);
     await loadChatSession(newSession.id);
+    stateManager.bus.publish('session:changed');
 }
 
 export async function archiveSession(id, event) {
@@ -172,12 +179,12 @@ export async function archiveSession(id, event) {
     session.archived = !session.archived;
     if (session.archived) session.pinned = false; // Unpin if archiving
     session.updatedAt = Date.now();
-    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
     
     if (project.activeSessionId === id && session.archived) {
         project.activeSessionId = null;
         const nextSession = project.chatSessions.find(s => !s.archived);
         stateManager.setProject(project);
+        stateManager.updateAndPersistState(); // Mark dirty
 
         if (nextSession) {
             await loadChatSession(nextSession.id);
@@ -186,6 +193,7 @@ export async function archiveSession(id, event) {
         }
     } else {
         stateManager.setProject(project);
+        stateManager.updateAndPersistState(); // Mark dirty
         stateManager.bus.publish('session:changed');
     }
 }
@@ -221,4 +229,35 @@ export function exportChat(sessionId) {
     a.download = `chat-export-${sessionName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+// [MODIFIED] Correctly saves all sessions to IndexedDB
+export async function saveAllSessions(sessionsToSave) {
+    const sessions = sessionsToSave || stateManager.getProject()?.chatSessions;
+    if (!sessions) return;
+
+    const db = getDb();
+    if (!db) {
+        console.error("[AutoSave] Cannot save sessions, DB not available.");
+        return;
+    }
+
+    const tx = db.transaction(SESSIONS_STORE_NAME, "readwrite");
+    const store = tx.objectStore(SESSIONS_STORE_NAME);
+
+    // Loop and put each session individually
+    for (const session of sessions) {
+        store.put(session);
+    }
+  
+    return new Promise((resolve, reject) => {
+        tx.oncomplete = () => {
+            console.log(`[AutoSave] ${sessions.length} sessions saved to DB.`);
+            resolve();
+        };
+        tx.onerror = () => {
+            console.error('[AutoSave] Error saving sessions:', tx.error);
+            reject(tx.error);
+        };
+    });
 }

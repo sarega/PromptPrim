@@ -1,6 +1,6 @@
 // ===============================================
 // FILE: src/main.js (แก้ไขแล้ว)
-// DESCRIPTION: เพิ่มโค้ดจัดการ Theme กลับเข้ามา และ subscribe event 'summary:delete'
+// DESCRIPTION: แก้ไข Logic การเริ่มต้นแอป, เพิ่ม Debounce สำหรับ Auto-Save
 // ===============================================
 
 // 1. Import CSS
@@ -27,6 +27,28 @@ import * as ChatHandlers from './js/modules/chat/chat.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
 // Summary has no handlers, its logic is in ChatHandlers
 
+// --- [NEW] Debounce Utility Function ---
+/**
+ * Creates a debounced function that delays invoking the provided function
+ * until after `wait` milliseconds have elapsed since the last time the
+ * debounced function was invoked.
+ * @param {Function} func The function to debounce.
+ * @param {number} wait The number of milliseconds to delay.
+ * @returns {Function} Returns the new debounced function.
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+
 // --- Main Application Initialization ---
 async function init() {
     try {
@@ -38,7 +60,6 @@ async function init() {
             gfm: true, breaks: true,
         });
 
-        // [MODIFIED] Initialize theme settings on startup
         initializeTheme();
 
         // Initialize all UI modules first
@@ -54,8 +75,8 @@ async function init() {
         // Then setup all event subscriptions that link UI to handlers
         setupEventSubscriptions();
         
-        // Finally, load the initial project data
-        await ProjectHandlers.proceedWithCreatingNewProject();
+        // [MODIFIED] The startup logic is now handled by the DOMContentLoaded listener below
+        // This function now only handles setup.
 
     } catch (error) {
         console.error("Critical initialization failed:", error);
@@ -70,8 +91,24 @@ async function init() {
 function setupEventSubscriptions() {
     const bus = stateManager.bus;
 
+    // --- [MODIFIED] Debounced Auto-Save ---
+    // This creates a version of the persist function that will only run
+    // 1.5 seconds after the *last* change was made.
+    const debouncedSave = debounce(() => {
+        console.log('[AutoSave] Debounced save triggered.');
+        ProjectHandlers.persistCurrentProject();
+    }, 1500);
+
+    // When the state becomes dirty, trigger the debounced save.
+    // This solves the race condition and improves performance.
+    bus.subscribe('dirty:changed', (isDirty) => {
+        if (isDirty) {
+            debouncedSave();
+        }
+    });
+
     // --- Core & Project ---
-    bus.subscribe('project:persistRequired', ProjectHandlers.persistProjectMetadata);
+    // bus.subscribe('project:persistRequired', ProjectHandlers.persistProjectMetadata); // REMOVED - Replaced by debounced save
     bus.subscribe('project:new', ProjectHandlers.createNewProject);
     bus.subscribe('project:open', () => document.getElementById('load-project-input').click());
     bus.subscribe('project:fileSelectedForOpen', (e) => ProjectHandlers.handleFileSelectedForOpen(e));
@@ -148,7 +185,7 @@ function setupEventSubscriptions() {
     console.log("Event bus subscriptions are set up.");
 }
 
-// --- [NEW] Theme Management Logic ---
+// --- Theme Management Logic ---
 function applyTheme(theme) {
     if (theme === 'system') {
         const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -188,5 +225,27 @@ function initializeTheme() {
     });
 }
 
-// --- Start the application ---
-document.addEventListener('DOMContentLoaded', init);
+// --- [MODIFIED] Start the application ---
+document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Initialize UI and event listeners
+    await init();
+
+    // 2. Determine which project to load
+    try {
+        const lastProjectId = localStorage.getItem('lastActiveProjectId');
+
+        if (lastProjectId) {
+            console.log(`[Startup] Found last project ID: ${lastProjectId}. Loading...`);
+            // This function from project.handlers will open the DB and load all data
+            await ProjectHandlers.loadLastProject(lastProjectId);
+        } else {
+            console.log('[Startup] No saved project found, creating a new one.');
+            // This function creates a fresh project state and DB
+            await ProjectHandlers.proceedWithCreatingNewProject();
+        }
+    } catch (error) {
+        console.error('[Startup Error] Failed to load project, creating a new one as a fallback.', error);
+        localStorage.removeItem('lastActiveProjectId'); // Clear potentially corrupted ID
+        await ProjectHandlers.proceedWithCreatingNewProject();
+    }
+});

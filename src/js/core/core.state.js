@@ -1,6 +1,6 @@
 // ===============================================
 // FILE: src/js/core/core.state.js (แก้ไขแล้ว)
-// DESCRIPTION: เพิ่มฟังก์ชัน updateAndPersistState และแก้ไขการ export ให้สมบูรณ์
+// DESCRIPTION: แก้ไขฟังก์ชัน updateAndPersistState ให้ทำงานถูกต้อง
 // ===============================================
 
 // --- Global Constants & Defaults ---
@@ -112,25 +112,13 @@ export const stateManager = {
     },
     
     /**
-     * [FIXED] Re-implemented this crucial function.
-     * It marks the project as "dirty" (unsaved changes) and
-     * publishes an event that tells the system to persist the data to the database.
+     * [MODIFIED] This function now ONLY marks the project state as dirty.
+     * The actual saving is handled by a debounced listener in main.js
+     * which listens for the 'dirty:changed' event.
      */
     updateAndPersistState() {
         this.setDirty(true);
-        eventBus.publish('project:persistRequired');
     },
 
     bus: eventBus
-};
-// --- markProjectDirty Functions ---
-export function markProjectDirty() {
-    if (stateManager && stateManager.bus && typeof stateManager.bus.publish === 'function') {
-        stateManager.bus.publish('dirty:changed', true);
-    } else {
-        console.warn('[WARN] EventBus not ready. Dirty state not set.');
-    }
-};
-export function markProjectDirtyDeferred() {
-    setTimeout(() => markProjectDirty(), 0);
 };
