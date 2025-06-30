@@ -50,7 +50,7 @@ async function init() {
         SummaryUI.initSummaryUI();
         SettingsUI.initSettingsUI(); // Assuming this exists and is needed
         setupEventSubscriptions();
-        initMobileGestures(); // [NEW] Initialize swipe gestures for mobile
+        initMobileGestures(); // Initialize swipe gestures for mobile
 
     } catch (error) {
         console.error("Critical initialization failed:", error);
@@ -59,45 +59,70 @@ async function init() {
 }
 
 /**
- * [NEW] Initializes swipe-to-open gesture for the sidebar on mobile devices.
+ * [REVISED] Initializes a two-finger swipe-to-open gesture for the sidebar.
+ * This approach avoids conflicts with the native single-finger "back" gesture on iOS
+ * by requiring a multi-touch interaction.
  */
 function initMobileGestures() {
+        // Exit if not on a touch-enabled device.
+    if (!('ontouchstart' in window)) {
+        return;
+    }
+
     const appWrapper = document.querySelector('.app-wrapper');
-    const swipeZoneWidth = 40; // The area on the left edge where a swipe can start (in pixels)
-    const swipeThreshold = 80; // The minimum distance the user must swipe right to trigger the action
+    if (!appWrapper) return;
+    const swipeZoneWidth = 60; // Area on the left edge where the swipe must start (pixels)
+    const swipeThreshold = 80; // Minimum distance for the swipe to be recognized
 
     let touchStartX = 0;
     let touchStartY = 0;
     let isSwiping = false;
-
-    // We listen on the body to catch swipes that start from the very edge.
+    // Listen on the whole body to catch the gesture
     document.body.addEventListener('touchstart', (e) => {
-        // A swipe can only start if the sidebar is currently collapsed and the touch begins on the far left of the screen.
-        if (appWrapper.classList.contains('sidebar-collapsed') && e.touches[0].clientX < swipeZoneWidth) {
+        // A swipe can only start if:
+        // 1. The sidebar is currently collapsed.
+        // 2. Exactly two fingers are used for the touch.
+        // 3. The first finger starts within the swipe zone on the left.
+        if (appWrapper.classList.contains('sidebar-collapsed') &&
+            e.touches.length === 2 &&
+            e.touches[0].clientX < swipeZoneWidth) {
+            
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
             isSwiping = true;
         }
     }, { passive: true });
-
     document.body.addEventListener('touchmove', (e) => {
-        if (!isSwiping) return;
-        // To avoid interfering with vertical scrolling, we cancel the swipe if it's more vertical than horizontal.
-        if (Math.abs(e.touches[0].clientY - touchStartY) > Math.abs(e.touches[0].clientX - touchStartX)) {
+        if (!isSwiping || e.touches.length !== 2) {
+            // If we are no longer swiping or the finger count changed, cancel.
+            isSwiping = false;
+            return;
+        }
+
+        // To avoid interfering with two-finger scrolling/zooming,
+        // we cancel the swipe if it's more vertical than horizontal.
+        const touchCurrentX = e.touches[0].clientX;
+        const touchCurrentY = e.touches[0].clientY;
+        if (Math.abs(touchCurrentY - touchStartY) > Math.abs(touchCurrentX - touchStartX)) {
             isSwiping = false;
         }
     }, { passive: true });
 
     document.body.addEventListener('touchend', (e) => {
         if (!isSwiping) return;
+        
+        const touchEndX = e.changedTouches[0].clientX;
         isSwiping = false;
-        if (e.changedTouches[0].clientX - touchStartX > swipeThreshold) {
+
+        if (touchEndX - touchStartX > swipeThreshold) {
             const hamburgerBtn = document.getElementById('hamburger-btn');
-            if (hamburgerBtn) hamburgerBtn.click();
+            if (hamburgerBtn) {
+                hamburgerBtn.click();
+            }
         }
     });
-}
 
+}
 
 // --- Event Bus Setup ---
 function setupEventSubscriptions() {
