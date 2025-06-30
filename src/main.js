@@ -27,22 +27,6 @@ import * as ChatHandlers from './js/modules/chat/chat.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
 import * as SettingsUI from './js/modules/settings/settings.ui.js';
 
-<<<<<<< HEAD
-=======
-// --- Debounce Utility Function ---
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 
 // --- Main Application Initialization ---
 async function init() {
@@ -64,15 +48,9 @@ async function init() {
         MemoryUI.initMemoryUI();
         ChatUI.initChatUI();
         SummaryUI.initSummaryUI();
-<<<<<<< HEAD
         SettingsUI.initSettingsUI(); // Assuming this exists and is needed
         setupEventSubscriptions();
         initMobileGestures(); // [NEW] Initialize swipe gestures for mobile
-=======
-        SettingsUI.initSettingsUI();
-        setupEventSubscriptions();
-        setupGlobalEventListeners();
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 
     } catch (error) {
         console.error("Critical initialization failed:", error);
@@ -80,7 +58,6 @@ async function init() {
     }
 }
 
-<<<<<<< HEAD
 /**
  * [NEW] Initializes swipe-to-open gesture for the sidebar on mobile devices.
  */
@@ -117,30 +94,6 @@ function initMobileGestures() {
         if (e.changedTouches[0].clientX - touchStartX > swipeThreshold) {
             const hamburgerBtn = document.getElementById('hamburger-btn');
             if (hamburgerBtn) hamburgerBtn.click();
-=======
-function setupGlobalEventListeners() {
-    document.addEventListener('click', (e) => {
-        // Close all standard dropdowns if the click is outside of them
-        const openDropdowns = document.querySelectorAll('.dropdown.open');
-        openDropdowns.forEach(dropdown => {
-            if (!dropdown.contains(e.target)) {
-                dropdown.classList.remove('open');
-                const parentItem = dropdown.closest('.item');
-                if (parentItem) parentItem.classList.remove('z-index-front');
-            }
-        });
-
-        // Close the custom entity selector if the click is outside
-        const entitySelector = document.getElementById('custom-entity-selector-wrapper');
-        if (entitySelector && entitySelector.classList.contains('open') && !entitySelector.contains(e.target)) {
-            entitySelector.classList.remove('open');
-        }
-
-        // Close chat actions menu if open
-        const chatActionsContainer = document.getElementById('chat-actions-container');
-        if (chatActionsContainer && chatActionsContainer.classList.contains('open') && !chatActionsContainer.contains(e.target)) {
-            chatActionsContainer.classList.remove('open');
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
         }
     });
 }
@@ -151,7 +104,6 @@ function setupEventSubscriptions() {
     const bus = stateManager.bus;
 
     // --- Debounced Auto-Save Listener ---
-<<<<<<< HEAD
     let saveTimeout;
     bus.subscribe('autosave:required', () => {
         clearTimeout(saveTimeout);
@@ -165,18 +117,6 @@ function setupEventSubscriptions() {
             }
         }, 1500);
     });
-=======
-    const debouncedSave = debounce(async () => {
-        if (stateManager.isAutoSaveDirty()) {
-            console.log('[AutoSave] Debounced save triggered.');
-            const success = await ProjectHandlers.persistCurrentProject();
-            if (success) {
-                stateManager.setAutoSaveDirty(false);
-            }
-        }
-    }, 1500);
-    bus.subscribe('autosave:required', debouncedSave);
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 
     // --- Project & Settings ---
     bus.subscribe('project:new', ProjectHandlers.createNewProject);
