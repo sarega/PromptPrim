@@ -315,6 +315,7 @@ export function hideContextInspector() {
 
 export function initChatUI() {
     // --- Subscribe to Events ---
+<<<<<<< HEAD
     // [FIX] Update chat title when a new session is loaded.
     stateManager.bus.subscribe('session:loaded', (session) => {
         if (session && session.name) {
@@ -322,6 +323,9 @@ export function initChatUI() {
         }
         renderChatMessages();
     });
+=======
+    stateManager.bus.subscribe('session:loaded', renderChatMessages);
+>>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
     stateManager.bus.subscribe('session:titleChanged', (newName) => { document.getElementById('chat-title').textContent = newName; });
     stateManager.bus.subscribe('ui:renderChatMessages', renderChatMessages);
     stateManager.bus.subscribe('ui:addMessage', (data) => {

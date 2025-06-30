@@ -57,6 +57,7 @@
     will-change: transform, max-height;
 }
 
+<<<<<<< HEAD
 /* [FIX] Rotate the icon inside the button, not the button itself, to prevent alignment shifts. */
 #collapse-sidebar-btn .icon-wrapper {
     display: inline-block; /* Needed for transform to apply correctly */
@@ -68,6 +69,8 @@
     transform: scaleX(-1); /* [FIX] Flip horizontally instead of rotating to maintain vertical alignment. */
 }
 
+=======
+>>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 /* --- Other styles remain unchanged --- */
 
 .status-left, .status-right {

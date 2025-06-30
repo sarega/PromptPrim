@@ -27,10 +27,17 @@
 
 /* --- Archived Session Styling --- */
 .item-list > .session-item.archived {
+<<<<<<< HEAD
     background-color: #e6ecee;
 }
 .session-item.archived .item-name {
     color: #6c6c6c;
+=======
+    background-color: #f8f9fa;
+}
+.session-item.archived .item-name {
+    color: #6c757d;
+>>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 }
 .session-item.archived .item-icon {
     opacity: 0.6;
@@ -45,7 +52,11 @@
 
 /* --- Inactive Memory Styling --- */
 .memory-item.inactive .item-name {
+<<<<<<< HEAD
     color: #416e9f;
+=======
+    color: #6c757d;
+>>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 }
 
 

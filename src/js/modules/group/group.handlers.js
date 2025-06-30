@@ -19,12 +19,26 @@ export function saveAgentGroup() {
         return;
     }
 
+<<<<<<< HEAD
     // [FIX] Get the ordered list of members directly from the DOM.
     // This is more robust than relying on sortableInstance.toArray().
     const memberItems = document.querySelectorAll('#group-member-list .agent-sortable-item');
     const members = Array.from(memberItems)
         .filter(item => item.querySelector('input[type="checkbox"]').checked)
         .map(item => item.dataset.agentName);
+=======
+    // Use Sortable's 'toArray' method to get the correct order of members
+    const sortableInstance = window.groupSortable;
+    const memberOrder = sortableInstance ? sortableInstance.toArray() : [];
+    
+    const checkedMembers = new Set(
+        Array.from(document.querySelectorAll('#group-member-list input[type="checkbox"]:checked'))
+             .map(cb => cb.closest('.agent-sortable-item').dataset.agentName)
+    );
+
+    // Filter the sorted list to include only checked members, preserving order.
+    const members = memberOrder.filter(name => checkedMembers.has(name));
+>>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 
     if (members.length === 0) {
         showCustomAlert("A group must have at least one member.", "Error");
