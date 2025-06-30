@@ -8,19 +8,11 @@
     height: 100dvh;
     width: 100vw;
     position: relative;
-<<<<<<< HEAD
-=======
-    transition: all 0.3s ease-in-out;
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 }
 
 /* --- Sidebar Collapsed State --- */
 .app-wrapper.sidebar-collapsed .sidebar {
-<<<<<<< HEAD
     flex-basis: 0; /* [FIX] Removed !important to allow for a smooth expand animation */
-=======
-    flex-basis: 0 !important; /* Use important to override inline styles from JS */
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
     min-width: 0;
     overflow: hidden;
     padding-left: 0;
@@ -28,7 +20,6 @@
     border-right-width: 0;
 }
 
-<<<<<<< HEAD
 /* [FIX] Hide sidebar content immediately when collapsing to prevent visual glitches. */
 .app-wrapper.sidebar-collapsed .sidebar-header,
 .app-wrapper.sidebar-collapsed .sidebar-content {
@@ -37,8 +28,6 @@
     transition-delay: 0s; /* Fade out immediately, overriding the expand delay. */
 }
 
-=======
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 /* --- Focus Mode State --- */
 body.focus-mode .sidebar,
 body.focus-mode #hamburger-btn,

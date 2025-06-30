@@ -77,10 +77,7 @@ export function showAgentGroupEditor(isEditing = false, groupName = null) {
         const item = document.createElement('div');
         item.className = 'agent-sortable-item';
         item.dataset.agentName = agentName;
-<<<<<<< HEAD
         item.dataset.id = agentName; // [FIX] Add data-id for Sortable.toArray()
-=======
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
         const checkboxId = `agent-cb-${agentName.replace(/\s+/g, '-')}`;
         item.innerHTML = `
             <input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''}>

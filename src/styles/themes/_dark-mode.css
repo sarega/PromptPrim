@@ -1,11 +1,6 @@
 /* ===============================================
-<<<<<<< HEAD
    FILE: src/styles/themes/_dark-mode.css (สมบูรณ์)
    DESCRIPTION: Theme สี Dark กลืนทุก element + วงกลม action โปร่งใส + ปรับ #agent-enhancer-column
-=======
-   FILE: src/styles/themes/_dark-mode.css (แก้ไขสมบูรณ์)
-   DESCRIPTION: ปรับค่า Opacity ของ Item ที่ไม่ใช้งาน
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
    =============================================== */
 
 body.dark-mode {
@@ -71,15 +66,10 @@ body.dark-mode #context-inspector-modal pre { background: #1a202c; border-color:
 body.dark-mode #chat-actions-menu { background-color: #2d3748; border-color: #4a5568; }
 body.dark-mode #chat-actions-menu a { color: var(--text-dark); }
 body.dark-mode #chat-actions-menu a:hover { background-color: #4a5568; }
-<<<<<<< HEAD
 body.dark-mode .agent-enhancer-column {
   background-color: #1a202c !important; /* หรือ #232d3e */
   border-color: #4a5568 !important;
 }body.dark-mode #group-member-list { border-color: #4a5568; }
-=======
-body.dark-mode #agent-enhancer-column { background-color: #1a202c; border-color: #4a5568; }
-body.dark-mode #group-member-list { border-color: #4a5568; }
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 body.dark-mode .agent-sortable-item { background-color: #2d3748; border-color: #4a5568; }
 body.dark-mode .agent-sortable-item .drag-handle { color: #718096; }
 body.dark-mode code { background-color: #4a5568; color: #f7fafc; }
@@ -88,10 +78,7 @@ body.dark-mode .inline-edit-textarea { background-color: #2d3748; color: var(--t
 body.dark-mode hr { border-top-color: #4a5568; }
 body.dark-mode *::-webkit-scrollbar-thumb { background-color: #718096; border-radius: 5px; border: 2px solid #2d3748; }
 body.dark-mode *::-webkit-scrollbar-thumb:hover { background-color: #a0aec0; }
-<<<<<<< HEAD
 body.dark-mode *::-webkit-scrollbar { background: #21222c; }
-=======
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 body.dark-mode .modal-warning { color: #a0aec0; }
 body.dark-mode .enhancer-status-box { color: #a0aec0; }
 body.dark-mode .sidebar-resizer { background: #2d3748; border-top: 1px solid #4a5568; border-bottom: 1px solid #4a5568; }
@@ -111,7 +98,6 @@ body.dark-mode .speaker-label { color: var(--primary-color); }
 body.dark-mode .file-preview-item { background-color: #2d3748; border-color: #4a5568; }
 
 /* --- Item-specific styling for Dark Mode --- */
-<<<<<<< HEAD
 body.dark-mode .sidebar .session-item.archived .item-name { color: #b6b6b6; }
 body.dark-mode .session-item.archived { opacity: 0.8; }
 body.dark-mode .item-list > .group-item { background-color: #3a4454; border-left-color: var(--primary-color);}
@@ -175,15 +161,3 @@ body.dark-mode .btn-icon:hover {
   background: #334155 !important;
   color: #fff !important;
 }
-=======
-body.dark-mode .session-item.archived {
-    opacity: 0.8; /* [FIX] Increased opacity */
-}
-body.dark-mode .item-list > .group-item {
-    background-color: #3a4454;
-    border-left-color: var(--primary-color);
-}
-body.dark-mode .memory-item.inactive .item-name {
-    opacity: 0.8; /* [FIX] Increased opacity */
-}
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e

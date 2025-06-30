@@ -7,10 +7,7 @@ import { stateManager, SESSIONS_STORE_NAME, defaultSystemUtilityAgent } from '..
 import { dbRequest } from '../../core/core.db.js';
 import { callLLM, streamLLMResponse, generateAndRenameSession } from '../../core/core.api.js';
 import { showCustomAlert } from '../../core/core.ui.js';
-<<<<<<< HEAD
 import { handleGroupChatRoundRobin, handleGroupChatAutoModerator } from './chat.group.js';
-=======
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
 
 export let attachedFiles = [];
 
@@ -93,32 +90,12 @@ export async function sendMessage(isRegeneration = false) {
         return;
     }
 
-<<<<<<< HEAD
     // [FIX] Process user input here, so it applies to both single and group chats.
     if (!isRegeneration) {
         const input = document.getElementById('chatInput');
         const message = input.value.trim();
         if (!message && attachedFiles.length === 0) return;
 
-=======
-    if (type === 'group') {
-        showCustomAlert("Group chat functionality is being refactored.", "Info");
-    } else {
-        await sendSingleAgentMessage(isRegeneration);
-    }
-}
-
-async function sendSingleAgentMessage(isRegeneration = false) {
-    const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    if (!session) return;
-
-    const input = document.getElementById('chatInput');
-    const message = input.value.trim();
-
-    if (!isRegeneration) {
-        if (!message && attachedFiles.length === 0) return;
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
         let userMessageContent = [];
         if (message) userMessageContent.push({ type: 'text', text: message });
         attachedFiles.forEach(file => userMessageContent.push({ type: 'image_url', url: file.data }));
@@ -134,7 +111,6 @@ async function sendSingleAgentMessage(isRegeneration = false) {
         attachedFiles = [];
         stateManager.bus.publish('ui:renderFilePreviews', attachedFiles);
     }
-<<<<<<< HEAD
     stateManager.bus.publish('ui:renderChatMessages');
 
     if (type === 'group') {
@@ -158,11 +134,6 @@ async function sendSingleAgentMessage(isRegeneration = false) {
 
     // User input processing and initial render has been moved to sendMessage()
 
-=======
-
-    stateManager.bus.publish('ui:renderChatMessages');
-
->>>>>>> 4fbef696f193b5cd9d648bccfe58d07aeb977a2e
     const agentName = project.activeEntity.name;
     const agent = project.agentPresets[agentName];
     if (!agent || !agent.model) {
