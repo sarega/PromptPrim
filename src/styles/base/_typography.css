@@ -1,0 +1,50 @@
+/* ===============================================
+   FILE: src/styles/base/_typography.css
+   DESCRIPTION: Base typography styles for headings, paragraphs, etc.
+   =============================================== */
+
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+
+.message-content h1 { font-size: 1.8rem; }
+.message-content h2 { font-size: 1.5rem; }
+.message-content h3 { font-size: 1.25rem; }
+.message-content h4 { font-size: 1.1rem; }
+
+.message-content p {
+    margin: 0;
+    padding: 0;
+    display: inline;
+}
+
+/* This CSS trick ensures that each <p> tag acts like a block-level element
+   with a line break after it, which is essential for correct rendering
+   when using `marked.js` which wraps each line in <p> tags. */
+.message-content p::after {
+    content: '\A';
+    white-space: pre;
+}
+
+.message-content p:last-child::after {
+    content: '';
+}
+
+.message-content ul, .message-content ol {
+    padding-left: 20px;
+}
+
+.message-content blockquote {
+    border-left: 4px solid #ccc;
+    padding-left: 10px;
+    margin-left: 0;
+    color: #666;
+}

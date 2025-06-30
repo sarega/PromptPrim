@@ -1,0 +1,148 @@
+/* ===============================================
+   FILE: src/styles/layout/_sidebar.css (แก้ไขสมบูรณ์)
+   DESCRIPTION: ปรับสัดส่วนและดีไซน์ของ Resizer
+   =============================================== */
+
+.sidebar {
+    flex-basis: 340px;
+    flex-shrink: 0;
+    min-width: 250px;
+    max-width: 600px;
+    background: var(--white-alpha-95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    z-index: 1100;
+    position: relative;
+    transition: flex-basis 0.3s ease-in-out, min-width 0.3s ease-in-out, padding 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+.sidebar-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    /* [FIX] Add transition for opacity with a delay on expand to prevent content "jumping". */
+    transition: opacity 0.2s ease-in 0.1s;
+}
+
+.sidebar-top-row, .sidebar-bottom-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.app-main-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-right: auto;
+    color: var(--text-dark);
+}
+
+.project-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #4a5568;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 12px;
+}
+
+.menu-toggle-btn,
+#collapse-sidebar-btn,
+#settings-btn {
+    font-size: 24px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-dark);
+    padding: 5px;
+    line-height: 1;
+}
+
+#hamburger-btn {
+    display: none; /* Controlled by responsive styles */
+    font-size: 28px;
+    margin-right: 15px;
+}
+
+.sidebar-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 15px;
+    /* [FIX] Add transition for opacity with a delay on expand to prevent content "jumping". */
+    transition: opacity 0.2s ease-in 0.1s;
+}
+
+.sessions-frame {
+    flex: 1 1 50%; /* [FIX] Set to 50% for an equal split */
+    min-height: 100px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.memories-frame {
+    flex: 1 1 50%; /* [FIX] Set to 50% for an equal split */
+    min-height: 100px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-resizer {
+    flex: 0 0 5px; /* [FIX] Made the resizer thinner */
+    cursor: ns-resize;
+    background: transparent; /* [FIX] Make it invisible by default */
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    transition: background .2s ease;
+}
+
+.sidebar-resizer:hover {
+    background: var(--primary-color);
+    opacity: 0.4;
+}
+
+.sidebar-horizontal-resizer {
+    width: 5px; /* [FIX] Made the resizer thinner */
+    cursor: ew-resize;
+    background: transparent;
+    position: absolute;
+    top: 0;
+    right: -2.5px; /* [FIX] Adjusted position */
+    height: 100%;
+    z-index: 1101;
+    transition: background .2s ease;
+}
+
+.sidebar-horizontal-resizer:hover {
+    background: var(--primary-color);
+    opacity: 0.6;
+}
+
+.mobile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    z-index: 1050;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.mobile-overlay.active {
+    display: block;
+    opacity: 1;
+}

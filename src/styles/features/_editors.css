@@ -1,0 +1,205 @@
+/* ===============================================
+   FILE: src/styles/features/_editors.css
+   DESCRIPTION: Specific styles for complex editor modals.
+   =============================================== */
+
+/* --- General Section Box (used in settings and editors) --- */
+.section-box {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-bottom: 5px;
+    position: relative;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #4a5568;
+    flex-grow: 1;
+}
+
+.section-header .btn-icon {
+    color: #718096;
+    font-weight: bold;
+}
+
+.flex-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.flex-group > select {
+    flex-grow: 1;
+}
+
+/* --- Context Inspector Modal --- */
+#context-inspector-modal .modal-box {
+    max-width: 700px;
+}
+#context-inspector-modal pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: #f7fafc;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    max-height: 40vh;
+    overflow-y: auto;
+    font-size: 14px;
+}
+
+#context-inspector-modal .info-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+#context-inspector-modal .info-grid strong {
+    font-weight: 600;
+}
+
+/* --- Agent Group Editor Modal --- */
+#group-member-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+#group-member-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px;
+}
+
+.agent-sortable-item {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    background-color: #f9fafb;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 5px;
+}
+
+.agent-sortable-item label {
+    flex-grow: 1;
+    margin-bottom: 0;
+    margin-left: 10px;
+    cursor: grab;
+}
+
+.agent-sortable-item:active {
+    cursor: grabbing;
+}
+
+.agent-sortable-item .drag-handle {
+    cursor: grab;
+    color: #9ca3af;
+    margin-left: auto;
+    padding: 0 5px;
+}
+
+.agent-sortable-item .drag-handle:active {
+    cursor: grabbing;
+}
+
+/* --- Agent Editor Modal --- */
+#agent-editor-modal .modal-box {
+    max-width: 900px;
+}
+
+#agent-editor-modal .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.agent-editor-column, .agent-enhancer-column {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.agent-enhancer-column {
+    background-color: #f7fafc;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.agent-enhancer-column h4 {
+    margin-top: 0;
+}
+
+.enhancer-status-box {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: #4a5568;
+}
+
+/* --- Summary Log Specifics (in sidebar but related to features) --- */
+#summaryLogList .summary-group {
+    padding-left: 10px;
+    margin-bottom: 5px;
+}
+#summaryLogList .summary-group summary {
+    font-size: 0.8rem;
+    color: #4a5568;
+    font-weight: bold;
+}
+.summary-log-item {
+    background: #f7fafc;
+    border: 1px solid transparent;
+    border-left: 3px solid var(--border-color);
+    padding: 6px 8px;
+    margin: 4px 0 4px 10px;
+    font-size: 0.8rem;
+    border-radius: 4px;
+}
+.summary-log-item.active {
+    border-left-color: var(--success-color);
+    background: #f0fff8;
+    font-weight: bold;
+}
+.summary-log-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.summary-log-item-title {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 5px;
+}
+.summary-log-item-actions {
+    display: flex;
+    flex-shrink: 0;
+}
+.summary-log-item-actions button {
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
+}
+#view-summary-modal .modal-box {
+    max-width: 700px;
+}
+#view-summary-modal pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}

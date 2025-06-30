@@ -1,0 +1,50 @@
+/* ===============================================
+   FILE: src/styles/features/_settings-panel.css
+   DESCRIPTION: Styles for the slide-out settings panel.
+   =============================================== */
+
+#settings-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 380px;
+    max-width: 85vw;
+    height: 100%;
+    background: white;
+    z-index: 1200;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    box-shadow: 5px 0 15px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+}
+
+#settings-panel.open {
+    transform: translateX(0);
+}
+
+.settings-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.settings-header h2 {
+    font-size: 1.4rem;
+}
+
+.close-settings-btn {
+    font-size: 28px;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.settings-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px;
+}

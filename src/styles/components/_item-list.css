@@ -1,0 +1,150 @@
+/* ===============================================
+   FILE: src/styles/components/_item-list.css (แก้ไขสมบูรณ์)
+   DESCRIPTION: เพิ่มขนาด Font และปรับสไตล์สีสำหรับ Item ประเภทต่างๆ
+   =============================================== */
+
+.item-list > .item {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: pointer;
+    border-left-width: 1px; /* Default border width */
+}
+
+.item-list > .item.active {
+    border-color: var(--success-color);
+    box-shadow: 0 0 8px rgba(72, 187, 120, 0.2);
+    background-color: #f6fff9;
+}
+
+.item-list > .item.pinned {
+    background-color: #f0e6ff;
+}
+
+/* --- Archived Session Styling --- */
+.item-list > .session-item.archived {
+    background-color: #e6ecee;
+}
+.session-item.archived .item-name {
+    color: #6c6c6c;
+}
+.session-item.archived .item-icon {
+    opacity: 0.6;
+}
+
+/* --- Agent Group Styling --- */
+.item-list > .group-item {
+    background-color: #f0f4f8;
+    border-left: 3px solid var(--primary-color);
+    padding-left: 8px; /* Adjust padding to compensate for border */
+}
+
+/* --- Inactive Memory Styling --- */
+.memory-item.inactive .item-name {
+    color: #416e9f;
+}
+
+
+/* --- Other Styles --- */
+.item.z-index-front {
+    z-index: 1105;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-name {
+    font-weight: 500;
+    font-size: 0.9rem; /* [FIX] Increased font size */
+    flex-grow: 1;
+    padding-right: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.item-name .item-icon {
+    margin-right: 6px;
+    display: inline-block;
+    width: 20px;
+    text-align: center;
+}
+
+.item-actions {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.collapsible-section summary {
+    cursor: pointer;
+    font-weight: 500;
+    padding: 5px;
+    border-radius: 5px;
+    transition: background 0.2s;
+    list-style: revert;
+}
+
+.collapsible-section summary:hover {
+    background: #f0f0f0;
+}
+
+.collapsible-section .item-list {
+    padding-top: 5px;
+}
+
+.memory-item {
+    padding: 3px 8px;
+}
+
+.memory-item .item-header {
+    gap: 8px;
+}
+
+.memory-item .item-name {
+    font-weight: normal;
+    font-size: 0.8rem;
+    cursor: default;
+}
+
+.memory-item .item-actions {
+    margin-left: auto;
+}
+
+.memory-toggle {
+    width: 34px;
+    height: 18px;
+    background: #cbd5e0;
+    border-radius: 9px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    flex-shrink: 0;
+}
+
+.memory-toggle.active {
+    background: var(--success-color);
+}
+
+.memory-toggle::after {
+    content: '';
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s ease;
+}
+
+.memory-toggle.active::after {
+    transform: translateX(16px);
+}

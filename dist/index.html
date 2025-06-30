@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PromptPrim Studio - Multi-Agent</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- PWA & Mobile Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7fafc">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#2d3748">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon.png"> 
+  <script type="module" crossorigin src="/PromptPrim/assets/index-CRERfBCU.js"></script>
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/index-CbO36dzU.css">
+</head>
+<body>
+
+    <div class="app-wrapper">
+        <!-- ===== SETTINGS PANEL ===== -->
+        <div id="settings-panel">
+            <div class="settings-header">
+                <h2>Global Settings</h2>
+                <button class="close-settings-btn" title="Close Settings">&times;</button>
+            </div>
+            <div class="settings-content">
+                <div class="section-box">
+                    <h3>About PromptPrim Studio</h3>
+                    <p>Version: <span id="app-version"></span></p>
+                </div>
+                <div class="section-box">
+                    <h3>🎨 การแสดงผล</h3>
+                    <div class="form-group">
+                        <label for="fontFamilySelect">ฟอนต์</label>
+                        <select id="fontFamilySelect">
+                            <option value="'Sarabun', sans-serif">สารบรรณ (Sarabun)</option>
+                            <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
+                            <option value="'IBM Plex Sans Thai', sans-serif">IBM Plex Sans Thai</option>
+                            <option value="'Mitr', sans-serif">มิตร (Mitr)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="section-box">
+                    <h3>🌗 ธีม</h3>
+                    <div class="form-group" id="theme-switcher">
+                        <label><input type="radio" name="theme" value="light" checked> สว่าง</label>
+                        <label><input type="radio" name="theme" value="dark"> มืด</label>
+                        <label><input type="radio" name="theme" value="system"> ตามระบบ</label>
+                    </div>
+                </div>
+                <div class="section-box">
+                    <h3>🔧 API Settings</h3>
+                    <div class="form-group">
+                        <label for="apiKey">OpenRouter API Key</label>
+                        <input type="password" id="apiKey" autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="ollamaBaseUrl">Ollama Base URL</label>
+                        <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434">
+                    </div>
+                    <button id="load-models-btn" class="btn btn-small">โหลด/รีเฟรช Model List</button>
+                </div>
+                <details class="collapsible-section">
+                    <summary><h3>⚙️ System Utility Agent Settings</h3></summary>
+                    <div class="section-box">
+                        <p class="modal-warning">Model นี้จะใช้สำหรับงานเบื้องหลัง เช่น สรุปความ, สร้าง Agent Profile, ฯลฯ</p>
+                        <div class="form-group">
+                            <label for="system-utility-model-select">System Utility Model</label>
+                            <select id="system-utility-model-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="system-utility-prompt">System Prompt (สำหรับสร้าง Agent Profile)</label>
+                            <textarea id="system-utility-prompt" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="system-utility-summary-prompt">Summarization Prompt Template</label>
+                            <div class="form-group">
+                                <div class="flex-group">
+                                    <select id="system-utility-summary-preset-select"></select>
+                                    <button id="save-summary-preset-btn" class="btn btn-small btn-secondary">Save as Preset</button>
+                                </div>
+                            </div>
+                            <textarea id="system-utility-summary-prompt" rows="8"></textarea>
+                            <p class="modal-warning">ใช้ ${previousSummary} และ ${newMessages} เป็นตัวแปร</p>
+                        </div>
+                        <details>
+                            <summary>Advanced Parameters</summary>
+                            <div>
+                                <div class="form-group"><label for="system-utility-temperature">Temperature</label><input type="number" id="system-utility-temperature" step="0.1" min="0" max="2"></div>
+                                <div class="form-group"><label for="system-utility-topP">Top P</label><input type="number" id="system-utility-topP" step="0.1" min="0" max="1"></div>
+                            </div>
+                        </details>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <!-- ===== SIDEBAR ===== -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-top-row">
+                    <h1 class="app-main-title">PromptPrim Studio</h1>
+                    <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">&#9881;</button>
+                </div>
+                <div class="sidebar-bottom-row">
+                    <div class="dropdown align-left">
+                        <button class="btn btn-small">Project</button>
+                        <div class="dropdown-content">
+                            <a href="#" data-action="newProject">New...</a>
+                            <a href="#" data-action="openProject">Open...</a>
+                            <a href="#" data-action="saveProject">Save</a>
+                            <a href="#" data-action="saveProjectAs">Save As...</a>
+                            <hr>
+                            <a href="#" data-action="exportChat">Export Chat...</a>
+                        </div>
+                    </div>
+                    <h2 id="project-title" class="project-title">Untitled Project</h2>
+                </div>
+            </div>
+            <div class="sidebar-content">
+                <div class="sessions-frame">
+                    <div class="section-box">
+                        <div class="section-header">
+                            <h3>📂 Chat Sessions</h3>
+                            <button id="new-chat-btn" class="btn-icon" title="สร้าง Chat ใหม่">+</button>
+                        </div>
+                        <div id="pinnedSessionList" class="item-list"></div>
+                        <div id="sessionListContainer" class="item-list"></div>
+                        <details class="collapsible-section hidden" id="archivedSessionsSection">
+                            <summary>Archived Sessions</summary>
+                            <div id="archivedSessionList" class="item-list"></div>
+                        </details>
+                    </div>
+                </div>
+                <div class="sidebar-resizer"></div>
+                <div class="memories-frame">
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>🤝 Agent Groups</h3>
+                            <div class="dropdown align-right">
+                                <button class="btn-icon" title="Manage Groups">&#8942;</button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="createGroup">สร้าง Group ใหม่</a>
+                                </div>
+                            </div>
+                        </summary>
+                        <div class="section-box">
+                            <div id="agentGroupList" class="item-list"></div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>🤖 Agent Presets</h3>
+                            <div class="dropdown align-right">
+                                <button class="btn-icon" title="Manage Agents">&#8942;</button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="createAgent">สร้าง Agent ใหม่</a>
+                                </div>
+                            </div>
+                        </summary>
+                        <div class="section-box">
+                            <div id="agentPresetList" class="item-list"></div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section">
+                        <summary class="section-header">
+                            <h3>🧠 Command Memories</h3>
+                            <div class="dropdown align-right">
+                                <button class="btn-icon" title="Manage Memories">&#8942;</button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="createMemory">เพิ่ม Memory ใหม่</a>
+                                    <hr>
+                                    <a href="#" data-action="exportMemories">Export Package</a>
+                                    <a href="#" data-action="importMemories">Import Package</a>
+                                </div>
+                            </div>
+                        </summary>
+                        <div class="section-box">
+                            <div id="memories-container">
+                                <details id="active-memories-details" open>
+                                    <summary>Active Memories</summary>
+                                    <div id="activeMemoriesList" class="item-list"></div>
+                                </details>
+                                <details id="inactiveMemoriesSection" class="hidden">
+                                    <summary>Inactive Memories</summary>
+                                    <div id="inactiveMemoriesList" class="item-list"></div>
+                                </details>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section" open>
+                        <summary class="section-header"><h3>💡 Summary Logs</h3></summary>
+                        <div class="section-box">
+                            <div id="summaryLogList" class="item-list"></div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+            <div class="sidebar-horizontal-resizer"></div>
+        </div>
+        
+        <!-- ===== MAIN CHAT AREA ===== -->
+        <div class="main-chat-area">
+            <div class="chat-header">
+                <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sidebar">&#9776;</button>
+                <button id="collapse-sidebar-btn" class="menu-toggle-btn" title="Collapse Sidebar"><span class="icon-wrapper">&laquo;</span></button>
+                <h1 id="chat-title" class="chat-title">AI Assistant</h1>
+                <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
+                    <select id="entitySelector" class="hidden"></select>
+                    <div id="custom-entity-selector-trigger" class="custom-select-trigger">
+                        <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
+                        <span id="custom-entity-selector-text">Default Agent</span>
+                        <span class="custom-select-arrow"></span>
+                    </div>
+                    <div id="custom-entity-selector-options" class="custom-select-options"></div>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chatMessages"></div>
+             
+            <div class="chat-input-wrapper">
+                <div id="file-preview-container" class="hidden"></div>
+                <div class="input-container-seamless">
+                    <div id="chat-actions-container" class="dropdown input-adornment left">
+                        <button class="btn" id="chat-actions-btn" title="More Actions">+</button>
+                        <div id="chat-actions-menu" class="dropdown-content">
+                            <a href="#" id="manual-summarize-btn">🧠 Summarize Conversation</a>
+                            <a href="#" id="clear-summary-btn" style="display: none;">🧹 Clear Summary Context</a>
+                            <a href="#" id="menu-upload-file-btn">📎 Upload File</a>
+                        </div>
+                    </div>
+                    <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
+                    <div class="input-adornment right">
+                        <button class="btn send-btn" id="sendBtn" title="Send Message">&#10148;</button>
+                        <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">&#9724;</button>
+                    </div>
+                </div>
+            </div>
+            <div id="status-panel">
+                <div class="status-left">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText" class="status-text-content">Disconnected</span>
+                </div>
+                <div class="status-right">
+                    <span id="active-agent-status"></span> &nbsp;
+                    <span id="token-count-status"></span>
+                </div>
+                <button id="context-inspector-trigger-btn" title="Inspect Context">&#8505;</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ===== OVERLAYS & MODALS ===== -->
+    <div id="mobile-overlay" class="mobile-overlay"></div>
+    
+    <div id="agent-group-editor-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="agent-group-modal-title">Create/Edit Agent Group</h3>
+            <div class="modal-body">
+                <div class="form-group"><label for="group-name-input">Group Name</label><input type="text" id="group-name-input" placeholder="e.g., Creative Team"></div>
+                <div class="form-group"><label for="group-moderator-select">Moderator Agent</label><select id="group-moderator-select"></select></div>
+                <div class="form-group"><label for="group-flow-select">Conversation Flow</label><select id="group-flow-select"><option value="auto-moderator">Automated Moderator</option><option value="round-robin">Round Robin</option></select></div>
+                <div class="form-group hidden" id="max-turns-group"><label for="group-max-turns-input">Max Turns (1-10)</label><input type="number" id="group-max-turns-input" value="4" min="1" max="10"></div>
+                <div class="form-group"><label for="group-summarization-threshold-input">Summarization Token Threshold</label><input type="number" id="group-summarization-threshold-input" value="3000" min="0" step="100"><p class="modal-warning">สรุปบทสนทนาเมื่อมี Token ใหม่เกินค่านี้ (ใส่ 0 เพื่อปิด)</p></div>
+                <div class="form-group"><label>Group Members</label><div id="group-member-list"></div></div>
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Group</button></div>
+        </div>
+    </div>
+    
+    <div id="agent-editor-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="agent-modal-title">Create/Edit Agent</h3>
+            <div class="modal-body">
+                <div class="agent-editor-column">
+                    <div class="form-group"><label for="agent-name-input">Agent Name</label><input type="text" id="agent-name-input" placeholder="e.g., Python Expert"></div>
+                    <div class="form-group"><label for="agent-icon-input">Agent Icon (Emoji)</label><input type="text" id="agent-icon-input" placeholder="🧑‍💻"></div>
+                    <div class="form-group"><label for="agent-model-select">Model</label><select id="agent-model-select"></select></div>
+                    <hr>
+                    <div class="section-box">
+                        <h4>📝 System Prompt &amp; Parameters</h4>
+                        <div class="form-group"><label for="agent-system-prompt">คำสั่งเริ่มต้นของระบบ</label><textarea id="agent-system-prompt" rows="5"></textarea></div>
+                        <div class="form-group"><label class="flex-group"><input type="checkbox" id="agent-use-markdown">ใช้ Markdown สำหรับการตอบกลับ</label></div>
+                        <details><summary>ตั้งค่าขั้นสูง</summary>
+                            <div>
+                                <div class="form-group"><label for="agent-temperature">Temperature</label><input type="number" id="agent-temperature" step="0.1" min="0" max="2"></div>
+                                <div class="form-group"><label for="agent-topP">Top P</label><input type="number" id="agent-topP" step="0.1" min="0" max="1"></div>
+                                <div class="form-group"><label for="agent-topK">Top K</label><input type="number" id="agent-topK" step="1" min="0"></div>
+                                <div class="form-group"><label for="agent-presence-penalty">Presence Penalty</label><input type="number" id="agent-presence-penalty" step="0.1" min="-2" max="2"></div>
+                                <div class="form-group"><label for="agent-frequency-penalty">Frequency Penalty</label><input type="number" id="agent-frequency-penalty" step="0.1" min="-2" max="2"></div>
+                                <div class="form-group"><label for="agent-max-tokens">Max Tokens</label><input type="number" id="agent-max-tokens" step="1" min="1"></div>
+                                <div class="form-group"><label for="agent-seed">Seed</label><input type="number" id="agent-seed" step="1" placeholder="ใส่ -1 เพื่อสุ่ม"></div>
+                                <div class="form-group"><label for="agent-stop-sequences">Stop Sequences (คั่นด้วย ,)</label><input type="text" id="agent-stop-sequences"></div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+                <div class="agent-enhancer-column">
+                    <h4>✨ Agent Profile Generator</h4>
+                    <p class="modal-warning">Powered by: <span id="enhancer-model-name">N/A</span></p>
+                    <div class="form-group">
+                        <label for="enhancer-prompt-input">อธิบาย Agent ที่คุณต้องการ:</label>
+                        <textarea id="enhancer-prompt-input" rows="4" placeholder="เช่น 'สร้าง Agent ผู้เชี่ยวชาญการเขียนนิยายสืบสวนสอบสวน'"></textarea>
+                    </div>
+                    <button class="btn" id="generate-agent-profile-btn">Generate Profile</button>
+                    <div id="enhancer-status" class="enhancer-status-box"></div>
+                </div>
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Agent</button></div>
+        </div>
+    </div>
+    <div id="alert-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="alert-modal-title">Notification</h3>
+            <div class="modal-body"><p id="alert-modal-message">This is a sample message.</p></div>
+            <div class="modal-actions"><button class="btn">Close</button></div>
+        </div>
+    </div>
+    <div id="memory-editor-modal" class="modal-overlay">
+        <div class="modal-box"><h3 id="memory-modal-title">เพิ่ม/แก้ไข Memory</h3>
+            <div class="modal-body">
+                <div class="form-group"><label for="memory-name-input">ชื่อ Memory</label><input type="text" id="memory-name-input"></div>
+                <div class="form-group"><label for="memory-content-input">เนื้อหา Memory</label><textarea id="memory-content-input" rows="8"></textarea></div>
+                <input type="hidden" id="memory-edit-index">
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก</button></div>
+        </div>
+    </div>
+    <div id="save-project-modal" class="modal-overlay">
+        <div class="modal-box"><h3>บันทึกโปรเจกต์</h3>
+            <div class="modal-body">
+                <div class="form-group"><label for="project-name-input">ชื่อโปรเจกต์</label><input type="text" id="project-name-input" placeholder="My Awesome Project"></div>
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก</button></div>
+        </div>
+    </div>
+    <div id="unsaved-changes-modal" class="modal-overlay">
+        <div class="modal-box"><h3>มีข้อมูลที่ยังไม่ได้บันทึก</h3>
+            <div class="modal-body">
+                <p>โปรเจกต์ปัจจุบันของคุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการทำอะไร?</p>
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn btn-danger">ไม่บันทึก</button><button class="btn">บันทึกโปรเจกต์</button></div>
+        </div>
+    </div>
+    <div id="context-inspector-modal" class="modal-overlay">
+        <div class="modal-box"><h3>Context Inspector</h3>
+            <div class="modal-body">
+                <div class="info-grid"><strong>Active Entity:</strong><span id="inspector-agent-name"></span><strong>Model:</strong><span id="inspector-agent-model"></span><strong>Total Tokens:</strong><span id="inspector-token-count"></span></div>
+                <h4>Final System Prompt:</h4><pre id="inspector-system-prompt"></pre>
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary">Close</button></div>
+        </div>
+    </div>
+    <div id="view-summary-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="view-summary-title"></h3>
+            <div class="modal-body"><pre id="view-summary-content"></pre></div>
+            <div class="modal-actions"><button class="btn btn-secondary">Close</button></div>
+        </div>
+    </div>
+    
+    <!-- ===== HIDDEN INPUTS ===== -->
+    <input type="file" id="load-project-input" class="hidden" accept=".json">
+    <input type="file" id="load-memory-package-input" class="hidden" accept=".json">
+    <input type="file" id="file-input" class="hidden" multiple accept="image/*,application/pdf,.txt,.docx,.csv,.xls,.xlsx,video/*,audio/*">
+
+    <!-- The ONLY script tag needed. It must be type="module" -->
+</body>
+</html>
