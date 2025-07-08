@@ -15,22 +15,110 @@
 /* 3. Components - Reusable UI elements. */
 @import './components/_buttons.css';
 @import './components/_modals.css';
+@import './components/_context-menu.css';
 @import './components/_dropdowns.css';
 @import './components/_item-list.css';
 @import './components/_code-block.css';
+@import './components/_mobile-overlay.css';
+@import './components/_panel-resizer.css';
 
 /* 4. Layout - Major page structure. */
 @import './layout/_app-wrapper.css';
 @import './layout/_sidebar.css';
 @import './layout/_main-area.css';
+@import './layout/_studio.css';
+@import './layout/_composer-panel.css';
+
 
 /* 5. Features - Styles for specific application features. */
 @import './features/_chat.css';
+@import './features/_chat-actions.css';
 @import './features/_settings-panel.css';
 @import './features/_editors.css';
 
-/* 6. Themes - Theming styles (e.g., dark mode). */
+/* 6. Responsive - Media queries. Must be last. */
+@import './responsive/_main.css';
+
+/* 7. Themes - Theming styles (e.g., dark mode). */
 @import './themes/_dark-mode.css';
 
-/* 7. Responsive - Media queries. Must be last. */
-@import './responsive/_main.css';
+
+/* ===============================================
+   DEFINITIVE MAIN LAYOUT FIX
+   =============================================== */
+
+/* 1. บังคับให้ Workspace หลักเป็น Flexbox แนวนอน */
+#chat-compose-workspace {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100%;
+    height: 100%;
+}
+
+/* 2. กำหนดขนาดของ Sidebar ให้คงที่ */
+#sessions-panel {
+    flex-basis: 360px;   /* กำหนดความกว้างเริ่มต้น */
+    flex-shrink: 0;      /* ป้องกันไม่ให้มันหดตัว */
+    flex-grow: 0;        /* ป้องกันไม่ให้มันขยายตัว */
+}
+
+/* 3. กำหนดให้ Main Chat Area ขยายตัวเต็มพื้นที่ที่เหลือ */
+#main-chat-panel {
+    flex-grow: 1;        /* <-- คำสั่งสำคัญ: บังคับให้ขยายเต็มพื้นที่ว่าง */
+    flex-basis: 0;       /* ให้เริ่มคำนวณขนาดจาก 0 เพื่อให้ขยายได้เต็มที่ */
+    min-width: 300px;    /* ป้องกันไม่ให้ถูกเบียดจนหดหายไป */
+}
+
+/* ===============================================
+   DEFINITIVE MAIN LAYOUT FIX (WITH ANIMATION)
+   =============================================== */
+
+/* 1. บังคับให้ Workspace หลักเป็น Flexbox แนวนอน */
+#chat-compose-workspace {
+    display: flex !important;
+    flex-direction: row !important;
+}
+
+/* 2. กำหนดขนาดและ Animation ของ Sidebar */
+#sessions-panel {
+    flex-basis: 360px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    transition: all 0.3s ease-in-out; /* <-- เพิ่มบรรทัดนี้ */
+}
+
+/* 3. กำหนดให้ Main Chat Area ขยายตัวและมี Animation */
+#main-chat-panel {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 300px;
+    transition: all 0.3s ease-in-out; /* <-- เพิ่มบรรทัดนี้ */
+}
+
+/* 4. Rule ที่สั่งให้ Sidebar หดตัว (เมื่อ .app-wrapper มีคลาส .sidebar-collapsed) */
+.app-wrapper.sidebar-collapsed #sessions-panel {
+    flex-basis: 0;
+    min-width: 0;
+    border-right-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* ===============================================
+   DEFINITIVE FIX for Mobile Overlay Interaction
+   =============================================== */
+
+/* 1. สถานะปกติ: ซ่อนและ "คลิกทะลุได้" */
+#mobile-overlay {
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+}
+
+/* 2. สถานะทำงาน (.active): แสดงผลและ "บังคับให้รับการคลิก" */
+#mobile-overlay.active {
+    pointer-events: auto !important; /* <-- คำสั่งสำคัญ */
+    opacity: 1;
+    visibility: visible;
+}

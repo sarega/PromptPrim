@@ -1,177 +1,162 @@
 // ===============================================
-// FILE: src/js/modules/memory/memory.ui.js (แก้ไขแล้ว)
-// DESCRIPTION: เพิ่ม class 'inactive' สำหรับ memory ที่ไม่ได้ใช้งาน
+// FILE: src/js/modules/memory/memory.ui.js 
+// DESCRIPTION: แก้ไขการจัดการ Event Listener
 // ===============================================
 
+// [DEFINITIVE & COMPLETE] src/js/modules/memory/memory.ui.js
+
 import { stateManager } from '../../core/core.state.js';
-import { toggleDropdown } from '../../core/core.ui.js';
+import { createDropdown } from '../../core/core.ui.js';
 
 let memorySortable = null;
 
-// --- Private Helper Functions ---
-
-function createMemoryElement(memory, isActive) {
-    const project = stateManager.getProject();
+// --- Private Helper: สร้าง Element ของ Memory หนึ่งรายการ ---
+function createMemoryElement(memory, isActive, originalIndex) {
     const itemDiv = document.createElement('div');
-    itemDiv.className = `item memory-item`;
-    if (!isActive) {
-        itemDiv.classList.add('inactive'); // [FIX] Add class for inactive memories
-    }
+    itemDiv.className = `item memory-item ${isActive ? '' : 'inactive'}`;
     itemDiv.dataset.name = memory.name;
-    const memoryIndex = project.memories.findIndex(m => m.name === memory.name);
+    itemDiv.dataset.memoryIndex = originalIndex;
 
-    itemDiv.innerHTML = `
-        <div class="item-header">
-            <div class="memory-toggle ${isActive ? 'active' : ''}"></div>
-            <span class="item-name">${memory.name}</span>
-            <div class="item-actions">
-                <div class="dropdown align-right">
-                    <button class="btn-icon" data-action="toggle-menu">&#8942;</button>
-                    <div class="dropdown-content">
-                        <a href="#" data-action="edit">&#9998; Edit</a>
-                        <a href="#" data-action="delete">&#128465; Delete</a>
-                    </div>
-                </div>
-            </div>
-        </div>`;
+    const dropdownOptions = [
+        { label: 'Edit...', action: 'memory:edit', data: { index: originalIndex } },
+        { label: 'Delete', action: 'memory:delete', data: { index: originalIndex }, isDestructive: true }
+    ];
+    const itemDropdown = createDropdown(dropdownOptions);
 
-    itemDiv.querySelector('.memory-toggle').addEventListener('click', (e) => stateManager.bus.publish('memory:toggle', { name: memory.name, event: e }));
-    itemDiv.querySelector('[data-action="toggle-menu"]').addEventListener('click', toggleDropdown);
-    itemDiv.querySelector('[data-action="edit"]').addEventListener('click', (e) => stateManager.bus.publish('memory:edit', { index: memoryIndex, event: e }));
-    itemDiv.querySelector('[data-action="delete"]').addEventListener('click', (e) => stateManager.bus.publish('memory:delete', { index: memoryIndex, event: e }));
+    const toggle = document.createElement('div');
+    toggle.className = `memory-toggle ${isActive ? 'active' : ''}`;
+    toggle.title = `Click to ${isActive ? 'deactivate' : 'activate'}`;
+    toggle.dataset.action = 'memory:toggle';
 
+    const itemName = document.createElement('span');
+    itemName.className = 'item-name';
+    itemName.textContent = memory.name;
+    
+    const itemHeader = document.createElement('div');
+    itemHeader.className = 'item-header';
+    itemHeader.appendChild(toggle);
+    itemHeader.appendChild(itemName);
+    itemHeader.appendChild(itemDropdown);
+
+    itemDiv.appendChild(itemHeader);
     return itemDiv;
 }
 
-// --- Exported UI Functions ---
+// --- Main UI Functions ---
 
-export function loadAndRenderMemories() {
+/**
+ * วาดเนื้อหาของ Memory ทั้งหมดลงใน Sidebar
+ */
+export function loadAndRenderMemories(assetsContainer) {
+    if (!assetsContainer) return;
     const project = stateManager.getProject();
     if (!project) return;
-    const container = document.getElementById('memories-container');
-    const activeList = document.getElementById('activeMemoriesList');
-    const inactiveList = document.getElementById('inactiveMemoriesList');
-    const inactiveSection = document.getElementById('inactiveMemoriesSection');
     
-    activeList.innerHTML = '';
-    inactiveList.innerHTML = '';
+    // สร้าง Section ของ Memory ทั้งหมด
+    const memorySection = document.createElement('details');
+    memorySection.className = 'collapsible-section memory-section';
+    memorySection.open = true;
+
+    // สร้าง Header พร้อม Dropdown
+    const summary = document.createElement('summary');
+    summary.className = 'section-header';
+    summary.innerHTML = '<h3>🧠 Command Memories</h3>';
+    const dropdownOptions = [
+        { label: 'New Memory...', action: 'memory:create' },
+        { label: 'Export Package...', action: 'memory:exportPackage' },
+        { label: 'Import Package...', action: 'memory:importPackage' },
+    ];
+    summary.appendChild(createDropdown(dropdownOptions));
+    memorySection.appendChild(summary);
     
-    let activeAgentPreset = null;
-    if(project.activeEntity?.type === 'agent' && project.agentPresets && project.agentPresets[project.activeEntity.name]) {
-        container.style.display = 'block';
-        activeAgentPreset = project.agentPresets[project.activeEntity.name];
+    const container = document.createElement('div');
+    container.className = 'section-box';
+    memorySection.appendChild(container);
+    
+    // ตรรกะการแสดงผล
+    const activeAgentPreset = project.agentPresets?.[project.activeEntity?.name];
+    if (!activeAgentPreset) {
+        container.innerHTML = `<p class="no-items-message">Select an Agent to see memories.</p>`;
     } else {
-        container.style.display = 'none';
-        return;
+        container.innerHTML = `
+            <details id="active-memories-details" open><summary>Active Memories</summary><div id="activeMemoriesList" class="item-list"></div></details>
+            <details id="inactiveMemoriesSection" open><summary>Inactive Memories</summary><div id="inactiveMemoriesList" class="item-list"></div></details>
+        `;
+        const activeList = container.querySelector('#activeMemoriesList');
+        const inactiveList = container.querySelector('#inactiveMemoriesList');
+        
+        const activeMemoryNames = activeAgentPreset.activeMemories || [];
+        const allMemories = project.memories || [];
+        
+        allMemories.forEach((memory, index) => {
+            const isActive = activeMemoryNames.includes(memory.name);
+            const listToUse = isActive ? activeList : inactiveList;
+            listToUse.appendChild(createMemoryElement(memory, isActive, index));
+        });
+
+        // จัดการ Sortable.js
+        if (memorySortable) memorySortable.destroy();
+        memorySortable = new Sortable(activeList, {
+            animation: 150,
+            onEnd: (evt) => {
+                const agent = stateManager.getProject().agentPresets[stateManager.getProject().activeEntity.name];
+                if (!agent) return;
+                const movedMemoryName = evt.item.dataset.name;
+                agent.activeMemories.splice(evt.oldDraggableIndex, 1);
+                agent.activeMemories.splice(evt.newDraggableIndex, 0, movedMemoryName);
+                stateManager.bus.publish('studio:contentShouldRender');
+            }
+        });
     }
     
-    if (!activeAgentPreset || !project.memories) {
-        container.style.display = 'none';
-        return;
-    }
-
-    const activeMemoryNames = activeAgentPreset.activeMemories || [];
-    const allMemoryNames = project.memories.map(m => m.name);
-    
-    const validActiveMemories = activeMemoryNames.filter(name => allMemoryNames.includes(name));
-    if(validActiveMemories.length !== activeMemoryNames.length) {
-        activeAgentPreset.activeMemories = validActiveMemories;
-    }
-
-    const inactiveMemories = allMemoryNames.filter(name => !validActiveMemories.includes(name));
-
-    validActiveMemories.forEach(name => {
-        const memory = project.memories.find(m => m.name === name);
-        if (memory) activeList.appendChild(createMemoryElement(memory, true));
-    });
-    inactiveMemories.forEach(name => {
-        const memory = project.memories.find(m => m.name === name);
-        if(memory) inactiveList.appendChild(createMemoryElement(memory, false));
-    });
-
-    inactiveSection.classList.toggle('hidden', inactiveMemories.length === 0);
-    
-    if (memorySortable) memorySortable.destroy();
-    memorySortable = new Sortable(activeList, {
-        animation: 150,
-        onEnd: (evt) => {
-            const agent = stateManager.getProject().agentPresets[stateManager.getProject().activeEntity.name];
-            if (!agent) return;
-            const movedMemoryName = evt.item.dataset.name;
-            agent.activeMemories.splice(evt.oldDraggableIndex, 1);
-            agent.activeMemories.splice(evt.newDraggableIndex, 0, movedMemoryName);
-            stateManager.updateAndPersistState();
-            loadAndRenderMemories();
-        }
-    });
-}
-
-export function showMemoryEditor(index = null, event) {
-    if(event) event.stopPropagation();
-    const project = stateManager.getProject();
-    const modal = document.getElementById('memory-editor-modal');
-    
-    if(index !== null && project.memories[index]){
-        const memory = project.memories[index];
-        document.getElementById('memory-modal-title').textContent = 'Edit Memory';
-        document.getElementById('memory-name-input').value = memory.name;
-        document.getElementById('memory-content-input').value = memory.content;
-        document.getElementById('memory-edit-index').value = index;
-    } else {
-        document.getElementById('memory-modal-title').textContent = 'Create New Memory';
-        document.getElementById('memory-name-input').value = '';
-        document.getElementById('memory-content-input').value = '';
-        document.getElementById('memory-edit-index').value = '';
-    }
-    modal.style.display='flex';
-}
-
-export function hideMemoryEditor() {
-    document.getElementById('memory-editor-modal').style.display = 'none';
+    assetsContainer.appendChild(memorySection);
 }
 
 export function initMemoryUI() {
-    // --- Subscribe to Events ---
-    stateManager.bus.subscribe('project:loaded', loadAndRenderMemories);
-    stateManager.bus.subscribe('memory:listChanged', loadAndRenderMemories);
-    stateManager.bus.subscribe('entity:selected', loadAndRenderMemories);
+    // รอรับคำสั่งให้ปิด Modal (หลังจากบันทึกสำเร็จ)
     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
 
-    // --- Setup Event Listeners ---
-    const memorySection = document.querySelector('#memories-container')?.closest('details.collapsible-section');
-    if (memorySection) {
-        const dropdownToggleButton = memorySection.querySelector('.section-header .dropdown button');
-        if (dropdownToggleButton) {
-            dropdownToggleButton.addEventListener('click', toggleDropdown);
-        }
-
-        const dropdownContent = memorySection.querySelector('.dropdown-content');
-        if (dropdownContent) {
-            dropdownContent.querySelector('a[data-action="createMemory"]').addEventListener('click', (e) => {
-                e.preventDefault();
-                stateManager.bus.publish('memory:create');
-            });
+    const memoryModal = document.getElementById('memory-editor-modal');
+    if (memoryModal) {
+        memoryModal.addEventListener('click', (e) => {
+            const target = e.target;
             
-            dropdownContent.querySelector('a[data-action="exportMemories"]').addEventListener('click', (e) => {
-                e.preventDefault();
-                stateManager.bus.publish('memory:exportPackage');
-            });
-
-            dropdownContent.querySelector('a[data-action="importMemories"]').addEventListener('click', (e) => {
-                e.preventDefault();
-                stateManager.bus.publish('memory:importPackage');
-            });
-        }
+            // ถ้าคลิกที่ปุ่ม "บันทึก"
+            if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
+                stateManager.bus.publish('memory:save');
+            }
+            
+            // [FIX] ถ้าคลิกที่ปุ่ม "ยกเลิก" หรือพื้นที่สีเทารอบๆ
+            // ให้เรียกฟังก์ชัน hideMemoryEditor() โดยตรง ไม่ต้องส่ง Event
+            if (target.matches('.btn-secondary') || target.closest('.modal-close-btn') || target === memoryModal) {
+                hideMemoryEditor();
+            }
+        });
     }
-    
-    document.getElementById('load-memory-package-input').addEventListener('change', (e) => {
-        stateManager.bus.publish('memory:fileSelectedForImport', e)
-    });
 
-    document.querySelector('#memory-editor-modal .btn-secondary').addEventListener('click', hideMemoryEditor);
-    document.querySelector('#memory-editor-modal .btn:not(.btn-secondary)').addEventListener('click', () => {
-        stateManager.bus.publish('memory:save');
-    });
+    console.log("✅ Memory UI Initialized with correct modal listeners.");
+}
+
+// --- ฟังก์ชัน show/hide Modal ของคุณ (ยังคงไว้) ---
+export function showMemoryEditor(index = null) {
+    const project = stateManager.getProject();
+    const modal = document.getElementById('memory-editor-modal');
+    if (!modal) return;
     
-    console.log("Memory UI Initialized.");
+    if(index !== null && project.memories[index]){
+        const memory = project.memories[index];
+        modal.querySelector('#memory-modal-title').textContent = 'Edit Memory';
+        modal.querySelector('#memory-name-input').value = memory.name;
+        modal.querySelector('#memory-content-input').value = memory.content;
+        modal.querySelector('#memory-edit-index').value = index;
+    } else {
+        modal.querySelector('#memory-modal-title').textContent = 'Create New Memory';
+        modal.querySelector('#memory-name-input').value = '';
+        modal.querySelector('#memory-content-input').value = '';
+        modal.querySelector('#memory-edit-index').value = '';
+    }
+    modal.style.display='flex';
+}
+export function hideMemoryEditor() {
+    document.getElementById('memory-editor-modal').style.display = 'none';
 }

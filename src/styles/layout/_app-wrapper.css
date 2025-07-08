@@ -4,12 +4,23 @@
    =============================================== */
 
 .app-wrapper {
+    /* This will now be the container for workspaces */
     display: flex;
-    height: 100dvh;
     width: 100vw;
+    height: 100vh;
+    overflow: hidden;
     position: relative;
 }
 
+/* --- Workspace Visibility & Layout Control --- */
+/* [FIX] ทำให้หน้าแชทเป็น Layout หลักที่แสดงผลเสมอ */
+#chat-compose-workspace {
+    display: flex;
+    flex-grow: 1; /* <-- สำคัญ: ทำให้หน้าแชทขยายเต็มพื้นที่ที่เหลือ */
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
 /* --- Sidebar Collapsed State --- */
 .app-wrapper.sidebar-collapsed .sidebar {
     flex-basis: 0; /* [FIX] Removed !important to allow for a smooth expand animation */
@@ -24,7 +35,7 @@
 .app-wrapper.sidebar-collapsed .sidebar-header,
 .app-wrapper.sidebar-collapsed .sidebar-content {
     opacity: 0;
-    pointer-events: none; /* Prevents interaction with invisible elements */
+    pointer-events: none;
     transition-delay: 0s; /* Fade out immediately, overriding the expand delay. */
 }
 
@@ -48,3 +59,7 @@ body.focus-mode #chatInput {
     min-height: 80px;
     font-size: 1.1rem;
 }
+
+/* ในไฟล์ src/styles/layout/_app-wrapper.css */
+
+/* --- Right Sidebar Collapsed State --- */

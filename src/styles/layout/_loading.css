@@ -1,0 +1,42 @@
+/* ===============================================
+   FILE: src/styles/layout/_loading.css (New File)
+   DESCRIPTION: Styles for the initial loading overlay.
+   =============================================== */
+
+.loading-overlay {
+    position: fixed;
+    inset: 0; /* Equivalent to top: 0; right: 0; bottom: 0; left: 0; */
+    background-color: rgba(26, 32, 44, 0.85); /* Dark background consistent with dark theme */
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #e2e8f0;
+    font-size: 1.2rem;
+    transition: opacity 0.4s ease, visibility 0.4s;
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-overlay:not(.active) {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.loading-overlay .spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #4a5568; /* Spinner track color */
+    border-top-color: #7f9cf5; /* Spinner active color */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

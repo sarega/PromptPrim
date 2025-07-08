@@ -1,5 +1,5 @@
 // ===============================================
-// FILE: src/js/core/core.state.js (แก้ไขแล้ว)
+// FILE: src/js/core/core.state.js
 // DESCRIPTION: Refactor isDirtyForUser to be part of the project state.
 // This ensures the dirty flag is persisted in IndexedDB with the project.
 // ===============================================
@@ -65,13 +65,24 @@ const eventBus = {
         this.events[eventName].push(fn);
         return () => { this.events[eventName] = this.events[eventName].filter(eventFn => fn !== eventFn); };
     },
+    // [FIX] เพิ่มฟังก์ชัน subscribeOnce ที่ทำงานได้อย่างถูกต้อง
+    subscribeOnce(eventName, fn) {
+        const onceFn = (data) => {
+            // เมื่อ event ทำงาน, ให้เรียกฟังก์ชันที่ส่งเข้ามา
+            fn(data);
+            // จากนั้นลบตัวเองออกจากการเป็น subscriber
+            this.events[eventName] = this.events[eventName].filter(eventFn => eventFn !== onceFn);
+        };
+        // ใช้ .subscribe เดิมเพื่อเพิ่ม listener แบบใช้ครั้งเดียวเข้าไป
+        this.subscribe(eventName, onceFn);
+    },
     publish(eventName, data) {
         if (this.events[eventName]) {
-            this.events[eventName].forEach(fn => fn(data));
+            // ใช้ .slice() เพื่อป้องกันปัญหาหากมีการ unsubscribe ระหว่างที่ loop ทำงาน
+            this.events[eventName].slice().forEach(fn => fn(data));
         }
     }
 };
-
 // --- Public State Manager ---
 export const stateManager = {
     getState: () => _appState,

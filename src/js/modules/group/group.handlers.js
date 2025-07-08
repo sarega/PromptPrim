@@ -1,95 +1,86 @@
 // ===============================================
-// FILE: src/js/modules/group/group.handlers.js (Refactored)
+// FILE: src/js/modules/group/group.handlers.js (New & Complete)
+// DESCRIPTION: Implements the logic for creating, saving, and deleting agent groups.
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 
+/**
+ * Saves the agent group based on the data entered in the editor modal.
+ * This function reads all inputs, validates them, and updates the project state.
+ */
+// ในไฟล์ /src/js/modules/group/group.handlers.js
+
 export function saveAgentGroup() {
-    const newName = document.getElementById('group-name-input').value.trim();
-    const oldName = stateManager.getState().editingGroupName;
-    if (!newName) {
-        showCustomAlert("Please enter a name for the group.", "Error");
-        return;
-    }
-
     const project = stateManager.getProject();
-    if (newName !== oldName && project.agentGroups[newName]) {
-        showCustomAlert("A group with this name already exists.", "Error");
+    const editingGroupName = stateManager.getState().editingGroupName;
+    const newName = document.getElementById('group-name-input').value.trim();
+
+    if (!newName) {
+        showCustomAlert("Group name cannot be empty.", "Error");
         return;
     }
 
-    // [FIX] Get the ordered list of members directly from the DOM.
-    // This is more robust than relying on sortableInstance.toArray().
+    if (newName !== editingGroupName && project.agentGroups[newName]) {
+        showCustomAlert(`A group named "${newName}" already exists.`, "Error");
+        return;
+    }
+
+    const allSortedAgentNames = window.groupSortable ? window.groupSortable.toArray() : [];
     const memberItems = document.querySelectorAll('#group-member-list .agent-sortable-item');
-    const members = Array.from(memberItems)
+    const selectedAgentNames = Array.from(memberItems)
         .filter(item => item.querySelector('input[type="checkbox"]').checked)
         .map(item => item.dataset.agentName);
 
-    if (members.length === 0) {
-        showCustomAlert("A group must have at least one member.", "Error");
-        return;
-    }
-    const moderatorAgent = document.getElementById('group-moderator-select').value;
-    if (!moderatorAgent || !members.includes(moderatorAgent)) {
-        showCustomAlert("Please select a valid moderator from the group members.", "Error");
-        return;
-    }
+    const finalAgentList = allSortedAgentNames.filter(name => selectedAgentNames.includes(name));
 
-    const newGroupData = {
-        members: members,
-        moderatorAgent: moderatorAgent,
+    const groupData = {
+        agents: finalAgentList,
+        moderatorAgent: document.getElementById('group-moderator-select').value,
         flowType: document.getElementById('group-flow-select').value,
-        maxTurns: parseInt(document.getElementById('group-max-turns-input').value, 10) || 4,
-        summarizationTokenThreshold: parseInt(document.getElementById('group-summarization-threshold-input').value, 10) ?? 3000
+        maxTurns: parseInt(document.getElementById('group-max-turns-input').value, 10),
+        timerInSeconds: parseInt(document.getElementById('group-timer-input').value, 10), // เพิ่ม field ใหม่
+        summarizationTokenThreshold: parseInt(document.getElementById('group-summarization-threshold-input').value, 10)
     };
 
-    if (oldName && oldName !== newName) {
-        delete project.agentGroups[oldName];
+    if (editingGroupName && editingGroupName !== newName) {
+        delete project.agentGroups[editingGroupName];
         project.chatSessions.forEach(session => {
-            if (session.linkedEntity?.type === 'group' && session.linkedEntity.name === oldName) {
+            if (session.linkedEntity?.type === 'group' && session.linkedEntity?.name === editingGroupName) {
                 session.linkedEntity.name = newName;
             }
         });
-        if(project.activeEntity.type === 'group' && project.activeEntity.name === oldName) {
-            project.activeEntity.name = newName;
-        }
     }
-    
-    project.agentGroups[newName] = newGroupData;
+
+    project.agentGroups[newName] = groupData;
 
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-    stateManager.bus.publish('group:listChanged');
-    if (project.activeEntity.type === 'group') {
-        stateManager.bus.publish('entity:selected', project.activeEntity);
-    }
-    
-    // Announce that the editor should close
+
+    // [FIX] แก้ไขการปิด Modal ให้ถูกต้อง
+    // แทนที่จะเรียกฟังก์ชัน UI โดยตรง ให้ส่ง Event ไปบอก UI ให้ปิดตัวเอง
     stateManager.bus.publish('group:editorShouldClose');
+    
+    showCustomAlert(`Group "${newName}" saved successfully.`, "Success");
+    
+    // สั่งให้ Studio วาด UI ใหม่ทั้งหมดเพียงครั้งเดียวหลังจากทุกอย่างเสร็จสิ้น
+    stateManager.bus.publish('studio:contentShouldRender');
 }
 
-export function deleteAgentGroup(groupName) {
-     if (!groupName) return;
-     if (confirm(`Are you sure you want to delete the group '${groupName}'?`)) {
-         const project = stateManager.getProject();
-         delete project.agentGroups[groupName];
-         
-         project.chatSessions.forEach(session => {
-             if (session.linkedEntity?.type === 'group' && session.linkedEntity.name === groupName) {
-                 // Fallback to the first available agent
-                 session.linkedEntity = {type: 'agent', name: Object.keys(project.agentPresets)[0]};
-             }
-         });
-         
-         if (project.activeEntity.type === 'group' && project.activeEntity.name === groupName) {
-             project.activeEntity = {type: 'agent', name: Object.keys(project.agentPresets)[0]};
-         }
-         
-         stateManager.setProject(project);
-         stateManager.updateAndPersistState();
-         
-         stateManager.bus.publish('group:listChanged');
-         stateManager.bus.publish('entity:selected', project.activeEntity);
-     }
+/**
+ * Deletes an agent group from the project.
+ * @param {object} payload - The event payload.
+ * @param {string} payload.groupName - The name of the group to delete.
+ */
+export function deleteAgentGroup({ groupName }) {
+    if (!confirm(`Are you sure you want to delete the group "${groupName}"? This cannot be undone.`)) return;
+
+    const project = stateManager.getProject();
+    delete project.agentGroups[groupName];
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('group:listChanged');
+    showCustomAlert(`Group "${groupName}" has been deleted.`, "Success");
 }
+

@@ -1,0 +1,100 @@
+/* [DEFINITIVE CSS FIX for Right Sidebar] */
+
+/* ใช้กับ Sidebar ขวา (#studio-panel) */
+.right-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 380px;
+    flex-shrink: 0;
+    height: 100vh;
+    max-height: 100vh;
+    background-color: var(--bg-workspace-studio);
+    border-left: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+/* ส่วนหัวของ Sidebar */
+.right-sidebar .studio-header {
+    flex-shrink: 0; /* ไม่ให้ส่วนหัวหดตัว */
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* ส่วนเนื้อหาของ Sidebar (สำคัญที่สุด) */
+.right-sidebar .studio-content {
+    flex-grow: 1;      /* ทำให้ขยายเต็มพื้นที่ที่เหลือ */
+    overflow-y: auto;  /* << ทำให้มี Scrollbar แนวตั้งเมื่อเนื้อหาล้น */
+    min-height: 0;     /* << เทคนิคสำหรับ Flexbox ให้ overflow ทำงานถูกต้อง */
+    padding: 1.25rem;
+
+}
+
+/* Container ที่อยู่ข้างในสุด */
+.right-sidebar .studio-assets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+/* ---- TEST--- */
+.right-sidebar {
+    transition: margin-right 0.2s, width 0.2s;
+    width: 380px;
+    max-width: 100vw;
+}
+
+.right-sidebar.collapsed {
+    margin-right: -380px;
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    transition: margin-right 0.2s, width 0.2s;
+}
+.app-wrapper.with-right-collapsed #studio-panel.right-sidebar {
+    margin-right: -380px;
+    width: 0;
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+  #studio-panel.right-sidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 100vh;
+    width: 90vw;
+    max-width: 420px;
+    background: var(--bg-workspace-studio, #fff);
+    z-index: 1002;
+    box-shadow: -2px 0 24px #0002;
+    transition: transform 0.2s;
+    transform: translateX(100%);
+    border-left: 1px solid var(--border-color, #e0e0e0);
+  }
+  #studio-panel.right-sidebar.open {
+    transform: translateX(0);
+  }
+  #right-sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0006;
+    z-index: 1001;
+  }
+  #right-sidebar-overlay.active {
+    display: block;
+  }
+}
+
+/* .mobile-overlay {
+    position: fixed;
+    z-index: 50;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+.mobile-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+} */

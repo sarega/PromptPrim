@@ -5,7 +5,7 @@
 
 /* [FIX] Added the .hidden utility class */
 .hidden {
-    display: none !important;
+    display: none !important; /* !important ยังคงไว้ได้ในกรณีนี้ เพราะ JS จัดการโดยการ add/remove class */
 }
 
 .form-group {
@@ -49,4 +49,17 @@ textarea:focus {
 textarea {
     resize: vertical;
     min-height: 100px;
+}
+
+/* Hide browser's default number input arrows */
+/* For Chrome, Safari, Edge, Opera */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* For Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
 }

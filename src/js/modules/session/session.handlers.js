@@ -1,250 +1,317 @@
 // ===============================================
-// FILE: src/js/modules/session/session.handlers.js (แก้ไขสมบูรณ์)
-// DESCRIPTION: แก้ไขให้การสร้างและลบ session ทำให้โปรเจกต์ dirty เสมอ
+// FILE: src/js/modules/session/session.handlers.js
+// DESCRIPTION: Handles all logic related to creating, loading,
+//              and managing chat sessions.
 // ===============================================
 
-import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
-import { dbRequest, getDb } from '../../core/core.db.js';
+// --- Core Imports ---
 import { showCustomAlert } from '../../core/core.ui.js';
-import { scrollToLinkedEntity } from '../project/project.ui.js';
+import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
+import { formatTimestamp } from '../../core/core.utils.js'; // <-- ตรวจสอบว่ามีบรรทัดนี้
+import { getDb } from '../../core/core.db.js';
 
-export async function createNewChatSession() {
-    const project = stateManager.getProject();
-    if (!project || !project.activeEntity) {
-        showCustomAlert("Please create or select an agent first.", "Error");
+
+// --- UI Module Imports ---
+// These modules are responsible for updating the user interface.
+import * as SessionUI from './session.ui.js';
+import * as ChatUI from '../chat/chat.ui.js';
+import * as ComposerUI from '../composer/composer.ui.js';
+
+
+// --- Helper Functions ---
+
+/**
+ * Generates a unique identifier string with a given prefix.
+ * @param {string} [prefix='sid'] - The prefix for the ID.
+ * @returns {string} A unique ID.
+ */
+const generateUniqueId = (prefix = 'sid') => `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+/**
+ * A helper function to get the currently active project from the state.
+ * @returns {object|null} The active project object or null.
+ */
+const getActiveProject = () => stateManager.getProject(stateManager.activeProjectId);
+
+// --- Primary Session Handlers ---
+
+/**
+ * Creates a new, empty chat session, adds it to the project,
+ * persists the state, and loads it into the UI.
+ */
+export function createNewChatSession() {
+    const project = getActiveProject();
+    // [FIX] The active entity is a property of the project object, not a method on stateManager.
+    const activeEntity = project?.activeEntity;
+
+    if (!project || !activeEntity) {
+        showCustomAlert("Please create or select an agent/group first.", "Error");
         return;
     }
 
     const newSession = {
-        id: `sid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        id: generateUniqueId(),
         name: 'New Chat',
-        history: [],
+        history: [], // <--- แก้ไขตรงนี้
+        composerContent: "", // [FIX] เพิ่ม property นี้เข้าไปใน session ที่สร้างใหม่
         createdAt: Date.now(),
         updatedAt: Date.now(),
         pinned: false,
         archived: false,
-        linkedEntity: { ...project.activeEntity },
-        groupChatState: { isRunning: false },
-        summaryState: { activeSummaryId: null, summarizedUntilIndex: 0 }
+        linkedEntity: { ...activeEntity },
+        summaryState: { activeSummaryId: null, summarizedUntilIndex: -1 }
     };
 
-    try {
-        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
-        
-        if (!project.chatSessions) {
-            project.chatSessions = [];
-        }
-        project.chatSessions.unshift(newSession);
-        
-        stateManager.setProject(project);
-        
-        // [FIX] Creating a session is a dirtying action.
-        stateManager.updateAndPersistState(); 
+    // 1. Modify state in memory
+    project.chatSessions.unshift(newSession);
+    project.activeSessionId = newSession.id;
 
-        await loadChatSession(newSession.id);
-        
-        // No longer need a separate publish for session:changed as loadChatSession handles rendering.
+    // 2. Persist the entire project state
+    stateManager.updateAndPersistState(project);
 
-    } catch (error) {
-        console.error("Failed to create new session in DB:", error);
-        showCustomAlert("Error creating new chat.", "Error");
-    }
+    // 3. Update the UI by loading the new session
+    loadChatSession(newSession.id);
 }
 
-export async function loadChatSession(id) {
-    if (stateManager.isLoading()) return;
+/**
+ * Loads a given session's data into the UI. This is the single source of truth
+ * for displaying a session's content and is responsible for updating all
+ * relevant UI components.
+ * @param {string | null} sessionId The ID of the session to load, or null to clear the view.
+ */
+export function loadChatSession(sessionId) {
     const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === id);
+    if (!project) return;
 
-    if (session) {
-        project.activeSessionId = id;
-        
-        if (session.linkedEntity?.type === 'agent' && project.agentPresets[session.linkedEntity.name]) {
-            project.activeEntity = { ...session.linkedEntity };
-        } else if (session.linkedEntity?.type === 'group' && project.agentGroups[session.linkedEntity.name]) {
-            project.activeEntity = { ...session.linkedEntity };
-        } else if (Object.keys(project.agentPresets).length > 0){
-            const firstAgentName = Object.keys(project.agentPresets)[0];
-            project.activeEntity = { type: 'agent', name: firstAgentName };
-            session.linkedEntity = { ...project.activeEntity };
-            stateManager.updateAndPersistState();
-        } else {
-             project.activeEntity = null;
-        }
-        
-        stateManager.setProject(project);
-        stateManager.bus.publish('session:loaded', session);
-        
-        if (project.activeEntity) {
-            stateManager.bus.publish('entity:selected', project.activeEntity);
-            
-            requestAnimationFrame(() => {
-                scrollToLinkedEntity(project.activeEntity.type, project.activeEntity.name);
-            });
-        }
+    // ส่วนจัดการกรณีไม่มี sessionId (เคลียร์หน้าจอ)
+    if (!sessionId) {
+        project.activeSessionId = null;
+        stateManager.updateAndPersistState(project);
+        // ใช้ setTimeout กับส่วนนี้ด้วยเพื่อความปลอดภัย
+        setTimeout(() => {
+            ChatUI.clearChat();
+            ComposerUI.setContent('');
+            SessionUI.renderSessionList();
+        }, 0);
+        return;
     }
-}
+    
+    const session = project.chatSessions.find(s => s.id === sessionId);
 
-export async function renameChatSession(id, e, newNameFromPrompt = null) {
-    if (e) e.stopPropagation();
-    const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === id);
+    // ส่วนจัดการกรณีหา session ไม่เจอ
+    if (!session) {
+        console.warn(`Session with ID ${sessionId} not found. Loading most recent session as fallback.`);
+        const fallbackSession = [...project.chatSessions]
+            .filter(s => !s.archived)
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        
+        loadChatSession(fallbackSession ? fallbackSession.id : null);
+        return;
+    }
+
+    // 1. ตั้งค่า active session ใน state
+    if (project.activeSessionId !== sessionId) {
+        project.activeSessionId = sessionId;
+        stateManager.updateAndPersistState(project);
+    }
+    
+    // [CRITICAL FIX] หน่วงเวลาการเรียก UI ทั้งหมด
+    // เพื่อให้แน่ใจว่าทุกโมดูล (ChatUI, ComposerUI, SessionUI) ถูกโหลดพร้อมใช้งานแล้ว
+    setTimeout(() => {
+        const composerPanel = document.getElementById('composer-panel');
+        if (composerPanel) {
+            // ถ้า session นี้เคยมีการบันทึกความสูงไว้ ให้นำมาใช้
+            if (session.composerHeight) {
+                composerPanel.style.flexBasis = session.composerHeight;
+            } else {
+                // ถ้าไม่เคย ให้ใช้ค่าเริ่มต้น
+                composerPanel.style.flexBasis = '35vh';
+            }
+        }
+        // 2. อัปเดต UI ทั้งหมดที่เกี่ยวข้องกับ session
+        ChatUI.renderMessages(session.history || []);
+        ComposerUI.setContent(session.composerContent || '');
+        ChatUI.updateChatTitle(session.name);
+        SessionUI.renderSessionList(); // วาด Session List ใหม่เพื่อไฮไลท์อันที่เลือก
+        ChatUI.scrollToBottom();
+
+        // 3. ตรวจสอบและเลือก agent/group ที่ผูกกับ session นี้
+        const entity = session.linkedEntity || project.activeEntity;
+        if (entity) {
+            project.activeEntity = entity;
+            stateManager.bus.publish('entity:selected', entity);
+        }
+    }, 0); // การใส่ 0 คือการสั่งให้ทำงานทันทีที่ Call Stack ปัจจุบันว่างลง
+
+}
+/**
+ * Renames a chat session after prompting the user for a new name.
+ * @param {string} sessionId - The ID of the session to rename.
+ * @param {Event} [event] - The click event, to stop propagation.
+ * @param {string} [newNameFromPrompt=null] - An optional new name passed directly.
+ */
+export function renameChatSession(sessionId, event, newNameFromPrompt = null) {
+    event?.stopPropagation();
+    const project = getActiveProject();
+    const session = project?.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
     const newName = newNameFromPrompt || prompt("Enter new name:", session.name);
-    if (newName && newName.trim()) {
+    if (newName && newName.trim() && newName.trim() !== session.name) {
+        // 1. Modify state
         session.name = newName.trim();
         session.updatedAt = Date.now();
-        stateManager.setProject(project);
-        stateManager.updateAndPersistState();
         
-        stateManager.bus.publish('session:changed');
-        if (id === project.activeSessionId) {
-            stateManager.bus.publish('session:titleChanged', newName);
+        // 2. Persist changes
+        stateManager.updateAndPersistState(project);
+        
+        // 3. Update UI directly
+        SessionUI.renderSessionList();
+        if (sessionId === project.activeSessionId) {
+            ChatUI.updateChatTitle(session.name);
         }
     }
 }
 
-export async function deleteChatSession(id, e) {
-    if (e) e.stopPropagation();
+/**
+ * Deletes a chat session after user confirmation.
+ * If the deleted session was active, it loads the next most recent session.
+ * @param {string} sessionId - The ID of the session to delete.
+ * @param {Event} [event] - The click event, to stop propagation.
+ */
+export function deleteChatSession(sessionId, event) {
+    event?.stopPropagation();
     if (!confirm("Are you sure you want to delete this chat session?")) return;
 
-    const project = stateManager.getProject();
-    const sessionIndex = project.chatSessions.findIndex(s => s.id === id);
+    const project = getActiveProject();
+    if (!project) return;
+
+    const sessionIndex = project.chatSessions.findIndex(s => s.id === sessionId);
     if (sessionIndex === -1) return;
 
+    // 1. Modify state by removing the session
     project.chatSessions.splice(sessionIndex, 1);
-    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'delete', id);
-    
-    // [FIX] Deleting a session is always a dirtying action.
-    stateManager.updateAndPersistState();
 
-    if (project.activeSessionId === id) {
-        project.activeSessionId = null;
-        const nextSession = [...project.chatSessions].filter(s => !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    // 2. Determine the next active session if the current one was deleted
+    if (project.activeSessionId === sessionId) {
+        const nextSession = [...project.chatSessions]
+            .filter(s => !s.archived)
+            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
         
-        stateManager.setProject(project);
+        project.activeSessionId = nextSession ? nextSession.id : null;
         
-        if (nextSession) {
-            await loadChatSession(nextSession.id);
-        } else {
-            // createNewChatSession will handle setting state and dirtying
-            await createNewChatSession();
-        }
+        // 3. Persist state changes
+        stateManager.updateAndPersistState(project);
+        
+        // 4. Update UI by loading the new active session (or clearing the view)
+        loadChatSession(project.activeSessionId);
     } else {
-        stateManager.setProject(project);
-        // The state is already marked dirty, just re-render the list
-        stateManager.bus.publish('session:changed');
+        // If a non-active session was deleted, just persist and re-render the list
+        stateManager.updateAndPersistState(project);
+        SessionUI.renderSessionList();
     }
 }
 
-export async function togglePinSession(id, event) {
-    if (event) event.stopPropagation();
-    const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === id);
+/**
+ * Toggles the pinned status of a session.
+ * @param {string} sessionId - The ID of the session to pin/unpin.
+ * @param {Event} [event] - The click event, to stop propagation.
+ */
+export function togglePinSession(sessionId, event) {
+    event?.stopPropagation();
+    const project = getActiveProject();
+    const session = project?.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
     session.pinned = !session.pinned;
     session.updatedAt = Date.now();
-    stateManager.setProject(project);
-    stateManager.updateAndPersistState();
-    stateManager.bus.publish('session:changed');
+    stateManager.updateAndPersistState(project);
+    SessionUI.renderSessionList();
 }
 
-export async function cloneSession(id, event) {
-    if (event) event.stopPropagation();
-    const project = stateManager.getProject();
-    const sessionToClone = project.chatSessions.find(s => s.id === id);
+/**
+ * Creates a duplicate of an existing session.
+ * @param {string} sessionId - The ID of the session to clone.
+ * @param {Event} [event] - The click event, to stop propagation.
+ */
+export function cloneSession(sessionId, event) {
+    event?.stopPropagation();
+    const project = getActiveProject();
+    const sessionToClone = project?.chatSessions.find(s => s.id === sessionId);
     if (!sessionToClone) {
         showCustomAlert("Error: Could not find session to clone.", "Error");
         return;
     }
 
+    // Deep copy to avoid reference issues
     const newSession = JSON.parse(JSON.stringify(sessionToClone));
-    newSession.id = `sid_${Date.now()}`;
+    
+    // Set new properties for the cloned session
+    newSession.id = generateUniqueId();
     newSession.name = `${sessionToClone.name} (Copy)`;
     newSession.createdAt = Date.now();
     newSession.updatedAt = Date.now();
     newSession.pinned = false;
     newSession.archived = false;
 
+    // 1. Add to state and make active
     project.chatSessions.unshift(newSession);
-    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'add', newSession);
-    stateManager.setProject(project);
-    
-    // [FIX] Cloning a session is a dirtying action
-    stateManager.updateAndPersistState();
-    await loadChatSession(newSession.id);
+    project.activeSessionId = newSession.id;
+
+    // 2. Persist
+    stateManager.updateAndPersistState(project);
+
+    // 3. Load into UI
+    loadChatSession(newSession.id);
 }
 
-export async function archiveSession(id, event) {
-    if (event) event.stopPropagation();
-    const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === id);
+/**
+ * Toggles the archived status of a session.
+ * @param {string} sessionId - The ID of the session to archive/unarchive.
+ * @param {Event} [event] - The click event, to stop propagation.
+ */
+export function archiveSession(sessionId, event) {
+    event?.stopPropagation();
+    const project = getActiveProject();
+    const session = project?.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
     session.archived = !session.archived;
-    if (session.archived) session.pinned = false;
+    if (session.archived) session.pinned = false; // Archived items cannot be pinned
     session.updatedAt = Date.now();
     
-    stateManager.updateAndPersistState();
-
-    if (project.activeSessionId === id && session.archived) {
-        project.activeSessionId = null;
+    // If the active session was just archived, load the next available one
+    if (project.activeSessionId === sessionId && session.archived) {
         const nextSession = project.chatSessions.find(s => !s.archived);
-        stateManager.setProject(project);
-
-        if (nextSession) {
-            await loadChatSession(nextSession.id);
-        } else {
-            await createNewChatSession();
-        }
+        project.activeSessionId = nextSession ? nextSession.id : null;
+        stateManager.updateAndPersistState(project);
+        loadChatSession(project.activeSessionId);
     } else {
-        stateManager.setProject(project);
-        stateManager.bus.publish('session:changed');
+        stateManager.updateAndPersistState(project);
+        SessionUI.renderSessionList();
     }
 }
 
-export function exportChat(sessionId) {
-    const project = stateManager.getProject();
-    const idToExport = sessionId || project.activeSessionId;
-    if (!idToExport) {
-        showCustomAlert('No active chat session to export.');
-        return;
-    }
+/**
+ * Exports the content of a chat session to a text file.
+ * @param {string} [sessionId] - The ID of the session to export. Defaults to the active session.
+ */
 
-    const session = project.chatSessions.find(s => s.id === idToExport);
-    if (!session) {
-        showCustomAlert('Could not find session data to export.');
-        return;
-    }
-
-    const sessionName = session.name || 'Untitled_Chat';
-    let exportText = `Chat Export - Session: ${sessionName}\n================\n\n`;
-    session.history.forEach(msg => {
-        const sender = msg.speaker || (msg.role.charAt(0).toUpperCase() + msg.role.slice(1));
-        let contentText = '';
-        if(typeof msg.content === 'string') contentText = msg.content;
-        else if (Array.isArray(msg.content)) contentText = msg.content.find(p => p.type === 'text')?.text || '[Image]';
-        exportText += `${sender}: ${contentText}\n\n`;
-    });
-    
-    const blob = new Blob([exportText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat-export-${sessionName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
+/**
+ * [DEPRECATED but restored for compatibility]
+ * Saves all sessions to IndexedDB. This function is kept for compatibility
+ * with older parts of the code that might still call it directly.
+ * The modern approach is to use `stateManager.updateAndPersistState()`.
+ * @param {Array} [sessionsToSave] - Optional array of sessions to save.
+ * @returns {Promise<void>}
+ */
 export async function saveAllSessions(sessionsToSave) {
-    const sessions = sessionsToSave || stateManager.getProject()?.chatSessions;
+    const sessions = sessionsToSave || getActiveProject()?.chatSessions;
     if (!sessions) return;
 
     const db = getDb();
     if (!db) {
-        console.error("[AutoSave] Cannot save sessions, DB not available.");
+        console.error("[SaveAllSessions] Cannot save, DB not available.");
         return;
     }
 
@@ -254,15 +321,91 @@ export async function saveAllSessions(sessionsToSave) {
     for (const session of sessions) {
         store.put(session);
     }
-  
+
     return new Promise((resolve, reject) => {
-        tx.oncomplete = () => {
-            console.log(`[AutoSave] ${sessions.length} sessions saved to DB.`);
-            resolve();
-        };
-        tx.onerror = () => {
-            console.error('[AutoSave] Error saving sessions:', tx.error);
-            reject(tx.error);
-        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
     });
+}
+
+/**
+ * [DEFINITIVE VERSION] Exports a chat session to a formatted text file.
+ * This version includes robust error checking and logging for easier debugging.
+ * @param {object} [payload={}] - The event data, which can contain `sessionId`.
+ */
+export function downloadChatSession(payload) {
+    try {
+        const project = stateManager.getProject();
+        if (!project) throw new Error("Project not found.");
+
+        // 1. Determine the correct session ID to export
+        const idToExport = payload?.sessionId || project.activeSessionId;
+        if (!idToExport) throw new Error("No session is active or selected for download.");
+        
+        console.log(`Attempting to download session with ID: ${idToExport}`);
+
+        const session = project.chatSessions.find(s => s.id === idToExport);
+        if (!session) throw new Error(`Session with ID ${idToExport} could not be found.`);
+
+        // 2. Build the text content for the file
+        let chatContent = `Chat Session: ${session.name || 'Untitled Session'}\n`;
+        chatContent += `Exported on: ${new Date().toLocaleString()}\n`;
+        if(session.linkedEntity) {
+            chatContent += `Associated Entity: ${session.linkedEntity.name} (${session.linkedEntity.type})\n`;
+        }
+        chatContent += "============================================\n\n";
+
+        const history = session.history || [];
+        if (history.length === 0) {
+            chatContent += "[This session has no messages.]";
+        } else {
+            history.forEach(msg => {
+                const timestamp = msg.timestamp ? formatTimestamp(msg.timestamp) : 'No Timestamp';
+                const role = (msg.speaker || msg.role || 'unknown').toUpperCase();
+                const content = Array.isArray(msg.content)
+                    ? msg.content.find(p => p.type === 'text')?.text || '[multimodal content]'
+                    : msg.content;
+                
+                chatContent += `[${timestamp}] ${role}:\n${content}\n\n--------------------------------\n\n`;
+            });
+        }
+        
+        console.log(`Final text content length: ${chatContent.length}`);
+
+        // 3. Create a Blob and trigger the download
+        const blob = new Blob([chatContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        const safeName = (session.name || 'untitled').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = `session-export-${safeName}.txt`;
+        a.href = url;
+        
+        // This part is crucial for ensuring the download works
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up after the download has been initiated
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log("Download initiated and cleanup complete.");
+        }, 100);
+
+    } catch (error) {
+        console.error("Download Chat Session failed:", error);
+        showCustomAlert(`Failed to download chat: ${error.message}`, "Error");
+    }
+}
+
+// [NEW] เพิ่มฟังก์ชันนี้เข้าไปเพื่อบันทึกความสูงของ Composer
+export function saveComposerHeight({ height }) {
+    const project = stateManager.getProject();
+    const session = project?.chatSessions.find(s => s.id === project.activeSessionId);
+
+    if (session && height) {
+        session.composerHeight = height;
+        // ไม่ต้องเรียก updateAndPersistState ที่นี่เพื่อลดการเขียน DB ที่ไม่จำเป็น
+        // การเปลี่ยนแปลงจะถูกบันทึกเมื่อมีการกระทำอื่นที่สำคัญเกิดขึ้น
+    }
 }

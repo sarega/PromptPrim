@@ -5,11 +5,9 @@
 import { stateManager } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 
-export function toggleMemory(name, event) {
-    if (event) event.stopPropagation();
+export function toggleMemory({ name }) {
     const project = stateManager.getProject();
-    if (project.activeEntity.type !== 'agent') return;
-    
+    if (project.activeEntity?.type !== 'agent') return;
     const agent = project.agentPresets[project.activeEntity.name];
     if (!agent) return;
     
@@ -21,65 +19,69 @@ export function toggleMemory(name, event) {
         agent.activeMemories.push(name);
     }
     
-    stateManager.setProject(project);
     stateManager.updateAndPersistState();
-    stateManager.bus.publish('memory:listChanged');
+    stateManager.bus.publish('studio:contentShouldRender');
 }
 
 export function saveMemory() {
-    const name = document.getElementById('memory-name-input').value.trim();
-    const content = document.getElementById('memory-content-input').value.trim();
-    const indexStr = document.getElementById('memory-edit-index').value;
-
-    if(!name || !content){
-        showCustomAlert('Please fill in all fields.');
-        return;
-    }
-    
     const project = stateManager.getProject();
-    const index = indexStr !== '' ? parseInt(indexStr, 10) : -1;
+    const name = document.getElementById('memory-name-input').value.trim();
+    const content = document.getElementById('memory-content-input').value;
+    const editingIndex = document.getElementById('memory-edit-index').value;
 
-    // Check for duplicate names
-    const isDuplicate = project.memories.some((m, i) => m.name === name && i !== index);
-    if (isDuplicate) {
-        showCustomAlert('A memory with this name already exists.');
+    if (!name) {
+        showCustomAlert('Memory name cannot be empty.', 'Error');
         return;
     }
 
-    if(index !== -1){ // Editing existing memory
-        project.memories[index] = {...project.memories[index], name: name, content: content};
-    } else { // Creating new memory
-        project.memories.push({name: name, content: content});
+    if (editingIndex !== '') {
+        // Editing existing memory
+        const originalName = project.memories[editingIndex].name;
+        project.memories[editingIndex] = { name, content };
+        // Update any agent that was using the old name
+        Object.values(project.agentPresets).forEach(agent => {
+            const memoryIndex = agent.activeMemories.indexOf(originalName);
+            if (memoryIndex > -1) {
+                agent.activeMemories[memoryIndex] = name;
+            }
+        });
+    } else {
+        // Creating new memory
+        if (project.memories.some(mem => mem.name === name)) {
+            showCustomAlert(`A memory named "${name}" already exists.`, 'Error');
+            return;
+        }
+        project.memories.push({ name, content });
     }
-    
+
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-    stateManager.bus.publish('memory:listChanged');
+
+    // [FIX] สั่งให้ Modal ปิด และสั่งให้วาดหน้าจอใหม่แค่ครั้งเดียว
     stateManager.bus.publish('memory:editorShouldClose');
+    stateManager.bus.publish('studio:contentShouldRender');
+    
+    showCustomAlert(`Memory "${name}" saved successfully.`, 'Success');
 }
 
-export function deleteMemory(index, e) {
-    if (e) e.stopPropagation();
+export function deleteMemory({ index }) {
     const project = stateManager.getProject();
     if (!project.memories[index]) return;
 
-    if(confirm(`Are you sure you want to delete the memory '${project.memories[index].name}'?`)){
-        const nameToDelete = project.memories[index].name;
-        project.memories.splice(index, 1);
-        
-        // Remove this memory from any agent that was using it
-        Object.values(project.agentPresets).forEach(agent => {
-            if (agent.activeMemories) {
-                const memIndex = agent.activeMemories.indexOf(nameToDelete);
-                if (memIndex > -1) agent.activeMemories.splice(memIndex, 1);
-            }
-        });
-        
-        stateManager.setProject(project);
-        stateManager.updateAndPersistState();
-        stateManager.bus.publish('memory:listChanged');
-    }
+    const nameToDelete = project.memories[index].name;
+    project.memories.splice(index, 1);
+    
+    Object.values(project.agentPresets).forEach(agent => {
+        if (agent.activeMemories) {
+            const memIndex = agent.activeMemories.indexOf(nameToDelete);
+            if (memIndex > -1) agent.activeMemories.splice(memIndex, 1);
+        }
+    });
+    
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('studio:contentShouldRender');
 }
+
 
 export function saveMemoryPackage() {
     try {

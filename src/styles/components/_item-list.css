@@ -7,8 +7,8 @@
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 6px 10px;
-    margin-bottom: 4px;
+    padding: 4px 10px;
+    margin-bottom: 3px;
     transition: all 0.2s ease;
     position: relative;
     cursor: pointer;
@@ -45,7 +45,7 @@
 
 /* --- Inactive Memory Styling --- */
 .memory-item.inactive .item-name {
-    color: #416e9f;
+    color: #8caac9;
 }
 
 
@@ -79,8 +79,12 @@
 
 .item-actions {
     display: flex;
-    gap: 5px;
     align-items: center;
+}
+
+/* [FIX] Use margin for more reliable spacing instead of gap */
+.item-actions > *:not(:last-child) {
+    margin-right: 2px;
 }
 
 .collapsible-section summary {
@@ -148,3 +152,10 @@
 .memory-toggle.active::after {
     transform: translateX(16px);
 }
+
+/* [ADD THIS] เพิ่มเอฟเฟกต์ hover สำหรับ Item ที่ไม่ได้ถูกเลือกใน Light Mode */
+.item-list > .item:not(.active):hover {
+    background-color: #eef2f7; /* หรือ var(--bg-workspace-studio) */
+    border-color: #d1d8e0;
+}
+

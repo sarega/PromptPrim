@@ -21,6 +21,8 @@
     align-self: flex-end;
     align-items: flex-end;
     max-width: 85%;
+    width: 100%; 
+
 }
 .message-turn-wrapper.assistant-turn {
     align-self: flex-start;
@@ -33,7 +35,7 @@
 .speaker-label {
     font-weight: bold;
     font-size: 0.9em;
-    color: var(--primary-color);
+    color: #2563eb; /* <--- เปลี่ยนตรงนี้ */
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -48,9 +50,9 @@
     outline: none;
 }
 .message.user {
-    background: var(--background-gradient);
-    color: white;
-    border-bottom-right-radius: 5px;
+    background-color: #eaf5fe ;
+    color: var(--user-bubble-edit-text-color); /* <--- เปลี่ยนตรงนี้ */
+    border-color: var(--text-light);
     width: fit-content;
     max-width: 100%;
 }
@@ -82,6 +84,7 @@
     border-radius: 20px;
     padding: 4px;
     border: 1px solid rgba(0,0,0,0.05);
+    opacity: 0.7;
 }
 .message:hover .message-actions, .message.is-editing .message-actions {
     display: flex;
@@ -91,23 +94,33 @@
 .message-actions button {
     background: transparent;
     border: none;
-    color: #718096;
+    /* color: #718096; */
     width: 28px;
     height: 28px;
     font-size: 16px;
     border-radius: 50%;
     cursor: pointer;
 }
-.message.user .message-actions button { color: rgba(255, 255, 255, 0.7); }
+.message.user .message-actions button { color: rgba(0, 0, 0, 0.7); }
 .message-actions button:hover { background: #e2e8f0; color: var(--text-dark); }
 .message.user .message-actions button:hover { background: rgba(0, 0, 0, 0.3); color: white; }
 .message-content img.multimodal-image {
+    display: block;
     max-width: 100%;
     max-height: 300px;
     border-radius: 8px;
     margin-top: 10px;
+    object-fit: contain;
 }
+
 .message.is-editing { max-width: 95% !important; }
+
+/* [FIX] When a user bubble is in edit mode, force it to expand to the full available width */
+.message.user.is-editing {
+    width: 100%;
+    align-self: stretch; /* <--- เพิ่มบรรทัดนี้เข้าไป */
+}
+
 .inline-edit-container { width: 100%; }
 .inline-edit-textarea {
     width: 100%;
@@ -124,8 +137,9 @@
     color: var(--text-dark);
 }
 .message.user .inline-edit-textarea {
-    background-color: rgba(0, 0, 0, 0.1);
-    color: var(--text-light);
+    background-color: rgba(255, 255, 255, 0.1);
+    /* [THIS IS THE CORRECT RULE] บังคับใช้ตัวแปรที่ถูกต้องกับ Selector ที่ถูกต้อง */
+    color: var(--user-bubble-edit-text-color) !important;
     border-color: var(--text-light);
 }
 .inline-edit-actions {
@@ -138,24 +152,44 @@
 /* --- [REFACTORED] Chat Input Area --- */
 .chat-input-wrapper {
     background: transparent;
-    padding: 0 20px 15px;
-    border-top: none;
+    padding: 0 20px 15px; /* ระยะห่างรอบๆ */
     flex-shrink: 0;
+    position: relative;
+    z-index: 30;
+    display: flex; /* [FIX] ทำให้เป็น Flexbox */
+    flex-direction: column; /* [FIX] จัดเรียงในแนวตั้ง */
 }
+
+#file-preview-container + .chat-input-wrapper {
+    margin-top: 12px;
+}
+
+.chat-panel-bottom {
+    position: relative;
+    z-index: 30; /* ตรวจสอบให้แน่ใจว่ามันอยู่เหนือ Composer */
+}
+
+
+
 .input-container-seamless {
     position: relative;
     width: 100%;
-    background-color: white;
+    background-color: var(--bg-color-secondary); /* ปรับสีพื้นหลังให้เข้ากัน */
     border: 1px solid var(--border-color);
     border-radius: 24px;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
     display: flex;
     align-items: center;
     padding: 5px;
+    transition: all 0.2s ease;
+    
 }
+
 .input-container-seamless:focus-within {
-    box-shadow: 0 0 0 3px var(--shadow-light);
     border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--shadow-light);
+    background: transparent !important;
+    
+
 }
 #chatInput {
     flex-grow: 1;
@@ -235,12 +269,25 @@
 #chat-actions-menu a:hover { background-color: #f1f1f1; }
 
 /* --- File Previews --- */
-#file-preview-container {
-    display: none;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 12px; margin-bottom: 12px; padding: 0;
-    background: transparent; width: 100%;
+
+
+/* [FIX] ใช้คลาส .hidden ในการซ่อนเท่านั้น */
+#file-preview-container.hidden {
+    display: none !important; /* ใช้ !important เพื่อความแน่นอน */
+    margin-bottom: 0;
+    
 }
+
+#file-preview-container {
+    display: grid; /* ค่าเริ่มต้นคือพร้อมแสดงผล */
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px; 
+    margin-bottom: 12px; /* [FIX] เพิ่มระยะห่างด้านล่างเมื่อแสดงผล */
+    padding: 0;
+    background: transparent; 
+    width: 100%;
+}
+
 .file-preview-item {
     position: relative; border-radius: 8px; overflow: hidden;
     aspect-ratio: 1 / 1; display: flex; flex-direction: column;

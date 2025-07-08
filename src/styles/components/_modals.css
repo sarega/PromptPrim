@@ -21,11 +21,17 @@
     padding: 25px;
     border-radius: 15px;
     width: 90%;
-    max-width: 550px;
+    max-width: 550px; /* ขนาดเริ่มต้น */
     box-shadow: 0 5px 20px rgba(0,0,0,0.2);
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+
+    /* [FIX] เพิ่ม 4 บรรทัดนี้เข้าไป */
+    overflow: auto; /* << ต้องมีเพื่อให้ resize ทำงาน */
+    resize: both;   /* << ทำให้ปรับขนาดได้ทั้งแนวตั้งและแนวนอน */
+    min-width: 450px;  /* << กำหนดขนาดเล็กสุด (ป้องกันการหดจนมองไม่เห็น) */
+    min-height: 300px; /* << กำหนดขนาดเล็กสุด */
 }
 
 .modal-body {

@@ -1,6 +1,6 @@
 // ===============================================
-// FILE: src/js/modules/agent/agent.ui.js
-// DESCRIPTION: No changes needed here, logic is correct.
+// FILE: src/js/modules/agent/agent.ui.js 
+// DESCRIPTION: แก้ไขการจัดการ Event Listener 
 // ===============================================
 
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
@@ -12,7 +12,7 @@ function createAgentElement(name, preset) {
     const activeEntity = project.activeEntity;
 
     const item = document.createElement('div');
-    item.className = 'item';
+    item.className = 'item agent-item'; // [FIX] Add specific class for styling and targeting
     item.dataset.agentName = name;
 
     if (activeEntity && activeEntity.type === 'agent' && activeEntity.name === name) {
@@ -23,35 +23,57 @@ function createAgentElement(name, preset) {
     <div class="item-header">
         <span class="item-name"><span class="item-icon">${preset.icon || '🤖'}</span> ${name}</span>
         <div class="item-actions">
-             <button class="btn-icon" data-action="edit" title="Edit Agent">&#9998;</button>
-             <button class="btn-icon danger" data-action="delete" title="Delete Agent">&#128465;</button>
-        </div>
+            <button class="btn-icon" data-action="edit" title="Edit Agent">
+                <span class="material-symbols-outlined">edit</span>
+            </button>             
+            <button class="btn-icon danger" data-action="delete" title="Delete Agent">
+                <span class="material-symbols-outlined">delete</span>
+            </button>        </div>
     </div>`;
     
-    item.addEventListener('click', (e) => {
-        if (e.target.closest('.item-actions')) return;
-        stateManager.bus.publish('entity:select', { type: 'agent', name });
-    });
-    item.querySelector('[data-action="edit"]').addEventListener('click', () => stateManager.bus.publish('agent:edit', { agentName: name }));
-    item.querySelector('[data-action="delete"]').addEventListener('click', () => stateManager.bus.publish('agent:delete', { agentName: name }));
+    // Event listeners are now handled by delegation in initAgentUI for robustness.
     
     return item;
 }
 
-// --- Exported UI Functions ---
+/**
+ * [REFACTORED] Renders agent presets into a specific container element.
+ * @param {HTMLElement} assetsContainer - The parent element to render into.
+ */
+export function renderAgentPresets(assetsContainer) {
+    // Guard Clause: ตรวจสอบว่า container ที่ส่งมาเป็น DOM Element จริง
+    if (!assetsContainer || typeof assetsContainer.insertAdjacentHTML !== 'function') {
+        console.error('Invalid container passed to renderAgentPresets:', assetsContainer);
+        return;
+    }
 
-export function renderAgentPresets() {
     const project = stateManager.getProject();
     if (!project || !project.agentPresets) return;
-    const container = document.getElementById('agentPresetList');
-    container.innerHTML = '';
+
+    // สร้างโครงสร้าง HTML ของ Section นี้
+    const agentSectionHTML = `
+        <details class="collapsible-section" open>
+            <summary class="section-header">
+                <h3>🤖 Agent Presets</h3>
+                <button class="btn-icon" data-action="createAgent" title="Create New Agent">+</button>
+            </summary>
+            <div class="section-box">
+                <div id="agentPresetList" class="item-list"></div>
+            </div>
+        </details>
+    `;
+    assetsContainer.insertAdjacentHTML('beforeend', agentSectionHTML);
+
+    // หา list container ที่อยู่ "ข้างใน" section ที่เพิ่งสร้างขึ้น
+    const listContainer = assetsContainer.querySelector('#agentPresetList');
+    if (!listContainer) return;
+
+    // วาด item ลงใน list container
     const presets = project.agentPresets;
-    
     for (const name in presets) {
-        container.appendChild(createAgentElement(name, presets[name]));
+        listContainer.appendChild(createAgentElement(name, presets[name]));
     }
 }
-
 export function populateModelSelectors() {
     const allModels = stateManager.getState().allProviderModels || [];
     const project = stateManager.getProject();
@@ -128,54 +150,89 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     populateModelSelectors();
     document.getElementById('agent-editor-modal').style.display = 'flex';
 }
-
 export function hideAgentEditor() {
     document.getElementById('agent-editor-modal').style.display = 'none';
     stateManager.setState('editingAgentName', null);
 }
 
 export function initAgentUI() {
-    // --- Subscribe to Events ---
-    stateManager.bus.subscribe('project:loaded', renderAgentPresets);
-    stateManager.bus.subscribe('agent:listChanged', renderAgentPresets);
-    stateManager.bus.subscribe('models:loaded', populateModelSelectors);
-    stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
-    stateManager.bus.subscribe('entity:selected', renderAgentPresets);
-    
-    stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
+    // --- ส่วนของ Subscribers ที่จัดการ Modal ยังคงเหมือนเดิมทุกประการ ---
+     stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
+        console.log("🎉 'agent:profileGenerated' event received. Populating form...", profileData);
+        
+        // ใช้ชื่อ field จาก JSON ที่ได้รับมาโดยตรง
         document.getElementById('agent-name-input').value = profileData.agent_name || '';
         document.getElementById('agent-icon-input').value = profileData.agent_icon || '🤖';
         document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
         document.getElementById('agent-temperature').value = profileData.temperature ?? 1.0;
         document.getElementById('agent-topP').value = profileData.top_p ?? 1.0;
+        document.getElementById('agent-topK').value = profileData.top_k ?? 0;
+        document.getElementById('agent-presence-penalty').value = profileData.presence_penalty ?? 0.0;
+        document.getElementById('agent-frequency-penalty').value = profileData.frequency_penalty ?? 0.0;
     });
 
     stateManager.bus.subscribe('agent:enhancerStatus', ({ text, color }) => {
         const statusDiv = document.getElementById('enhancer-status');
-        statusDiv.textContent = text;
-        statusDiv.style.color = color || 'var(--text-dark)';
+        if (statusDiv) {
+            statusDiv.textContent = text;
+            statusDiv.style.color = color || 'var(--text-dark)';
+        }
     });
 
-    // --- Setup Event Listeners ---
-    const agentSection = document.querySelector('#agentPresetList')?.closest('details.collapsible-section');
-    if (agentSection) {
-        const dropdownToggleButton = agentSection.querySelector('.section-header .dropdown button');
-        if (dropdownToggleButton) {
-            dropdownToggleButton.addEventListener('click', toggleDropdown);
-        }
-        
-        const createAgentButton = agentSection.querySelector('a[data-action="createAgent"]');
-        if (createAgentButton) {
-            createAgentButton.addEventListener('click', (e) => {
+    // --- [CRITICAL FIX] แก้ไข Event Listener ให้ดักฟังบน Sidebar ขวาอันใหม่ ---
+    // เปลี่ยนจาก '#studio-modal .studio-assets-container' มาเป็น '#studio-panel'
+    const studioPanel = document.getElementById('studio-panel');
+    if (studioPanel) {
+        // ใช้ Event Delegation กับ Panel แม่ เพื่อให้ดักจับทุกคลิกที่เกิดขึ้นข้างในได้
+        studioPanel.addEventListener('click', (e) => {
+            // Listener for the "Add Agent" button (+) in the section header
+            const addAgentButton = e.target.closest('button[data-action="createAgent"]');
+            if (addAgentButton) {
                 e.preventDefault();
                 stateManager.bus.publish('agent:create');
-            });
-        }
+                return;
+            }
+
+            // Listeners for items in the agent list (Edit/Delete buttons)
+            const agentItem = e.target.closest('.item[data-agent-name]');
+            if (!agentItem) return;
+
+            const agentName = agentItem.dataset.agentName;
+            const actionButton = e.target.closest('button[data-action]');
+
+            if (actionButton) {
+                const action = actionButton.dataset.action;
+                if (action === 'edit') {
+                    stateManager.bus.publish('agent:edit', { agentName });
+                } else if (action === 'delete') {
+                    stateManager.bus.publish('agent:delete', { agentName });
+                }
+            } else {
+                // ถ้าคลิกที่ตัว Item เอง (ไม่ใช่ปุ่ม) ก็สามารถเลือกเป็น Active Agent ได้
+                const entity = { type: 'agent', name: agentName };
+                stateManager.bus.publish('entity:select', entity);
+            }
+        });
     }
 
-    document.getElementById('generate-agent-profile-btn').addEventListener('click', () => stateManager.bus.publish('agent:generateProfile'));
-    document.querySelector('#agent-editor-modal .modal-actions .btn:not(.btn-secondary)').addEventListener('click', () => stateManager.bus.publish('agent:save'));
-    document.querySelector('#agent-editor-modal .btn-secondary').addEventListener('click', hideAgentEditor);
+    // --- ส่วนของ Listener สำหรับ Agent Editor Modal ยังคงเหมือนเดิม ---
+    const agentEditorModal = document.getElementById('agent-editor-modal');
+    if (agentEditorModal) {
+        agentEditorModal.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
+                stateManager.bus.publish('agent:save');
+            } else if (target.closest('#generate-agent-profile-btn')) {
+                stateManager.bus.publish('agent:generateProfile');
+            } else if (target.matches('.btn-secondary') || target.closest('.modal-close-btn')) {
+                hideAgentEditor();
+            }
+        });
+    }
 
-    console.log("Agent UI Initialized.");
+    // --- Subscriptions อื่นๆ ---
+    stateManager.bus.subscribe('models:loaded', populateModelSelectors);
+    stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
+
+    console.log("✅ Agent UI and its listeners initialized correctly.");
 }

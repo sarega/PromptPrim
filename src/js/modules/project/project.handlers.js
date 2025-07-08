@@ -13,11 +13,65 @@ import {
     SESSIONS_STORE_NAME,
     METADATA_STORE_NAME
 } from '../../core/core.state.js';
+
 import { openDb, dbRequest, clearObjectStores } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
-import { showCustomAlert, showSaveProjectModal, hideSaveProjectModal, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
+import { showCustomAlert, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
 import { createNewChatSession, loadChatSession, saveAllSessions } from '../session/session.handlers.js';
 import { scrollToLinkedEntity } from './project.ui.js';
+
+// [NEW] เพิ่มฟังก์ชันนี้สำหรับจัดการ Autosave
+export function setupAutoSaveChanges() {
+    let saveTimeout;
+    stateManager.bus.subscribe('autosave:required', () => {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(async () => {
+            if (stateManager.isAutoSaveDirty()) {
+                console.log('[AutoSave] Persisting project to IndexedDB...');
+                const success = await persistCurrentProject();
+                if (success) {
+                    // [FIX] แก้ไขการอัปเดต state ให้เรียกผ่าน stateManager
+                    stateManager.setAutoSaveDirty(false);
+                }
+            }
+        }, 2000);
+    });
+}
+
+// [NEW] เพิ่มฟังก์ชันนี้สำหรับอัปเดต Global Settings
+export function updateGlobalSettings(settings) {
+    const project = stateManager.getProject();
+    if (!project.globalSettings) return;
+
+    if (settings.fontFamily) {
+        project.globalSettings.fontFamilySelect = settings.fontFamily;
+        stateManager.bus.publish('ui:applyFontSettings');
+    }
+    if (settings.apiKey !== undefined) {
+        project.globalSettings.apiKey = settings.apiKey;
+        stateManager.bus.publish('api:loadModels');
+    }
+    if (settings.ollamaBaseUrl !== undefined) {
+        project.globalSettings.ollamaBaseUrl = settings.ollamaBaseUrl;
+    }
+    
+    stateManager.updateAndPersistState();
+}
+
+// [NEW] ฟังก์ชันเริ่มต้นสำหรับ "Open Project"
+export function openProject() {
+    // ตรวจสอบสถานะ dirty ก่อนเปิด dialog เลือกไฟล์
+    if (stateManager.isUserDirty()) {
+        // บันทึก action ที่จะทำหลังจาก user ตัดสินใจ (คือการเปิด dialog)
+        stateManager.setState('pendingActionAfterSave', () => {
+            document.getElementById('load-project-input').click();
+        });
+        showUnsavedChangesModal();
+    } else {
+        // ถ้าไม่มีอะไรค้างคา ก็เปิด dialog ได้เลย
+        document.getElementById('load-project-input').click();
+    }
+}
 
 export function initializeFirstProject() {
     const projectId = `proj_${Date.now()}`;
@@ -44,38 +98,71 @@ export function initializeFirstProject() {
 }
 
 export async function proceedWithCreatingNewProject() {
-  try {
-    const newProject = initializeFirstProject();
-    await openDb(newProject.id);
-    await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
-    // [FIX] Pass `isFromFile` as true to indicate this is a clean state
-    await loadProjectData(newProject, true);
-  } catch (error) {
-    console.error("Failed to proceed with creating new project:", error);
-    showCustomAlert("Could not create a new project. Please check console for errors.", "Error");
-  }
+    console.log("Proceeding with creating a new project...");
+    try {
+        // 1. สร้าง Object ของโปรเจกต์ใหม่
+        const newProject = initializeFirstProject();
+
+        // 2. เปิด/สร้าง DB ใหม่
+        await openDb(newProject.id);
+
+        // 3. ล้างข้อมูลเก่าใน DB
+        await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
+
+        // 4. [FIX] ใช้ Logic การโหลดข้อมูลที่สมบูรณ์เพื่อให้แน่ใจว่า UI ทั้งหมดถูกรีเซ็ต
+        await loadProjectData(newProject, true); // true = โหลดจากไฟล์/สถานะใหม่
+
+    } catch (error) {
+        console.error("Failed to proceed with creating a new project:", error);
+        showCustomAlert("Could not create a new project.", "Error");
+    }
 }
 
 export function createNewProject() {
     if (stateManager.isUserDirty()) {
-        stateManager.setState('pendingActionAfterSave', 'new');
+        stateManager.setState('pendingActionAfterSave', proceedWithCreatingNewProject);
         showUnsavedChangesModal();
     } else {
         proceedWithCreatingNewProject();
     }
 }
 
+
 export function handleFileSelectedForOpen(event) {
     const file = event.target.files[0];
-    if (!file) return;
-    stateManager.setState('pendingFileToOpen', file);
-    event.target.value = '';
-    if (stateManager.isUserDirty()) {
-        stateManager.setState('pendingActionAfterSave', 'open');
-        showUnsavedChangesModal();
-    } else {
-        proceedWithOpeningProject();
+    if (!file) {
+        return; // ไม่ทำอะไรถ้าผู้ใช้กดยกเลิก
     }
+    
+    console.log(`[OpenProject] File selected: ${file.name}. Reading file...`);
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const fileContent = e.target.result;
+            console.log("[OpenProject] File read complete. Parsing JSON...");
+            const data = JSON.parse(fileContent);
+            
+            if (!data.id || !data.name) {
+                throw new Error("Invalid project file format.");
+            }
+            
+            console.log(`[OpenProject] JSON parsed successfully for project: ${data.name}. Loading data...`);
+            await loadProjectData(data, true); // true = โหลดจากไฟล์, จะมีการเขียนทับ DB
+
+        } catch (error) {
+            console.error("[OpenProject] Failed to load project:", error);
+            showCustomAlert(`Error loading project: ${error.message}`, 'Error');
+        }
+    };
+    reader.onerror = () => {
+        console.error("[OpenProject] FileReader error.");
+        showCustomAlert("Failed to read the selected file.", "Error");
+    };
+    reader.readAsText(file);
+    
+    // เคลียร์ค่า input เพื่อให้เลือกไฟล์เดิมซ้ำได้
+    event.target.value = '';
 }
 
 export function proceedWithOpeningProject() {
@@ -93,7 +180,8 @@ export function proceedWithOpeningProject() {
 export async function saveProject(saveAs = false) {
     const project = stateManager.getProject();
     if (saveAs || project.name === "Untitled Project") {
-        showSaveProjectModal();
+        // Instead of directly showing, we publish an event for the UI module to handle.
+        stateManager.bus.publish('ui:showSaveAsModal');
     } else {
         await handleProjectSaveConfirm(project.name);
     }
@@ -127,7 +215,7 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
         URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        hideSaveProjectModal();
+        stateManager.bus.publish('ui:hideSaveAsModal'); // This event might not be needed if save always closes it, but good for consistency.
         
         // Now that the project is successfully saved to a file,
         // the auto-save state can also be considered clean.
@@ -151,32 +239,25 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
     }
 }
 
+// [REVISED] แก้ไข handleUnsavedChanges ให้รองรับ pendingAction ที่เป็นฟังก์ชัน
 export async function handleUnsavedChanges(choice) {
     hideUnsavedChangesModal();
-    try {
-        switch (choice) {
-            case 'save':
-                // `saveProject` will pop a modal if needed, or save directly.
-                // The new logic in `handleProjectSaveConfirm` will then trigger the pending action.
-                await saveProject(false);
-                break;
-            case 'discard':
-                stateManager.setUserDirty(false);
-                // [FIX] Persist the clean state to DB *before* performing the next action
-                await persistCurrentProject();
-                await performPendingAction();
-                break;
-            case 'cancel':
-            default:
-                stateManager.setState('pendingFileToOpen', null);
-                stateManager.setState('pendingActionAfterSave', null);
-                break;
-        }
-    } catch (error) {
-        console.error("Error handling unsaved changes choice:", error);
-        showCustomAlert(`An error occurred while performing the action: ${error.message}`, "Error");
-        stateManager.setState('pendingFileToOpen', null);
-        stateManager.setState('pendingActionAfterSave', null);
+    const pendingAction = stateManager.getState().pendingActionAfterSave;
+    stateManager.setState('pendingActionAfterSave', null);
+
+    switch (choice) {
+        case 'save':
+            await saveProject(false); // saveProject จะจัดการเรียก pendingAction ที่ค้างไว้เอง
+            break;
+        case 'discard':
+            if (typeof pendingAction === 'function') {
+                await pendingAction();
+            }
+            break;
+        case 'cancel':
+        default:
+            // ไม่ทำอะไร
+            break;
     }
 }
 
@@ -327,6 +408,8 @@ export function handleApiKeyChange(key) {
     project.globalSettings.apiKey = key;
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
+    stateManager.bus.publish('api:loadModels');
+
 }
 
 export function handleOllamaUrlChange(url) {
@@ -352,11 +435,24 @@ export function saveSystemUtilityAgentSettings() {
 
 export function migrateProjectData(projectData) {
     // Ensure the isDirtyForUser flag exists
-    if (typeof projectData.isDirtyForUser === 'undefined') {
+    if (projectData.isDirtyForUser === undefined) {
         projectData.isDirtyForUser = true; // Assume dirty if flag is missing
     }
+
+    // [FIX] Ensure all agent groups have a valid `agents` array.
+    // This handles projects saved before the `agents` property was added to groups.
+    if (projectData.agentGroups) {
+        for (const groupName in projectData.agentGroups) {
+            const group = projectData.agentGroups[groupName];
+            if (group && !Array.isArray(group.agents)) {
+                group.agents = [];
+            }
+        }
+    }
+
     return projectData;
 }
+
 
 export async function selectEntity(type, name) {
     const project = stateManager.getProject();
@@ -374,3 +470,4 @@ export async function selectEntity(type, name) {
         scrollToLinkedEntity(type, name);
     });
 }
+

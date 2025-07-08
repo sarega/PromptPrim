@@ -1,5 +1,5 @@
 // ===============================================
-// FILE: src/js/core/core.api.js (แก้ไขแล้ว)
+// FILE: src/js/core/core.api.js 
 // DESCRIPTION: เปลี่ยน Model เริ่มต้นเป็น Gemma 3 27B
 // ===============================================
 
@@ -25,85 +25,99 @@ async function fetchOllamaModels(baseUrl) {
     }
 }
 
+// [NEW] เพิ่มฟังก์ชัน fetchWithTimeout เข้าไป
+async function fetchWithTimeout(resource, options = {}, timeout = 120000) { // Timeout 2 นาที (120,000 ms)
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    const response = await fetch(resource, {
+        ...options,
+        signal: controller.signal  
+    });
+    
+    clearTimeout(id);
+    return response;
+}
+
+
 
 // --- Main Exported Functions ---
 
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-    let project = stateManager.getProject(); // Get the project state at the beginning
+    
+    // [FIX 1] สร้าง deep copy ของ project state ขึ้นมาทำงานด้วย เพื่อป้องกัน side effect
+    const project = JSON.parse(JSON.stringify(stateManager.getProject()));
+
     if (!project || !project.globalSettings) {
         stateManager.bus.publish('status:update', { message: 'Project not loaded', state: 'error' });
         return;
     }
+
     const apiKey = project.globalSettings.apiKey?.trim() || '';
     const baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
-    let finalStatus = { message: 'No models found. Please check API settings.', state: 'warning' };
     
-    const fetchPromises = [];
-    if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
-    if (baseUrl) fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
-
+    let allModels = [];
     try {
-        if (fetchPromises.length === 0) {
-             stateManager.setAllModels([]);
-             finalStatus = { message: 'Ready', state: 'connected' };
-             stateManager.bus.publish('status:update', finalStatus);
-             return;
-        }
+        const fetchPromises = [];
+        if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
+        if (baseUrl) fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
+
         const results = await Promise.all(fetchPromises);
-        const allModels = results.flat();
-        
-        // --- Logic to set default model ---
-        if (allModels.length > 0) {
-            // [MODIFIED] Set the desired default model to Gemma 3 27B
-            const defaultModelId = 'google/gemma-3-27b-it'; 
-            const defaultModelExists = allModels.some(m => m.id === defaultModelId);
-            
-            let projectChanged = false;
-            if (defaultModelExists) {
-                // 1. Update the project object IN MEMORY FIRST
-                
-                // Set for System Utility Agent if it's still the initial default or empty
-                const oldDefaults = ['openai/gpt-4o-mini', 'google/gemma-2-27b-it'];
-                if (!project.globalSettings.systemUtilityAgent.model || oldDefaults.includes(project.globalSettings.systemUtilityAgent.model)) {
-                    project.globalSettings.systemUtilityAgent.model = defaultModelId;
-                    projectChanged = true;
-                }
-                
-                // Set for the "Default Agent" preset if it's empty
-                const defaultAgent = project.agentPresets['Default Agent'];
-                if (defaultAgent && !defaultAgent.model) {
-                    defaultAgent.model = defaultModelId;
-                    projectChanged = true;
-                }
-            }
-
-            // 2. If changes were made, update the central state BEFORE updating the model list
-            if (projectChanged) {
-                stateManager.setProject(project);
-            }
-            
-            // 3. NOW, update the model list. This will trigger 'models:loaded' event.
-            stateManager.setAllModels(allModels);
-            
-            // 4. If changes were made, persist them to the database
-            if(projectChanged) {
-                await stateManager.updateAndPersistState();
-            }
-
-            finalStatus = { message: `Loaded ${allModels.length} models successfully.`, state: 'connected' };
-        }
+        allModels = results.flat();
     } catch (error) {
-        finalStatus = { message: `Error loading models: ${error.message}`, state: 'error' };
+        stateManager.bus.publish('status:update', { message: `Error loading models: ${error.message}`, state: 'error' });
+        return;
+    }
+
+    // --- [FIX 2] ปรับปรุง Logic การตั้งค่า Default Model ---
+    let projectWasChanged = false;
+    if (allModels.length > 0) {
+        // สร้างรายการ Model เริ่มต้นที่ต้องการ โดยเรียงตามลำดับความสำคัญ
+        const preferredDefaults = [
+            'google/gemma-3-27b-it',
+            'google/gemma-2-9b-it',
+            'openai/gpt-4o-mini',
+            'mistralai/mistral-7b-instruct'
+        ];
+        
+        // หา Model แรกที่เจอในรายการ `preferredDefaults` ที่ผู้ใช้มี
+        const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
+
+        if (availableDefaultModel) {
+            // 1. อัปเดต System Utility Agent
+            const systemAgent = project.globalSettings.systemUtilityAgent;
+            if (!systemAgent.model) { // ตั้งค่าให้เฉพาะเมื่อยังไม่มี model เท่านั้น
+                systemAgent.model = availableDefaultModel;
+                projectWasChanged = true;
+                console.log(`System Utility Agent model set to: ${availableDefaultModel}`);
+            }
+
+            // 2. อัปเดต Default Agent
+            const defaultAgent = project.agentPresets['Default Agent'];
+            if (defaultAgent && !defaultAgent.model) {
+                defaultAgent.model = availableDefaultModel;
+                projectWasChanged = true;
+                console.log(`'Default Agent' model set to: ${availableDefaultModel}`);
+            }
+        }
     }
     
-    // Publish the final status update
-    stateManager.bus.publish('status:update', finalStatus);
+    // --- [FIX 3] จัดการ State Update และ UI Re-render อย่างเป็นขั้นตอน ---
     
-    // Trigger a final re-render to ensure all UI is in sync
-    stateManager.bus.publish('project:loaded', { projectData: stateManager.getProject() });
+    // 1. อัปเดตรายชื่อ Model ทั้งหมดใน State (จะ trigger ให้ dropdown แสดงผล)
+    stateManager.setAllModels(allModels);
+    
+    // 2. ถ้ามีการเปลี่ยนแปลงค่า Default Model ให้ทำการอัปเดต project state ทั้งก้อน
+    if (projectWasChanged) {
+        stateManager.setProject(project); // อัปเดต state ใน memory
+        await stateManager.updateAndPersistState(); // สั่งให้เซฟลง DB และตั้งค่า isDirty
+    }
+    
+    // 3. แจ้งสถานะสุดท้าย
+    const statusMessage = allModels.length > 0 ? `Loaded ${allModels.length} models.` : 'No models found. Check API Settings.';
+    stateManager.bus.publish('status:update', { message: statusMessage, state: 'connected' });
 }
-
 
 export async function callLLM(agent, messages) {
     const allModels = stateManager.getState().allProviderModels;
@@ -132,9 +146,10 @@ export async function callLLM(agent, messages) {
         body.options = params;
     }
 
-    const response = await fetch(url, {
-        method: 'POST', headers: headers, body: JSON.stringify(body),
-        signal: stateManager.getState().abortController?.signal
+    const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -176,9 +191,11 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
         body.options = params;
     }
 
-    const response = await fetch(url, {
-        method: 'POST', headers: headers, body: JSON.stringify(body),
-        signal: stateManager.getState().abortController?.signal
+    const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body),
+        signal: stateManager.getState().abortController?.signal // ยังคง signal เดิมไว้สำหรับปุ่ม Stop
     });
 
     if (!response.ok) {
@@ -191,17 +208,25 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
     let fullResponseText = '';
     let buffer = '';
 
-    const streamingContentSpan = contentDiv.querySelector('.streaming-content');
+const streamingContentSpan = contentDiv.querySelector('.streaming-content');
     if (!streamingContentSpan) {
         contentDiv.innerHTML += " Error: UI render target not found.";
         return;
     }
-    streamingContentSpan.innerHTML = ''; // Clear loading dots
+    streamingContentSpan.innerHTML = ''; // [FIX] Clear loading dots
 
-    while (true) {
-        if (stateManager.getState().abortController?.signal.aborted) break;
+    let streamDone = false; // [FIX] Flag to break the outer loop
+
+    while (!streamDone) {
+        if (stateManager.getState().abortController?.signal.aborted) {
+            streamDone = true;
+            break;
+        }
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            streamDone = true;
+            break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -214,26 +239,34 @@ export async function streamLLMResponse(contentDiv, agent, messages, speakerName
                  if (provider === 'openrouter') {
                     if (line.startsWith('data: ')) {
                         const jsonStr = line.substring(6);
-                        if (jsonStr.trim() === '[DONE]') break;
+                        if (jsonStr.trim() === '[DONE]') {
+                            streamDone = true; // [FIX] Set flag
+                            break;
+                        }
                         const data = JSON.parse(jsonStr);
                         token = data.choices[0]?.delta?.content || '';
                     }
-                } else {
+                } else { // ollama
                     const data = JSON.parse(line);
                     token = data.message?.content || '';
-                    if(data.done) break;
+                    if(data.done) {
+                        streamDone = true; // [FIX] Set flag
+                        break;
+                    }
                 }
             } catch (e) { console.warn("Error parsing stream chunk:", e); }
 
             if (token) {
                 fullResponseText += token;
-                if (agent.useMarkdown) {
+                if (agent.useMarkdown && window.marked) {
                     streamingContentSpan.innerHTML = marked.parse(fullResponseText);
                 } else {
                     streamingContentSpan.textContent = fullResponseText;
                 }
             }
         }
+        // [FIX] If the inner loop broke because of a "done" message, break the outer loop too
+        if (streamDone) break;
     }
     
     stateManager.bus.publish('ui:enhanceCodeBlocks', contentDiv);
