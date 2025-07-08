@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     
     <!-- Fonts -->
@@ -25,6 +26,12 @@
     <link rel="apple-touch-icon" href="/icon.png"> 
 </head>
 <body>
+
+    <!-- ===== LOADING OVERLAY ===== -->
+    <div id="loading-overlay" class="loading-overlay active">
+        <div class="spinner"></div>
+        <p>Loading Project...</p>
+    </div>
 
     <div class="app-wrapper">
         <!-- ===== SETTINGS PANEL ===== -->
@@ -105,54 +112,161 @@
             </div>
         </div>
 
-        <!-- ===== SIDEBAR ===== -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-top-row">
-                    <h1 class="app-main-title">PromptPrim Studio</h1>
-                    <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">&#9881;</button>
-                </div>
-                <div class="sidebar-bottom-row">
-                    <div class="dropdown align-left">
-                        <button class="btn btn-small">Project</button>
-                        <div class="dropdown-content">
-                            <a href="#" data-action="newProject">New...</a>
-                            <a href="#" data-action="openProject">Open...</a>
-                            <a href="#" data-action="saveProject">Save</a>
-                            <a href="#" data-action="saveProjectAs">Save As...</a>
-                            <hr>
-                            <a href="#" data-action="exportChat">Export Chat...</a>
+        <!-- ================================================================== -->
+        <!-- =================== CHAT & COMPOSE WORKSPACE =================== -->
+        <!-- ================================================================== -->
+        <div id="chat-compose-workspace" class="workspace active">
+
+            <!-- ===== SESSIONS PANEL (COLUMN 1) ===== -->
+            <div id="sessions-panel" class="sessions-panel sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-top-row">
+                        <h1 class="app-main-title">PromptPrim</h1>
+                        <div>
+                            <button id="switch-workspace-btn" class="menu-toggle-btn" title="Go to Agent & Asset Studio">
+                                <span class="material-symbols-outlined">construction</span>
+                            </button>
+                            <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">
+                                <span class="material-symbols-outlined">settings</span>
+                            </button>
+                            <button id="close-sidebar-btn" class="menu-toggle-btn mobile-only" title="Close Sidebar">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
                         </div>
                     </div>
-                    <h2 id="project-title" class="project-title">Untitled Project</h2>
+                    <div class="sidebar-bottom-row">
+                        <div class="dropdown align-left">
+                            <button class="btn btn-small">Project</button>
+                            <div class="dropdown-content">
+                                <a href="#" data-action="newProject">New...</a>
+                                <a href="#" data-action="openProject">Open...</a>
+                                <a href="#" data-action="saveProject">Save</a>
+                                <a href="#" data-action="saveProjectAs">Save As...</a>
+                            </div>
+                        </div>
+                        <h2 id="project-title" class="project-title">Untitled Project</h2>
+                    </div>
+                </div>
+                <div class="sidebar-content">
+                    <div class="sessions-frame">
+                        <div class="section-box">
+                            <div class="section-header">
+                                <h3><span class="material-symbols-outlined">folder</span> Chat Sessions</h3>
+                                <button id="new-chat-btn" class="btn-icon" title="New Chat">
+                                    <span class="material-symbols-outlined">add</span>
+                                </button>
+                            </div>
+                            <div id="pinnedSessionList" class="item-list"></div>
+                            <div id="sessionListContainer" class="item-list"></div>
+                            <details class="collapsible-section hidden" id="archivedSessionsSection">
+                                <summary>Archived Sessions</summary>
+                                <div id="archivedSessionList" class="item-list"></div>
+                            </details>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="sidebar-content">
-                <div class="sessions-frame">
-                    <div class="section-box">
-                        <div class="section-header">
-                            <h3>📂 Chat Sessions</h3>
-                            <button id="new-chat-btn" class="btn-icon" title="สร้าง Chat ใหม่">+</button>
+            <!-- END SESSIONS PANEL -->
+
+            <!-- ===== MAIN CHAT AREA (COLUMN 2) ===== -->
+            <div id="main-chat-panel" class="main-chat-area">
+                <div class="chat-header">
+                    <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sessions Panel">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
+                    <h1 id="chat-title" class="chat-title">AI Assistant</h1>
+                    <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
+                        <select id="entitySelector" class="hidden"></select>
+                        <div id="custom-entity-selector-trigger" class="custom-select-trigger">
+                            <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
+                            <span id="custom-entity-selector-text">Default Agent</span>
+                            <span class="custom-select-arrow"></span>
                         </div>
-                        <div id="pinnedSessionList" class="item-list"></div>
-                        <div id="sessionListContainer" class="item-list"></div>
-                        <details class="collapsible-section hidden" id="archivedSessionsSection">
-                            <summary>Archived Sessions</summary>
-                            <div id="archivedSessionList" class="item-list"></div>
-                        </details>
+                        <div id="custom-entity-selector-options" class="custom-select-options"></div>
                     </div>
                 </div>
-                <div class="sidebar-resizer"></div>
-                <div class="memories-frame">
+
+                <div class="chat-messages" id="chatMessages"></div>
+                
+                <!-- [MOVED] Composer Panel is now inside the main chat panel -->
+                <div id="composer-panel" class="composer-panel">
+                    <div class="composer-header">
+                        <h3><span class="material-symbols-outlined">edit_square</span> Composer</h3>
+                        <div class="composer-actions">
+                            <button id="export-composer-btn" class="btn btn-small" title="Export Content">Export</button>
+                        </div>
+                    </div>
+                    <div class="composer-toolbar">
+                        <!-- Placeholder for Rich Text Editor Toolbar -->
+                    </div>
+                    <div id="composer-editor" class="composer-editor" contenteditable="true" spellcheck="false"></div>
+                </div>
+
+                <!-- [MODIFIED] Chat Input Wrapper with new Action Menu -->
+                <div class="chat-input-wrapper">
+                    <div id="file-preview-container" class="hidden"></div>
+                    <div class="input-container-seamless">
+                        <div id="chat-actions-container" class="dropdown input-adornment left">
+                            <button class="btn-icon" id="chat-actions-btn" title="More Actions">
+                                <span class="material-symbols-outlined">add_circle</span>
+                            </button>
+                            <div id="chat-actions-menu" class="dropdown-content bottom-up">
+                                <a href="#" data-action="open-composer">
+                                    <span class="material-symbols-outlined">edit_square</span> Composer
+                                </a>
+                                <a href="#" data-action="summarize">
+                                    <span class="material-symbols-outlined">psychology</span> Summarize
+                                </a>
+                                <a href="#" data-action="upload-file">
+                                    <span class="material-symbols-outlined">attach_file</span> Upload files
+                                </a>
+                            </div>
+                        </div>
+                        <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
+                        <div class="input-adornment right">
+                            <button class="btn send-btn" id="sendBtn" title="Send Message">
+                                <span class="material-symbols-outlined">send</span>
+                            </button>
+                            <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">
+                                <span class="material-symbols-outlined">stop_circle</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="status-panel">
+                    <div class="status-left">
+                        <div class="status-dot" id="statusDot"></div>
+                        <span id="statusText" class="status-text-content">Disconnected</span>
+                    </div>
+                    <div class="status-right">
+                        <span id="active-agent-status"></span> &nbsp;
+                        <span id="token-count-status"></span>
+                    </div>
+                    <button id="context-inspector-trigger-btn" title="Inspect Context">&#8505;</button>
+                </div>
+            </div>
+            <!-- END MAIN CHAT AREA -->
+        </div>
+        <!-- END CHAT & COMPOSE WORKSPACE -->
+
+        <!-- ================================================================== -->
+        <!-- =================== AGENT & ASSET STUDIO ======================= -->
+        <!-- ================================================================== -->
+        <div id="agent-asset-studio" class="workspace">
+            <div class="studio-header">
+                <h1>Agent & Asset Studio</h1>
+                <button id="switch-back-to-chat-btn" class="btn">Back to Chat &raquo;</button>
+            </div>
+            <div class="studio-content">
+                <!-- [RESTRUCTURE] This is the main container for all asset lists in the studio.
+                     The 'memories-frame' class was causing CSS conflicts and has been removed.
+                     JS will now target specific list containers by their ID. -->
+                <div class="studio-assets-container">
                     <details class="collapsible-section" open>
                         <summary class="section-header">
                             <h3>🤝 Agent Groups</h3>
-                            <div class="dropdown align-right">
-                                <button class="btn-icon" title="Manage Groups">&#8942;</button>
-                                <div class="dropdown-content">
-                                    <a href="#" data-action="createGroup">สร้าง Group ใหม่</a>
-                                </div>
-                            </div>
+                            <button class="btn-icon" data-action="createGroup" title="Create New Group">+</button>
                         </summary>
                         <div class="section-box">
                             <div id="agentGroupList" class="item-list"></div>
@@ -161,29 +275,16 @@
                     <details class="collapsible-section" open>
                         <summary class="section-header">
                             <h3>🤖 Agent Presets</h3>
-                            <div class="dropdown align-right">
-                                <button class="btn-icon" title="Manage Agents">&#8942;</button>
-                                <div class="dropdown-content">
-                                    <a href="#" data-action="createAgent">สร้าง Agent ใหม่</a>
-                                </div>
-                            </div>
+                            <button class="btn-icon" data-action="createAgent" title="Create New Agent">+</button>
                         </summary>
                         <div class="section-box">
                             <div id="agentPresetList" class="item-list"></div>
                         </div>
                     </details>
-                    <details class="collapsible-section">
+                    <details class="collapsible-section" open>
                         <summary class="section-header">
                             <h3>🧠 Command Memories</h3>
-                            <div class="dropdown align-right">
-                                <button class="btn-icon" title="Manage Memories">&#8942;</button>
-                                <div class="dropdown-content">
-                                    <a href="#" data-action="createMemory">เพิ่ม Memory ใหม่</a>
-                                    <hr>
-                                    <a href="#" data-action="exportMemories">Export Package</a>
-                                    <a href="#" data-action="importMemories">Import Package</a>
-                                </div>
-                            </div>
+                            <button class="btn-icon" data-action="createMemory" title="Create New Memory">+</button>
                         </summary>
                         <div class="section-box">
                             <div id="memories-container">
@@ -206,62 +307,11 @@
                     </details>
                 </div>
             </div>
-            <div class="sidebar-horizontal-resizer"></div>
         </div>
-        
-        <!-- ===== MAIN CHAT AREA ===== -->
-        <div class="main-chat-area">
-            <div class="chat-header">
-                <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sidebar">&#9776;</button>
-                <button id="collapse-sidebar-btn" class="menu-toggle-btn" title="Collapse Sidebar"><span class="icon-wrapper">&laquo;</span></button>
-                <h1 id="chat-title" class="chat-title">AI Assistant</h1>
-                <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
-                    <select id="entitySelector" class="hidden"></select>
-                    <div id="custom-entity-selector-trigger" class="custom-select-trigger">
-                        <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
-                        <span id="custom-entity-selector-text">Default Agent</span>
-                        <span class="custom-select-arrow"></span>
-                    </div>
-                    <div id="custom-entity-selector-options" class="custom-select-options"></div>
-                </div>
-                <button class="btn-icon" id="focus-mode-btn" title="Focus Mode">&#x2922;</button>
-            </div>
-
-            <div class="chat-messages" id="chatMessages"></div>
-             
-            <div class="chat-input-wrapper">
-                <div id="file-preview-container" class="hidden"></div>
-                <div class="input-container-seamless">
-                    <div id="chat-actions-container" class="dropdown input-adornment left">
-                        <button class="btn" id="chat-actions-btn" title="More Actions">+</button>
-                        <div id="chat-actions-menu" class="dropdown-content">
-                            <a href="#" id="manual-summarize-btn">🧠 Summarize Conversation</a>
-                            <a href="#" id="clear-summary-btn" style="display: none;">🧹 Clear Summary Context</a>
-                            <a href="#" id="menu-upload-file-btn">📎 Upload File</a>
-                        </div>
-                    </div>
-                    <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
-                    <div class="input-adornment right">
-                        <button class="btn send-btn" id="sendBtn" title="Send Message">&#10148;</button>
-                        <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">&#9724;</button>
-                    </div>
-                </div>
-            </div>
-            <div id="status-panel">
-                <div class="status-left">
-                    <div class="status-dot" id="statusDot"></div>
-                    <span id="statusText" class="status-text-content">Disconnected</span>
-                </div>
-                <div class="status-right">
-                    <span id="active-agent-status"></span> &nbsp;
-                    <span id="token-count-status"></span>
-                </div>
-                <button id="context-inspector-trigger-btn" title="Inspect Context">&#8505;</button>
-            </div>
-        </div>
+        <!-- END AGENT & ASSET STUDIO -->
     </div>
     
-    <!-- ===== OVERLAYS & MODALS ===== -->
+    <!-- ===== OVERLAYS & MODALS (Remains unchanged) ===== -->
     <div id="mobile-overlay" class="mobile-overlay"></div>
     
     <div id="agent-group-editor-modal" class="modal-overlay">
