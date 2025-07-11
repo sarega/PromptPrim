@@ -8,10 +8,7 @@
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-light-theme">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-dark-theme" disabled>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     
     <!-- Fonts -->
@@ -24,19 +21,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7fafc">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#2d3748">
-    <!-- <link rel="manifest" href="/manifest.json"> -->
-     <link rel="manifest" href="/PromptPrim/manifest.json">
+    <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/index-DIwAM9cS.js"></script>
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/index-C13SUKqR.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/index-CA2upeHT.js"></script>
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/index-DSeY0NBj.css">
 </head>
 <body>
-
-    <!-- ===== LOADING OVERLAY ===== -->
-    <div id="loading-overlay" class="loading-overlay active">
-        <div class="spinner"></div>
-        <p>Loading Project...</p>
-    </div>
 
     <div class="app-wrapper">
         <!-- ===== SETTINGS PANEL ===== -->
@@ -117,65 +107,115 @@
             </div>
         </div>
 
-        <!-- ================================================================== -->
-        <!-- =================== CHAT & COMPOSE WORKSPACE =================== -->
-        <!-- ================================================================== -->
-        <div id="chat-compose-workspace" class="workspace active">
-
-            <!-- ===== SESSIONS PANEL (COLUMN 1) ===== -->
-            <div id="sessions-panel" class="sessions-panel sidebar">
-                <div class="sidebar-header">
-                    <div class="sidebar-top-row">
-                        <h1 class="app-main-title">PromptPrim</h1>
-                        <div>
-                            <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">
-                                <span class="material-symbols-outlined">settings</span>
-                            </button>
-                            <button id="close-sidebar-btn" class="menu-toggle-btn mobile-only" title="Close Sidebar">
-                                <span class="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="sidebar-bottom-row">
-                        <div class="dropdown align-left">
-                            <button class="btn btn-small">Project</button>
-                            <div class="dropdown-content">
-                                <a href="#" data-action="newProject">New...</a>
-                                <a href="#" data-action="openProject">Open...</a>
-                                <a href="#" data-action="saveProject">Save</a>
-                                <a href="#" data-action="saveProjectAs">Save As...</a>
-                            </div>
-                        </div>
-                        <h2 id="project-title" class="project-title">Untitled Project</h2>
-                    </div>
+        <!-- ===== SIDEBAR ===== -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-top-row">
+                    <h1 class="app-main-title">PromptPrim Studio</h1>
+                    <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">&#9881;</button>
                 </div>
-                <div class="sidebar-content">
-                    <div class="sessions-frame">
-                        <div class="section-box">
-                            <div class="section-header">
-                                <h3><span class="material-symbols-outlined">folder</span> Chat Sessions</h3>
-                                <button id="new-chat-btn" class="btn-icon" title="New Chat">
-                                    <span class="material-symbols-outlined">add</span>
-                                </button>
-                            </div>
-                            <div id="pinnedSessionList" class="item-list"></div>
-                            <div id="sessionListContainer" class="item-list"></div>
-                            <details class="collapsible-section hidden" id="archivedSessionsSection">
-                                <summary>Archived Sessions</summary>
-                                <div id="archivedSessionList" class="item-list"></div>
-                            </details>
+                <div class="sidebar-bottom-row">
+                    <div class="dropdown align-left">
+                        <button class="btn btn-small">Project</button>
+                        <div class="dropdown-content">
+                            <a href="#" data-action="newProject">New...</a>
+                            <a href="#" data-action="openProject">Open...</a>
+                            <a href="#" data-action="saveProject">Save</a>
+                            <a href="#" data-action="saveProjectAs">Save As...</a>
+                            <hr>
+                            <a href="#" data-action="exportChat">Export Chat...</a>
                         </div>
                     </div>
+                    <h2 id="project-title" class="project-title">Untitled Project</h2>
                 </div>
             </div>
-            <!-- END SESSIONS PANEL -->
-
-            <!-- ===== MAIN CHAT AREA (COLUMN 2) ===== -->
-        <div id="main-chat-panel" class="main-chat-area">
+            <div class="sidebar-content">
+                <div class="sessions-frame">
+                    <div class="section-box">
+                        <div class="section-header">
+                            <h3>📂 Chat Sessions</h3>
+                            <button id="new-chat-btn" class="btn-icon" title="สร้าง Chat ใหม่">+</button>
+                        </div>
+                        <div id="pinnedSessionList" class="item-list"></div>
+                        <div id="sessionListContainer" class="item-list"></div>
+                        <details class="collapsible-section hidden" id="archivedSessionsSection">
+                            <summary>Archived Sessions</summary>
+                            <div id="archivedSessionList" class="item-list"></div>
+                        </details>
+                    </div>
+                </div>
+                <div class="sidebar-resizer"></div>
+                <div class="memories-frame">
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>🤝 Agent Groups</h3>
+                            <div class="dropdown align-right">
+                                <button class="btn-icon" title="Manage Groups">&#8942;</button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="createGroup">สร้าง Group ใหม่</a>
+                                </div>
+                            </div>
+                        </summary>
+                        <div class="section-box">
+                            <div id="agentGroupList" class="item-list"></div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section" open>
+                        <summary class="section-header">
+                            <h3>🤖 Agent Presets</h3>
+                            <div class="dropdown align-right">
+                                <button class="btn-icon" title="Manage Agents">&#8942;</button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="createAgent">สร้าง Agent ใหม่</a>
+                                </div>
+                            </div>
+                        </summary>
+                        <div class="section-box">
+                            <div id="agentPresetList" class="item-list"></div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section">
+                        <summary class="section-header">
+                            <h3>🧠 Command Memories</h3>
+                            <div class="dropdown align-right">
+                                <button class="btn-icon" title="Manage Memories">&#8942;</button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="createMemory">เพิ่ม Memory ใหม่</a>
+                                    <hr>
+                                    <a href="#" data-action="exportMemories">Export Package</a>
+                                    <a href="#" data-action="importMemories">Import Package</a>
+                                </div>
+                            </div>
+                        </summary>
+                        <div class="section-box">
+                            <div id="memories-container">
+                                <details id="active-memories-details" open>
+                                    <summary>Active Memories</summary>
+                                    <div id="activeMemoriesList" class="item-list"></div>
+                                </details>
+                                <details id="inactiveMemoriesSection" class="hidden">
+                                    <summary>Inactive Memories</summary>
+                                    <div id="inactiveMemoriesList" class="item-list"></div>
+                                </details>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="collapsible-section" open>
+                        <summary class="section-header"><h3>💡 Summary Logs</h3></summary>
+                        <div class="section-box">
+                            <div id="summaryLogList" class="item-list"></div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+            <div class="sidebar-horizontal-resizer"></div>
+        </div>
+        
+        <!-- ===== MAIN CHAT AREA ===== -->
+        <div class="main-chat-area">
             <div class="chat-header">
-                <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sessions Panel">
-                    <span class="material-symbols-outlined">menu</span>
-                </button>
+                <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sidebar">&#9776;</button>
+                <button id="collapse-sidebar-btn" class="menu-toggle-btn" title="Collapse Sidebar"><span class="icon-wrapper">&laquo;</span></button>
                 <h1 id="chat-title" class="chat-title">AI Assistant</h1>
                 <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
                     <select id="entitySelector" class="hidden"></select>
@@ -186,100 +226,29 @@
                     </div>
                     <div id="custom-entity-selector-options" class="custom-select-options"></div>
                 </div>
-                <button id="toggle-right-sidebar-btn" class="menu-toggle-btn" title="Toggle Agent & Asset Studio">
-                    <span class="material-symbols-outlined">construction</span>
-                </button>
-                
+                <button class="btn-icon" id="focus-mode-btn" title="Focus Mode">&#x2922;</button>
             </div>
 
-            <div class="main-content-wrapper">
-                <div class="chat-messages" id="chatMessages"></div>
-
-                <div id="resizer-row" class="panel-resizer horizontal"></div>
-
-            <div id="composer-panel" class="composer-panel collapsed">
-                <div class="composer-header">
-                    <div class="composer-title-area">
-                        <h3><span class="material-symbols-outlined">edit_square</span> Composer</h3>
-                    </div>
-
-                    <div class="composer-tools-area">
-                        <button class="btn-icon small" data-command="formatBlock" data-value="H1" title="Heading 1">H1</button>
-                        <button class="btn-icon small" data-command="formatBlock" data-value="H2" title="Heading 2">H2</button>
-                        <button class="btn-icon small" data-command="formatBlock" data-value="H3" title="Heading 3">H3</button>
-                        <button class="btn-icon small" data-command="formatBlock" data-value="P" title="Paragraph">P</button>
-                        <div class="toolbar-divider"></div>
-                        <div class="dropdown">
-                            <button class="btn-icon small" id="color-picker-btn" title="Text Color">
-                                <span class="material-symbols-outlined">format_color_text</span>
-                            </button>
-                            <div id="color-palette" class="dropdown-content"></div>
-                        </div>
-                        <div class="toolbar-divider"></div>
-                        <button class="btn-icon small" data-command="bold" title="Bold"><span class="material-symbols-outlined">format_bold</span></button>
-                        <button class="btn-icon small" data-command="italic" title="Italic"><span class="material-symbols-outlined">format_italic</span></button>
-                        <button class="btn-icon small" data-command="underline" title="Underline"><span class="material-symbols-outlined">format_underlined</span></button>
-                        <button class="btn-icon small" data-command="strikeThrough" title="Strikethrough"><span class="material-symbols-outlined">format_strikethrough</span></button>
-                        <div class="toolbar-divider"></div>
-                        <button class="btn-icon small" data-command="insertUnorderedList" title="Bulleted List"><span class="material-symbols-outlined">format_list_bulleted</span></button>
-                        <button class="btn-icon small" data-command="insertOrderedList" title="Numbered List"><span class="material-symbols-outlined">format_list_numbered</span></button>
-                    </div>
-
-                    <div class="composer-actions">
-
-                        <button class="btn-icon" id="composer-collapse-btn" title="Collapse">
-                            <span class="material-symbols-outlined">keyboard_arrow_down</span>
-                        </button>
-                        <button class="btn-icon" id="composer-expand-btn" title="Expand/Collapse">
-                            <span class="material-symbols-outlined">fullscreen</span>
-                        </button>
-                        <button id="export-composer-btn" class="btn-icon" title="Export Content">
-                            <span class="material-symbols-outlined">save</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <div id="composer-editor" class="composer-editor">
-                    <div class="composer-content-area" contenteditable="true" spellcheck="false"></div>
-                </div>        
-            </div>
-            <!-- <div class="chat-panel-bottom"> 
-                    <div class="chat-input-wrapper">
-                        <div id="file-preview-container" class="hidden"></div>
-                        <div class="input-container-seamless"></div>
-                    </div>
-            </div> -->
+            <div class="chat-messages" id="chatMessages"></div>
+             
             <div class="chat-input-wrapper">
                 <div id="file-preview-container" class="hidden"></div>
                 <div class="input-container-seamless">
                     <div id="chat-actions-container" class="dropdown input-adornment left">
-                        <button class="btn-icon" id="chat-actions-btn" title="More Actions">
-                            <span class="material-symbols-outlined">add_circle</span>
-                        </button>
-                        <div id="chat-actions-menu" class="dropdown-content bottom-up">
-                            <a href="#" data-action="open-composer">
-                                <span class="material-symbols-outlined">edit_square</span> Composer
-                            </a>
-                            <a href="#" data-action="summarize">
-                                <span class="material-symbols-outlined">psychology</span> Summarize
-                            </a>
-                            <a href="#" data-action="upload-file">
-                                <span class="material-symbols-outlined">attach_file</span> Upload files
-                            </a>
+                        <button class="btn" id="chat-actions-btn" title="More Actions">+</button>
+                        <div id="chat-actions-menu" class="dropdown-content">
+                            <a href="#" id="manual-summarize-btn">🧠 Summarize Conversation</a>
+                            <a href="#" id="clear-summary-btn" style="display: none;">🧹 Clear Summary Context</a>
+                            <a href="#" id="menu-upload-file-btn">📎 Upload File</a>
                         </div>
                     </div>
                     <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
                     <div class="input-adornment right">
-                        <button class="btn send-btn" id="sendBtn" title="Send Message">
-                            <span class="material-symbols-outlined">send</span>
-                        </button>
-                        <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">
-                            <span class="material-symbols-outlined">stop_circle</span>
-                        </button>
+                        <button class="btn send-btn" id="sendBtn" title="Send Message">&#10148;</button>
+                        <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">&#9724;</button>
                     </div>
                 </div>
             </div>
-            
             <div id="status-panel">
                 <div class="status-left">
                     <div class="status-dot" id="statusDot"></div>
@@ -292,21 +261,9 @@
                 <button id="context-inspector-trigger-btn" title="Inspect Context">&#8505;</button>
             </div>
         </div>
-            <!-- END MAIN CHAT AREA -->
-        </div>
-
-        <div id="studio-panel" class="right-sidebar">
-            <div class="studio-header">
-                <h1>Agent & Asset Studio</h1>
-            </div>
-            <div class="studio-content">
-                <div class="studio-assets-container">
-                    </div>
-            </div>
-        </div>
     </div>
     
-    <!-- ===== OVERLAYS & MODALS (Remains unchanged) ===== -->
+    <!-- ===== OVERLAYS & MODALS ===== -->
     <div id="mobile-overlay" class="mobile-overlay"></div>
     
     <div id="agent-group-editor-modal" class="modal-overlay">
@@ -315,26 +272,8 @@
             <div class="modal-body">
                 <div class="form-group"><label for="group-name-input">Group Name</label><input type="text" id="group-name-input" placeholder="e.g., Creative Team"></div>
                 <div class="form-group"><label for="group-moderator-select">Moderator Agent</label><select id="group-moderator-select"></select></div>
-                <div class="form-group">
-                    <label for="group-flow-select">Conversation Flow</label>
-                    <select id="group-flow-select">
-                        <option value="auto-moderator">Automated Moderator</option>
-                        <option value="round-robin">Round Robin</option>
-                    </select>
-                </div>                
-                <div class="form-group hidden" id="group-rounds-control">
-                    <label for="group-max-turns-input">Rounds (1-8)</label>
-                    <div class="input-group-stepper">
-                        <button type="button" class="stepper-btn" data-step="1">+</button>
-                        <input type="number" id="group-max-turns-input" value="1" min="1" max="8">
-                        <button type="button" class="stepper-btn" data-step="-1">-</button>
-                    </div>
-                </div>
-                <div class="form-group" id="group-timer-control">
-                    <label for="group-timer-input">Timer (0-180 seconds)</label>
-                    <input type="number" id="group-timer-input" value="0" min="0" max="180" step="10">
-                    <p class="modal-warning">ใส่ 0 เพื่อให้ Moderator ทำงานรอบเดียวแล้วหยุด (โหมดปกติ)</p>
-                </div>                
+                <div class="form-group"><label for="group-flow-select">Conversation Flow</label><select id="group-flow-select"><option value="auto-moderator">Automated Moderator</option><option value="round-robin">Round Robin</option></select></div>
+                <div class="form-group hidden" id="max-turns-group"><label for="group-max-turns-input">Max Turns (1-10)</label><input type="number" id="group-max-turns-input" value="4" min="1" max="10"></div>
                 <div class="form-group"><label for="group-summarization-threshold-input">Summarization Token Threshold</label><input type="number" id="group-summarization-threshold-input" value="3000" min="0" step="100"><p class="modal-warning">สรุปบทสนทนาเมื่อมี Token ใหม่เกินค่านี้ (ใส่ 0 เพื่อปิด)</p></div>
                 <div class="form-group"><label>Group Members</label><div id="group-member-list"></div></div>
             </div>
@@ -432,12 +371,12 @@
             <div class="modal-actions"><button class="btn btn-secondary">Close</button></div>
         </div>
     </div>
-    <div id="right-sidebar-overlay"></div>
     
     <!-- ===== HIDDEN INPUTS ===== -->
     <input type="file" id="load-project-input" class="hidden" accept=".json">
     <input type="file" id="load-memory-package-input" class="hidden" accept=".json">
-    <input type="file" id="file-input" class="hidden" multiple>
-    
+    <input type="file" id="file-input" class="hidden" multiple accept="image/*,application/pdf,.txt,.docx,.csv,.xls,.xlsx,video/*,audio/*">
+
+    <!-- The ONLY script tag needed. It must be type="module" -->
 </body>
 </html>
