@@ -15,6 +15,7 @@ import { loadAllProviderModels } from './js/core/core.api.js';
 import { initCoreUI } from './js/core/core.ui.js';
 import { initGlobalKeybindings } from './js/core/core.keyboard.js';
 import { initRightSidebarToggle } from './js/modules/chat/chat.ui.js';
+import { initGlobalDropdownListener } from './js/core/core.ui.js';
 
 // UI & Handler Modules (Import all necessary modules)
 import * as ProjectUI from './js/modules/project/project.ui.js';
@@ -112,6 +113,8 @@ function setupEventSubscriptions() {
     bus.subscribe('session:archive', ({ sessionId, event }) => SessionHandlers.archiveSession(sessionId, event));
     bus.subscribe('session:pin', ({ sessionId, event }) => SessionHandlers.togglePinSession(sessionId, event));
     bus.subscribe('session:delete', ({ sessionId, event }) => SessionHandlers.deleteChatSession(sessionId, event));
+    bus.subscribe('session:download', ({ sessionId }) => SessionHandlers.downloadChatSession({ sessionId }));
+
 
     // Agent & Studio Actions
     bus.subscribe('agent:create', () => AgentUI.showAgentEditor(false));
@@ -129,12 +132,20 @@ function setupEventSubscriptions() {
     bus.subscribe('memory:edit', ({ index }) => MemoryUI.showMemoryEditor(index));
     bus.subscribe('memory:delete', ({ index }) => MemoryHandlers.deleteMemory({ index }));
     bus.subscribe('memory:toggle', ({ name }) => MemoryHandlers.toggleMemory({ name }));
+    bus.subscribe('studio:itemClicked', ProjectHandlers.handleStudioItemClick); 
     bus.subscribe('summary:view', ({ logId }) => SummaryUI.showSummaryModal(logId));
+    bus.subscribe('summary:load', ({ logId }) => ChatHandlers.loadSummaryIntoContext(logId));
+    bus.subscribe('summary:delete', ({ logId }) => ChatHandlers.deleteSummary(logId));
     bus.subscribe('entity:select', ({ type, name }) => ProjectHandlers.selectEntity(type, name));
 
     // Chat Actions
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
     bus.subscribe('chat:stopGeneration', ChatHandlers.stopGeneration);
+    bus.subscribe('chat:editMessage', ({ index }) => ChatHandlers.editMessage({ index }));
+    bus.subscribe('chat:deleteMessage', ({ index }) => ChatHandlers.deleteMessage({ index }));
+    bus.subscribe('chat:copyMessage', ({ index, event }) => ChatHandlers.copyMessageToClipboard({ index, event }));
+    bus.subscribe('chat:regenerateMessage', ({ index }) => ChatHandlers.regenerateMessage({ index }));
+
     bus.subscribe('chat:fileUpload', (event) => ChatHandlers.handleFileUpload(event));
     bus.subscribe('chat:removeFile', ({ index }) => ChatHandlers.removeAttachedFile({ index }));
     bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
@@ -150,6 +161,8 @@ function setupEventSubscriptions() {
     bus.subscribe('settings:ollamaUrlChanged', ProjectHandlers.handleOllamaUrlChanged);
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
+    bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange);
+    bus.subscribe('settings:saveSummaryPreset', MemoryHandlers.handleSaveSummarizationPreset);
 
     console.log("✅ Central Event Bus ready.");
 }
@@ -162,14 +175,23 @@ function initializeTheme() {
     const themeRadios = themeSwitcher.querySelectorAll('input[type="radio"]');
     const savedTheme = localStorage.getItem('theme') || 'system';
     
+    // อ้างอิงถึง Stylesheet ของ highlight.js ทั้งสองอัน
+    const lightThemeSheet = document.getElementById('hljs-light-theme');
+    const darkThemeSheet = document.getElementById('hljs-dark-theme');
+    
     const applyTheme = (theme) => {
         document.body.classList.remove('dark-mode', 'light-mode');
+        
+        let isDark = theme === 'dark';
         if (theme === 'system') {
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            document.body.classList.add(systemPrefersDark ? 'dark-mode' : 'light-mode');
-        } else {
-            document.body.classList.add(theme === 'dark' ? 'dark-mode' : 'light-mode');
+            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         }
+
+        document.body.classList.add(isDark ? 'dark-mode' : 'light-mode');
+
+        // [DEFINITIVE FIX] สั่งเปิด/ปิด Stylesheet ของโค้ดตาม Theme
+        if (lightThemeSheet) lightThemeSheet.disabled = isDark;
+        if (darkThemeSheet) darkThemeSheet.disabled = !isDark;
     };
 
     themeRadios.forEach(radio => {
@@ -189,7 +211,6 @@ function initializeTheme() {
         }
     });
 }
-
 // // --- Application Entry Point ---
 
 function initializeUI() {
@@ -198,6 +219,7 @@ function initializeUI() {
     initGlobalKeybindings();
     setupLayout();
     initRightSidebarToggle();
+    initGlobalDropdownListener();
 
     ProjectUI.initProjectUI();
     SessionUI.initSessionUI();

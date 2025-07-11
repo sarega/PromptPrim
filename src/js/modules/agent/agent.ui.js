@@ -10,28 +10,31 @@ import { showCustomAlert, toggleDropdown } from '../../core/core.ui.js';
 function createAgentElement(name, preset) {
     const project = stateManager.getProject();
     const activeEntity = project.activeEntity;
+    const stagedEntity = stateManager.getStagedEntity();
 
     const item = document.createElement('div');
-    item.className = 'item agent-item'; // [FIX] Add specific class for styling and targeting
+    item.className = 'item agent-item';
     item.dataset.agentName = name;
 
-    if (activeEntity && activeEntity.type === 'agent' && activeEntity.name === name) {
+    if (activeEntity?.type === 'agent' && activeEntity.name === name) {
         item.classList.add('active');
+    } else if (stagedEntity?.type === 'agent' && stagedEntity.name === name) {
+        item.classList.add('staged');
     }
 
+    // [DEFINITIVE FIX] เพิ่ม 'agent:' เข้าไปใน data-action ให้ถูกต้อง
     item.innerHTML = `
     <div class="item-header">
         <span class="item-name"><span class="item-icon">${preset.icon || '🤖'}</span> ${name}</span>
         <div class="item-actions">
-            <button class="btn-icon" data-action="edit" title="Edit Agent">
+            <button class="btn-icon" data-action="agent:edit" title="Edit Agent">
                 <span class="material-symbols-outlined">edit</span>
             </button>             
-            <button class="btn-icon danger" data-action="delete" title="Delete Agent">
+            <button class="btn-icon danger" data-action="agent:delete" title="Delete Agent">
                 <span class="material-symbols-outlined">delete</span>
-            </button>        </div>
+            </button>
+        </div>
     </div>`;
-    
-    // Event listeners are now handled by delegation in initAgentUI for robustness.
     
     return item;
 }
@@ -41,39 +44,37 @@ function createAgentElement(name, preset) {
  * @param {HTMLElement} assetsContainer - The parent element to render into.
  */
 export function renderAgentPresets(assetsContainer) {
-    // Guard Clause: ตรวจสอบว่า container ที่ส่งมาเป็น DOM Element จริง
-    if (!assetsContainer || typeof assetsContainer.insertAdjacentHTML !== 'function') {
-        console.error('Invalid container passed to renderAgentPresets:', assetsContainer);
-        return;
-    }
+    if (!assetsContainer) return;
 
     const project = stateManager.getProject();
     if (!project || !project.agentPresets) return;
 
-    // สร้างโครงสร้าง HTML ของ Section นี้
+    // [DEFINITIVE FIX] กลับมาใช้ Template Literal ที่อ่านง่ายและดีกว่า
     const agentSectionHTML = `
         <details class="collapsible-section" open>
             <summary class="section-header">
                 <h3>🤖 Agent Presets</h3>
-                <button class="btn-icon" data-action="createAgent" title="Create New Agent">+</button>
+                <button class="btn-icon" data-action="agent:create" title="Create New Agent">+</button>
             </summary>
             <div class="section-box">
                 <div id="agentPresetList" class="item-list"></div>
             </div>
         </details>
     `;
+    // 1. สร้างโครงสร้างหลักด้วย innerHTML
     assetsContainer.insertAdjacentHTML('beforeend', agentSectionHTML);
 
-    // หา list container ที่อยู่ "ข้างใน" section ที่เพิ่งสร้างขึ้น
-    const listContainer = assetsContainer.querySelector('#agentPresetList');
+    // 2. ค้นหา list container ที่เพิ่งสร้างขึ้น
+    const listContainer = assetsContainer.querySelector('#agentPresetList:last-of-type');
     if (!listContainer) return;
 
-    // วาด item ลงใน list container
+    // 3. วาด item แต่ละอันลงไป
     const presets = project.agentPresets;
     for (const name in presets) {
         listContainer.appendChild(createAgentElement(name, presets[name]));
     }
 }
+
 export function populateModelSelectors() {
     const allModels = stateManager.getState().allProviderModels || [];
     const project = stateManager.getProject();
@@ -155,12 +156,113 @@ export function hideAgentEditor() {
     stateManager.setState('editingAgentName', null);
 }
 
-export function initAgentUI() {
-    // --- ส่วนของ Subscribers ที่จัดการ Modal ยังคงเหมือนเดิมทุกประการ ---
-     stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
-        console.log("🎉 'agent:profileGenerated' event received. Populating form...", profileData);
+// export function initAgentUI() {
+//         stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
+//         console.log("🎉 'agent:profileGenerated' event received. Populating form...", profileData);
         
-        // ใช้ชื่อ field จาก JSON ที่ได้รับมาโดยตรง
+//         // ใช้ชื่อ field จาก JSON ที่ได้รับมาโดยตรง
+//         document.getElementById('agent-name-input').value = profileData.agent_name || '';
+//         document.getElementById('agent-icon-input').value = profileData.agent_icon || '🤖';
+//         document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
+//         document.getElementById('agent-temperature').value = profileData.temperature ?? 1.0;
+//         document.getElementById('agent-topP').value = profileData.top_p ?? 1.0;
+//         document.getElementById('agent-topK').value = profileData.top_k ?? 0;
+//         document.getElementById('agent-presence-penalty').value = profileData.presence_penalty ?? 0.0;
+//         document.getElementById('agent-frequency-penalty').value = profileData.frequency_penalty ?? 0.0;
+//     });
+
+//     stateManager.bus.subscribe('agent:enhancerStatus', ({ text, color }) => {
+//         const statusDiv = document.getElementById('enhancer-status');
+//         if (statusDiv) {
+//             statusDiv.textContent = text;
+//             statusDiv.style.color = color || 'var(--text-dark)';
+//         }
+//     });
+
+//     // --- [CRITICAL FIX] แก้ไข Event Listener ให้ดักฟังบน Sidebar ขวาอันใหม่ ---
+//     // เปลี่ยนจาก '#studio-modal .studio-assets-container' มาเป็น '#studio-panel'
+//     const studioPanel = document.getElementById('studio-panel');
+//     if (studioPanel) {
+//         // ใช้ Event Delegation กับ Panel แม่ เพื่อให้ดักจับทุกคลิกที่เกิดขึ้นข้างในได้
+//         studioPanel.addEventListener('click', (e) => {
+//             // Listener for the "Add Agent" button (+) in the section header
+//             const addAgentButton = e.target.closest('button[data-action="createAgent"]');
+//             if (addAgentButton) {
+//                 e.preventDefault();
+//                 stateManager.bus.publish('agent:create');
+//                 return;
+//             }
+
+//             // Listeners for items in the agent list (Edit/Delete buttons)
+//             const agentItem = e.target.closest('.item[data-agent-name]');
+//             if (!agentItem) return;
+
+//             const agentName = agentItem.dataset.agentName;
+//             const actionButton = e.target.closest('button[data-action]');
+
+//             if (actionButton) {
+//                 const action = actionButton.dataset.action;
+//                 if (action === 'edit') {
+//                     stateManager.bus.publish('agent:edit', { agentName });
+//                 } else if (action === 'delete') {
+//                     stateManager.bus.publish('agent:delete', { agentName });
+//                 }
+//             } else {
+//                 // ถ้าคลิกที่ตัว Item เอง (ไม่ใช่ปุ่ม) ก็สามารถเลือกเป็น Active Agent ได้
+//                 const entity = { type: 'agent', name: agentName };
+//                 stateManager.bus.publish('entity:select', entity);
+//             }
+//         });
+//     }
+
+//     // --- ส่วนของ Listener สำหรับ Agent Editor Modal ยังคงเหมือนเดิม ---
+//     const agentEditorModal = document.getElementById('agent-editor-modal');
+//     if (agentEditorModal) {
+//         agentEditorModal.addEventListener('click', (e) => {
+//             const target = e.target;
+//             if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
+//                 stateManager.bus.publish('agent:save');
+//             } else if (target.closest('#generate-agent-profile-btn')) {
+//                 stateManager.bus.publish('agent:generateProfile');
+//             } else if (target.matches('.btn-secondary') || target.closest('.modal-close-btn')) {
+//                 hideAgentEditor();
+//             }
+//         });
+//     }
+
+//     // --- Subscriptions อื่นๆ ---
+//     stateManager.bus.subscribe('models:loaded', populateModelSelectors);
+//     stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
+
+//     console.log("✅ Agent UI and its listeners initialized correctly.");
+// }
+
+/**
+ * [REVISED & COMPLETE] Initializes the UI functionalities specific to the Agent Editor.
+ * The conflicting delegated event listener for the studio panel has been removed.
+ * All item clicks in the studio are now exclusively handled by initStudioUI().
+ */
+export function initAgentUI() {
+    // --- Event Listener for the Agent Editor Modal ---
+    // This part is correct and remains, as it's specific to the agent editor.
+    const agentEditorModal = document.getElementById('agent-editor-modal');
+    if (agentEditorModal) {
+        agentEditorModal.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
+                stateManager.bus.publish('agent:save');
+            } else if (target.closest('#generate-agent-profile-btn')) {
+                stateManager.bus.publish('agent:generateProfile');
+            } else if (target.matches('.btn-secondary') || target.closest('.modal-close-btn')) {
+                hideAgentEditor();
+            }
+        });
+    }
+
+    // --- Event Bus Subscriptions ---
+    // These are necessary for the modal and form to function correctly.
+    stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
+        console.log("🎉 'agent:profileGenerated' event received. Populating form...", profileData);
         document.getElementById('agent-name-input').value = profileData.agent_name || '';
         document.getElementById('agent-icon-input').value = profileData.agent_icon || '🤖';
         document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
@@ -179,60 +281,8 @@ export function initAgentUI() {
         }
     });
 
-    // --- [CRITICAL FIX] แก้ไข Event Listener ให้ดักฟังบน Sidebar ขวาอันใหม่ ---
-    // เปลี่ยนจาก '#studio-modal .studio-assets-container' มาเป็น '#studio-panel'
-    const studioPanel = document.getElementById('studio-panel');
-    if (studioPanel) {
-        // ใช้ Event Delegation กับ Panel แม่ เพื่อให้ดักจับทุกคลิกที่เกิดขึ้นข้างในได้
-        studioPanel.addEventListener('click', (e) => {
-            // Listener for the "Add Agent" button (+) in the section header
-            const addAgentButton = e.target.closest('button[data-action="createAgent"]');
-            if (addAgentButton) {
-                e.preventDefault();
-                stateManager.bus.publish('agent:create');
-                return;
-            }
-
-            // Listeners for items in the agent list (Edit/Delete buttons)
-            const agentItem = e.target.closest('.item[data-agent-name]');
-            if (!agentItem) return;
-
-            const agentName = agentItem.dataset.agentName;
-            const actionButton = e.target.closest('button[data-action]');
-
-            if (actionButton) {
-                const action = actionButton.dataset.action;
-                if (action === 'edit') {
-                    stateManager.bus.publish('agent:edit', { agentName });
-                } else if (action === 'delete') {
-                    stateManager.bus.publish('agent:delete', { agentName });
-                }
-            } else {
-                // ถ้าคลิกที่ตัว Item เอง (ไม่ใช่ปุ่ม) ก็สามารถเลือกเป็น Active Agent ได้
-                const entity = { type: 'agent', name: agentName };
-                stateManager.bus.publish('entity:select', entity);
-            }
-        });
-    }
-
-    // --- ส่วนของ Listener สำหรับ Agent Editor Modal ยังคงเหมือนเดิม ---
-    const agentEditorModal = document.getElementById('agent-editor-modal');
-    if (agentEditorModal) {
-        agentEditorModal.addEventListener('click', (e) => {
-            const target = e.target;
-            if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
-                stateManager.bus.publish('agent:save');
-            } else if (target.closest('#generate-agent-profile-btn')) {
-                stateManager.bus.publish('agent:generateProfile');
-            } else if (target.matches('.btn-secondary') || target.closest('.modal-close-btn')) {
-                hideAgentEditor();
-            }
-        });
-    }
-
-    // --- Subscriptions อื่นๆ ---
     stateManager.bus.subscribe('models:loaded', populateModelSelectors);
     stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
 
-    console.log("✅ Agent UI and its listeners initialized correctly.");
+    console.log("✅ Agent UI Initialized (Conflicting studio listener removed).");
 }

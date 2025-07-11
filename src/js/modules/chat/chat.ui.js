@@ -10,20 +10,33 @@ import { debounce } from '../../core/core.utils.js';
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
     messageElement.querySelectorAll('pre code').forEach(block => {
-        if (block.parentNode.classList.contains('code-block-wrapper')) return;
+        const pre = block.parentNode;
+        if (pre.parentNode.classList.contains('code-block-wrapper')) return;
+        if (pre.parentNode.tagName === 'P') {
+            const p = pre.parentNode;
+            p.parentNode.insertBefore(pre, p);
+            if (p.childNodes.length === 0) p.remove();
+        }
+        
         const wrapper = document.createElement('div');
         wrapper.className = 'code-block-wrapper';
-        block.parentNode.insertBefore(wrapper, block);
-        wrapper.appendChild(block.parentNode);
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
         const copyButton = document.createElement('button');
         copyButton.className = 'copy-code-btn';
         copyButton.textContent = 'Copy';
         wrapper.appendChild(copyButton);
+
         copyButton.addEventListener('click', () => {
             navigator.clipboard.writeText(block.textContent).then(() => {
                 copyButton.textContent = 'Copied!';
-                setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
+                setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
             });
+            // [DEFINITIVE FIX] สั่งให้ highlight.js ทำงานกับ Code Block นี้โดยเฉพาะ
+            if (window.hljs) {
+                hljs.highlightElement(block);
+            }
         });
     });
 }
@@ -40,7 +53,7 @@ function createMessageElement(message, index) {
     msgDiv.className = `message ${role}`;
     if (isError) msgDiv.classList.add('error');
 
-    // --- ส่วนสร้าง Speaker Label (โค้ดส่วนนี้สมบูรณ์) ---
+    // --- Speaker Label ---
     if (role === 'assistant' && speaker) {
         const speakerAgent = project.agentPresets?.[speaker];
         const speakerIcon = speakerAgent ? speakerAgent.icon : '🤖';
@@ -53,50 +66,84 @@ function createMessageElement(message, index) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
 
+    // --- Content Rendering ---
     if (isLoading) {
         contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
     } else {
         const streamingContentSpan = document.createElement('span');
         streamingContentSpan.className = 'streaming-content';
-        const contentArray = Array.isArray(content) ? content : [{ type: 'text', text: content || '' }];
         
-        contentArray.forEach(part => {
-            if (part.type === 'text' && part.text) {
-                const agentForMarkdown = project.agentPresets?.[speaker] || {};
-                const useMarkdown = agentForMarkdown.useMarkdown !== false;
-
-                // [CRITICAL FIX] ตรวจสอบว่าเป็น Assistant และตั้งค่าให้ใช้ Markdown หรือไม่
-                if (role === 'assistant' && useMarkdown && window.marked) {
-                    // ถ้าใช่, ให้แปลง Markdown เป็น HTML
-                    const htmlContent = marked.parse(part.text);
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = htmlContent;
-                    // เพิ่มเข้าไปใน streamingContentSpan ทีละ Element
-                    Array.from(tempDiv.childNodes).forEach(child => streamingContentSpan.appendChild(child));
-                } else {
-                    // ถ้าไม่ใช่, ให้แสดงเป็น Text ธรรมดา
-                    const p = document.createElement('p');
-                    p.textContent = part.text;
-                    streamingContentSpan.appendChild(p);
-                }
-
-            } else if (part.type === 'image_url' && part.url) {
-                const img = document.createElement('img');
-                img.src = part.url;
-                img.className = 'multimodal-image';
-                streamingContentSpan.appendChild(img);
+        try {
+            // Logic สำหรับ Assistant (content เป็น Markdown string)
+            if (typeof content === 'string') {
+                const options = { gfm: true, breaks: false };
+                streamingContentSpan.innerHTML = marked.parse(content, options, { gfm: true, breaks: false })
+            } 
+            // Logic สำหรับ User (content เป็น Array)
+            else if (Array.isArray(content)) {
+                content.forEach(part => {
+                    if (part.type === 'text' && part.text) {
+                        const p = document.createElement('p');
+                        p.textContent = part.text;
+                        streamingContentSpan.appendChild(p);
+                    } else if (part.type === 'image_url' && part.url) {
+                        const img = document.createElement('img');
+                        img.src = part.url;
+                        img.className = 'multimodal-image';
+                        streamingContentSpan.appendChild(img);
+                    }
+                });
             }
-        });
+        } catch (e) {
+            console.error("Markdown parsing failed, rendering as plain text. Error:", e);
+            streamingContentSpan.textContent = typeof content === 'string' ? content : 'Error displaying content';
+        }
         
         contentDiv.appendChild(streamingContentSpan);
         enhanceCodeBlocks(contentDiv);
     }
     
     msgDiv.appendChild(contentDiv);
+
+    // --- Action Menu ---
+    const actions = document.createElement('div');
+    actions.className = 'message-actions';
+    const iconStyle = 'style="font-size: 18px;"';
+
+    if (!isLoading && !isError) {
+        const btnEdit = document.createElement('button');
+        btnEdit.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>edit</span>`;
+        btnEdit.title = 'Edit';
+        btnEdit.onclick = (event) => stateManager.bus.publish('chat:editMessage', { index, event });
+        actions.appendChild(btnEdit);
+
+        const btnCopy = document.createElement('button');
+        btnCopy.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>content_copy</span>`;
+        btnCopy.title = 'Copy';
+        btnCopy.onclick = (event) => stateManager.bus.publish('chat:copyMessage', { index, event });
+        actions.appendChild(btnCopy);
+
+        if (role === 'assistant') {
+            const btnRegenerate = document.createElement('button');
+            btnRegenerate.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>refresh</span>`;
+            btnRegenerate.title = 'Regenerate';
+            btnRegenerate.onclick = (event) => stateManager.bus.publish('chat:regenerateMessage', { index, event });
+            actions.appendChild(btnRegenerate);
+        }
+
+        const btnDelete = document.createElement('button');
+        btnDelete.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>delete_forever</span>`;
+        btnDelete.title = 'Delete';
+        btnDelete.onclick = (event) => stateManager.bus.publish('chat:deleteMessage', { index, event });
+        actions.appendChild(btnDelete);
+    }
+    
+    msgDiv.appendChild(actions);
+
+    // --- Final Assembly ---
     turnWrapper.appendChild(msgDiv);
     return turnWrapper;
 }
-
 function initMobileScrollBehavior() {
     const chatArea = document.querySelector('.main-chat-area');
     const messagesContainer = document.getElementById('chatMessages');
@@ -174,7 +221,7 @@ export function addMessageToUI(message, index) {
         const useMarkdown = agentForMarkdown.useMarkdown !== false;
         const textContent = (typeof content === 'string') ? content : (content?.find(p => p.type === 'text')?.text || '');
         
-        streamingContentSpan.innerHTML = useMarkdown && window.marked ? marked.parse(textContent) : `<p>${textContent}</p>`;
+        streamingContentSpan.innerHTML = useMarkdown && window.marked ? marked.parse(textContent, { gfm: true, breaks: false }) : `<p>${textContent}</p>`;
         enhanceCodeBlocks(streamingContentSpan);
     }
     
@@ -190,8 +237,6 @@ export function addMessageToUI(message, index) {
 }
 
 export function renderMessages() {
-    console.log("🖌️ [UI] renderMessages function has been called!");
-
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) {
@@ -220,6 +265,11 @@ export function renderMessages() {
 
     // เลื่อนหน้าจอไปที่ข้อความล่าสุด
     scrollToBottom();
+    if (window.hljs) {
+        document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
 }
 
 export function showStreamingTarget(index) {

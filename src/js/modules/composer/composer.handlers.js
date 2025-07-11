@@ -21,9 +21,6 @@ export function updateComposerContent(newContent) {
     }
 }
 
-/**
- * [REFACTORED] Loads composer content into the correct editable area.
- */
 export function loadComposerContent() {
     const contentArea = getEditableArea();
     if (!contentArea) return;
@@ -44,40 +41,53 @@ export function loadComposerContent() {
  * @param {string} payload.content - The HTML content to append.
  */
 export function appendToComposer({ content }) {
-    const contentArea = getEditableArea();
+    const contentArea = getEditableArea(); // This gets .composer-content-area
     const composerPanel = document.getElementById('composer-panel');
     if (!contentArea || !composerPanel) return;
 
-    // Open the panel if it's collapsed
+    // ... โค้ดส่วนเปิด panel ถ้ามันปิดอยู่ ...
     if (composerPanel.classList.contains('collapsed')) {
         composerPanel.classList.remove('collapsed');
         document.getElementById('resizer-row')?.classList.remove('collapsed');
         stateManager.bus.publish('composer:visibilityChanged');
     }
 
-    if (contentArea.innerHTML.trim() !== '') {
+    // [DEFINITIVE FIX] เปลี่ยนจาก innerHTML มาเช็คที่ textContent แทน
+    // เพื่อให้แน่ใจว่าเราจะเพิ่มเส้นคั่นก็ต่อเมื่อมี "ข้อความ" อยู่จริงๆ เท่านั้น
+    if (contentArea.textContent.trim() !== '') {
         contentArea.innerHTML += '<br><hr><br>';
     }
+
     contentArea.innerHTML += content;
     contentArea.scrollTop = contentArea.scrollHeight;
 
-    // Trigger auto-save
     updateComposerContent(contentArea.innerHTML);
 }
 
+// [REVISED] ฟังก์ชันทำความสะอาด HTML ที่จะเก็บคลาสของ highlight.js ไว้
 function sanitizeHtmlForExport(rawHtml) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = rawHtml;
+
     tempDiv.querySelectorAll('*').forEach(el => {
+        // ลบ style attribute ที่ไม่จำเป็นออก
         el.removeAttribute('style');
-        el.removeAttribute('class');
+        
+        // ลบคลาสทั้งหมด ยกเว้นคลาสที่ขึ้นต้นด้วย 'hljs-'
+        if (el.classList.length > 0) {
+            const classesToRemove = [];
+            for (let i = 0; i < el.classList.length; i++) {
+                if (!el.classList[i].startsWith('hljs-')) {
+                    classesToRemove.push(el.classList[i]);
+                }
+            }
+            classesToRemove.forEach(cls => el.classList.remove(cls));
+        }
     });
+
     return tempDiv.innerHTML;
 }
 
-/**
- * [REFACTORED] Exports the composer content from the correct editable area.
- */
 export function exportComposerContent() {
     const contentArea = getEditableArea();
     if (!contentArea) return;
@@ -88,17 +98,37 @@ export function exportComposerContent() {
         return;
     }
 
+    // ฟังก์ชัน sanitizeHtmlForExport ยังคงเหมือนเดิม
     const cleanHtmlContent = sanitizeHtmlForExport(rawHtmlContent);
+    
+    // [DEFINITIVE FIX] สร้าง HTML ที่สมบูรณ์พร้อมกับ <link> ไปยัง stylesheet
     const fullHtml = `
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <title>Composer Export</title>
+            
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+            
             <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: auto; }
-                h1, h2, h3 { margin-top: 1.2em; margin-bottom: 0.5em; }
-                ul, ol { padding-left: 30px; }
+                /* 2. สไตล์พื้นฐานของหน้าเว็บที่ Export */
+                body { 
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+                    line-height: 1.6; 
+                    padding: 20px; 
+                    max-width: 800px; 
+                    margin: auto; 
+                }
+                pre {
+                    background-color: #f6f8fa; /* สีพื้นหลัง Code Block สำหรับไฟล์ที่ Export */
+                    padding: 16px;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                }
+                code {
+                    font-family: 'Fira Mono', 'Menlo', monospace;
+                }
             </style>
         </head>
         <body>
@@ -107,6 +137,7 @@ export function exportComposerContent() {
         </html>
     `;
 
+    // ส่วนของการสร้าง Blob และการดาวน์โหลดยังคงเหมือนเดิม
     const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

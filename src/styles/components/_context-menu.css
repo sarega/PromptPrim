@@ -1,47 +1,65 @@
-/*
- * Styles for the custom context menu component.
- */
+/* ===============================================
+   == DEFINITIVE STYLES FOR CUSTOM CONTEXT MENU ==
+   =============================================== */
+
+/* 1. The main menu container */
 .context-menu {
     position: fixed;
     z-index: 11000;
+    min-width: 220px;
+
     /* Frosted glass effect */
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%); /* For Safari */
-    background-color: rgba(248, 250, 252, 0.7); /* Light theme semi-transparent background */
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
     padding: 6px;
+
     opacity: 0;
     transform: scale(0.95);
     transition: opacity 0.1s ease-out, transform 0.1s ease-out;
-    min-width: 200px;
 }
 
-/* Specific background for dark mode for the glass effect to work well */
-[data-theme="dark"] .context-menu {
-    background-color: rgba(45, 55, 72, 0.75); /* Dark theme semi-transparent background */
+/* --- Light Theme Styles --- */
+.context-menu {
+    background-color: rgba(248, 249, 250, 0.7);
+}
+.context-menu li {
+    color: var(--text-dark);
+}
+.context-menu li:hover {
+    background-color: #4f8fff; 
+    color: #fff;
 }
 
+/* --- Dark Theme Overrides --- */
+body.dark-mode .context-menu {
+    background-color: rgba(45, 55, 72, 0.75);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+body.dark-mode .context-menu li {
+    color: var(--text-dark);
+}
+body.dark-mode .context-menu li:hover {
+    background-color: var(--accent-color);
+    color: #000;
+}   
+
+/* --- General list item styling --- */
 .context-menu ul {
     list-style: none;
     margin: 0;
     padding: 0;
 }
-
 .context-menu li {
     padding: 9px 14px;
     cursor: pointer;
     border-radius: 6px;
     font-size: 0.9rem;
-    color: var(--text-color-primary);
-    transition: background-color 0.15s ease;
+    font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease;
     white-space: nowrap;
-    -webkit-user-select: none; /* Safari */
-    user-select: none;         /* Standard */
-}
-
-.context-menu li:hover {
-    background-color: var(--accent-color-translucent);
-    color: var(--accent-color);
+    user-select: none;
 }

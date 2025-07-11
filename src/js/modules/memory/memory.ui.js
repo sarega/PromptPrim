@@ -112,29 +112,45 @@ export function loadAndRenderMemories(assetsContainer) {
     assetsContainer.appendChild(memorySection);
 }
 
+// export function initMemoryUI() {
+//     // รอรับคำสั่งให้ปิด Modal (หลังจากบันทึกสำเร็จ)
+//     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
+
+//     const memoryModal = document.getElementById('memory-editor-modal');
+//     if (memoryModal) {
+//         memoryModal.addEventListener('click', (e) => {
+//             const target = e.target;
+            
+//             // ถ้าคลิกที่ปุ่ม "บันทึก"
+//             if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
+//                 stateManager.bus.publish('memory:save');
+//             }
+//                         if (target.matches('.btn-secondary') || target.closest('.modal-close-btn') || target === memoryModal) {
+//                 hideMemoryEditor();
+//             }
+//         });
+//     }
+
+//     console.log("✅ Memory UI Initialized with correct modal listeners.");
+// }
+
 export function initMemoryUI() {
-    // รอรับคำสั่งให้ปิด Modal (หลังจากบันทึกสำเร็จ)
     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
 
     const memoryModal = document.getElementById('memory-editor-modal');
     if (memoryModal) {
         memoryModal.addEventListener('click', (e) => {
             const target = e.target;
-            
-            // ถ้าคลิกที่ปุ่ม "บันทึก"
             if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
                 stateManager.bus.publish('memory:save');
             }
-            
-            // [FIX] ถ้าคลิกที่ปุ่ม "ยกเลิก" หรือพื้นที่สีเทารอบๆ
-            // ให้เรียกฟังก์ชัน hideMemoryEditor() โดยตรง ไม่ต้องส่ง Event
             if (target.matches('.btn-secondary') || target.closest('.modal-close-btn') || target === memoryModal) {
                 hideMemoryEditor();
             }
         });
     }
 
-    console.log("✅ Memory UI Initialized with correct modal listeners.");
+    console.log("✅ Memory UI Initialized (Studio listener removed).");
 }
 
 // --- ฟังก์ชัน show/hide Modal ของคุณ (ยังคงไว้) ---

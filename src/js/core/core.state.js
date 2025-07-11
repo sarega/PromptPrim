@@ -48,11 +48,11 @@ const _appState = {
     currentProject: {}, // isDirtyForUser will now live inside this object
     allProviderModels: [],
     isLoading: false,
-    // isDirtyForUser has been moved into currentProject
-    isDirtyForAutoSave: false, // This remains a global, non-persisted flag
+    isDirtyForAutoSave: false,
     abortController: null,
     editingAgentName: null,
     editingGroupName: null,
+    stagedEntity: null,
     pendingFileToOpen: null,
     pendingActionAfterSave: null
 };
@@ -88,7 +88,18 @@ export const stateManager = {
     getState: () => _appState,
     getProject: () => _appState.currentProject,
     isLoading: () => _appState.isLoading,
-    
+    // [NEW] เพิ่ม getter และ setter สำหรับ stagedEntity
+    getStagedEntity: () => _appState.stagedEntity,
+    setStagedEntity: (entity) => {
+        // ไม่ต้องทำอะไรถ้า entity ที่เลือกมาเป็นตัวเดิมที่ staged อยู่แล้ว
+        if (JSON.stringify(_appState.stagedEntity) === JSON.stringify(entity)) return;
+
+        console.log(`🟠 [STATE] Staged entity changing to:`, entity);
+        _appState.stagedEntity = entity;
+        
+        // [DEFINITIVE FIX] เพิ่มการ publish event นี้เข้าไป
+        eventBus.publish('entity:staged', entity);
+    },
     // [MODIFIED] Read the user-facing dirty flag from the project object
     isUserDirty: () => _appState.currentProject?.isDirtyForUser || false,
     isAutoSaveDirty: () => _appState.isDirtyForAutoSave,

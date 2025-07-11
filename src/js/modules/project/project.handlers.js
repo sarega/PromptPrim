@@ -455,19 +455,54 @@ export function migrateProjectData(projectData) {
 
 
 export async function selectEntity(type, name) {
+    console.log(`🟢 [CONFIRMED] selectEntity called with:`, { type, name });
+    console.log("   - Clearing any existing staged entity.");
+
+    // [KEY FIX] เมื่อมีการเลือก Entity อย่างเป็นทางการ ให้ล้าง Staging ทิ้งเสมอ
+    stateManager.setStagedEntity(null);
+
     const project = stateManager.getProject();
     project.activeEntity = { type, name };
     const activeSession = project.chatSessions.find(s => s.id === project.activeSessionId);
+
     if (activeSession) {
         if (activeSession.groupChatState) activeSession.groupChatState.isRunning = false;
         activeSession.linkedEntity = { ...project.activeEntity };
         activeSession.updatedAt = Date.now();
     }
+
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
     stateManager.bus.publish('entity:selected', { type, name });
+    
     requestAnimationFrame(() => {
         scrollToLinkedEntity(type, name);
     });
 }
 
+export function handleStudioItemClick({ type, name }) {
+    console.log(`🟡 [HANDLER] handleStudioItemClick received:`, { type, name });
+
+    const clickedEntity = { type, name };
+    const stagedEntity = stateManager.getStagedEntity();
+    const activeEntity = stateManager.getProject().activeEntity;
+
+    console.log(`   - Current Active:`, activeEntity);
+    console.log(`   - Current Staged:`, stagedEntity);
+
+    // Case 1: ยืนยันตัวที่ Staging อยู่
+    if (stagedEntity && stagedEntity.name === clickedEntity.name && stagedEntity.type === clickedEntity.type) {
+        console.log("   -> DECISION: Confirming staged entity.");
+        stateManager.bus.publish('entity:select', clickedEntity);
+    } 
+    // Case 2: คลิกที่ตัวที่ Active อยู่แล้ว
+    else if (activeEntity && activeEntity.name === clickedEntity.name && activeEntity.type === clickedEntity.type) {
+        console.log("   -> DECISION: Clicked active entity. Clearing stage.");
+        stateManager.setStagedEntity(null);
+    } 
+    // Case 3: เริ่ม Staging ตัวใหม่
+    else {
+        console.log("   -> DECISION: Staging new entity.");
+        stateManager.setStagedEntity(clickedEntity);
+    }
+}

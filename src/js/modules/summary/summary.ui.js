@@ -14,7 +14,7 @@ import { createDropdown } from '../../core/core.ui.js';
  */
 function createSummaryLogElement(log) {
     const item = document.createElement('div');
-    item.className = 'item-list-item summary-log-item'; // Use consistent class name
+    item.className = 'item summary-log-item'; // ใช้ item class หลัก
     item.dataset.logId = log.id;
 
     const project = stateManager.getProject();
@@ -22,23 +22,34 @@ function createSummaryLogElement(log) {
     if (activeSession && activeSession.summaryState?.activeSummaryId === log.id) {
         item.classList.add('active');
     }
-    
-    // Format the timestamp as you originally had it.
+
     const timestamp = new Date(log.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
 
-    item.innerHTML = `
-        <span class="item-icon">💡</span>
-        <span class="item-text" title="${log.summary}">${timestamp}</span>
-    `;
-    
-    // Use the dropdown helper to create action buttons.
     const dropdownOptions = [
-        { label: 'View', action: 'summary:view', data: { logId: log.id } },
-        { label: 'Load to Context', action: 'summary:load', data: { logId: log.id } },
-        { label: 'Delete', action: 'summary:delete', data: { logId: log.id }, isDestructive: true }
+        { label: 'View', action: 'summary:view' },
+        { label: 'Load to Context', action: 'summary:load' }, // เดิมคือ Upload
+        { label: 'Delete', action: 'summary:delete', isDestructive: true }
     ];
-    item.appendChild(createDropdown(dropdownOptions));
+    const itemDropdown = createDropdown(dropdownOptions);
+    
+    // [FIX] แก้ไขโครงสร้าง HTML ให้เหมือนกับ item อื่นๆ (ใช้ item-header และ item-actions)
+    const itemHeader = document.createElement('div');
+    itemHeader.className = 'item-header';
 
+    const itemName = document.createElement('span');
+    itemName.className = 'item-name';
+    itemName.innerHTML = `<span class="item-icon">💡</span> ${log.summary}`;
+    itemName.title = `${log.summary}\nCreated: ${timestamp}`;
+
+    const itemActions = document.createElement('div');
+    itemActions.className = 'item-actions';
+    itemActions.appendChild(itemDropdown);
+    
+    itemHeader.appendChild(itemName);
+    itemHeader.appendChild(itemActions);
+    item.appendChild(itemHeader);
+
+    // Event listener จะถูกจัดการโดย studio.ui.js อยู่แล้ว
     return item;
 }
 

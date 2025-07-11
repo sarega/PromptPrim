@@ -25,20 +25,39 @@ async function fetchOllamaModels(baseUrl) {
     }
 }
 
-// [NEW] เพิ่มฟังก์ชัน fetchWithTimeout เข้าไป
-async function fetchWithTimeout(resource, options = {}, timeout = 120000) { // Timeout 2 นาที (120,000 ms)
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
+/**
+ * [REWRITTEN] A robust fetch helper that supports both an external AbortSignal
+ * (for the stop button) and an internal timeout.
+ * @param {string} resource - The URL to fetch.
+ * @param {object} options - The options for the fetch request, may include a signal.
+ * @param {number} [timeout=120000] - The timeout in milliseconds.
+ * @returns {Promise<Response>}
+ */
+async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
+    // 1. สร้าง AbortController สำหรับ Timeout โดยเฉพาะ
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), timeout);
 
-    const response = await fetch(resource, {
-        ...options,
-        signal: controller.signal  
-    });
-    
-    clearTimeout(id);
-    return response;
+    // 2. [สำคัญที่สุด] รวม signal จากภายนอก (ปุ่ม Stop) กับ signal ของ Timeout
+    // โดยใช้ AbortSignal.any() ซึ่งจะทำงานเมื่อ signal ใด signal หนึ่งถูกเรียก
+    // ทำให้ไม่ว่าจะเป็นการกดปุ่ม Stop หรือ Timeout ก็สามารถหยุด fetch ได้
+    const abortSignal = AbortSignal.any([
+        options.signal,
+        timeoutController.signal
+    ].filter(Boolean)); // .filter(Boolean) เพื่อกรอง signal ที่อาจเป็น null ออกไป
+
+    try {
+        // 3. ส่ง AbortSignal ที่รวมแล้วเข้าไปใน fetch request
+        const response = await fetch(resource, {
+            ...options,
+            signal: abortSignal,
+        });
+        return response;
+    } finally {
+        // 4. ไม่ว่า fetch จะสำเร็จหรือล้มเหลว ให้เคลียร์ Timeout เสมอ
+        clearTimeout(timeoutId);
+    }
 }
-
 
 
 // --- Main Exported Functions ---
@@ -164,113 +183,198 @@ export async function callLLM(agent, messages) {
     throw new Error("Invalid API response structure.");
 }
 
-export async function streamLLMResponse(contentDiv, agent, messages, speakerName = null) {
+// export async function streamLLMResponse(contentDiv, agent, messages, speakerName = null) {
+//         // [FIX] ส่งสัญญาณ 'loading' ออกไปทันทีที่เริ่มทำงาน
+//     const modelData = stateManager.getState().allProviderModels.find(m => m.id === agent.model);
+//     const statusMessage = `Responding with ${modelData?.name || agent.model}...`;
+//     stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
+//     //=====
+//     const allModels = stateManager.getState().allProviderModels;
+//     // const modelData = allModels.find(m => m.id === agent.model);
+//     if (!modelData) throw new Error("Model data not found for active agent.");
+
+//     const project = stateManager.getProject();
+//     const provider = modelData.provider;
+//     const body = { model: agent.model, messages: messages, stream: true };
+//     const params = {
+//         temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
+//         top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
+//         frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
+//         seed: parseInt(agent.seed, 10),
+//     };
+//     if (agent.stop_sequences) params.stop = agent.stop_sequences.split(',').map(s => s.trim());
+
+//     let url, headers;
+//     if (provider === 'openrouter') {
+//         url = 'https://openrouter.ai/api/v1/chat/completions';
+//         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
+//         Object.assign(body, params);
+//     } else { // ollama
+//         url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
+//         headers = { 'Content-Type': 'application/json' };
+//         body.options = params;
+//     }
+
+//     const response = await fetchWithTimeout(url, {
+//         method: 'POST',
+//         headers: headers,
+//         body: JSON.stringify(body),
+//         signal: stateManager.getState().abortController?.signal // ยังคง signal เดิมไว้สำหรับปุ่ม Stop
+//     });
+
+//     if (!response.ok) {
+//         const errorText = await response.text();
+//         throw new Error(`API Error: ${errorText}`);
+//     }
+
+//     const reader = response.body.getReader();
+//     const decoder = new TextDecoder();
+//     let fullResponseText = '';
+//     let buffer = '';
+
+// const streamingContentSpan = contentDiv.querySelector('.streaming-content');
+//     if (!streamingContentSpan) {
+//         contentDiv.innerHTML += " Error: UI render target not found.";
+//         return;
+//     }
+//     streamingContentSpan.innerHTML = ''; // [FIX] Clear loading dots
+
+//     let streamDone = false; // [FIX] Flag to break the outer loop
+
+//     while (!streamDone) {
+//         if (stateManager.getState().abortController?.signal.aborted) {
+//             streamDone = true;
+//             break;
+//         }
+//         const { done, value } = await reader.read();
+//         if (done) {
+//             streamDone = true;
+//             break;
+//         }
+
+//         buffer += decoder.decode(value, { stream: true });
+//         const lines = buffer.split('\n');
+//         buffer = lines.pop(); // Keep the last, possibly incomplete, line
+
+//         for (const line of lines) {
+//             if (line.trim() === '') continue;
+//             let token = '';
+//             try {
+//                  if (provider === 'openrouter') {
+//                     if (line.startsWith('data: ')) {
+//                         const jsonStr = line.substring(6);
+//                         if (jsonStr.trim() === '[DONE]') {
+//                             streamDone = true; // [FIX] Set flag
+//                             break;
+//                         }
+//                         const data = JSON.parse(jsonStr);
+//                         token = data.choices[0]?.delta?.content || '';
+//                     }
+//                 } else { // ollama
+//                     const data = JSON.parse(line);
+//                     token = data.message?.content || '';
+//                     if(data.done) {
+//                         streamDone = true; // [FIX] Set flag
+//                         break;
+//                     }
+//                 }
+//             } catch (e) { console.warn("Error parsing stream chunk:", e); }
+
+//             if (token) {
+//                 fullResponseText += token;
+//                 if (agent.useMarkdown && window.marked) {
+//                     streamingContentSpan.innerHTML = marked.parse(fullResponseText);
+//                 } else {
+//                     streamingContentSpan.textContent = fullResponseText;
+//                 }
+//             }
+//         }
+//         // [FIX] If the inner loop broke because of a "done" message, break the outer loop too
+//         if (streamDone) break;
+//     }
+    
+//     stateManager.bus.publish('ui:enhanceCodeBlocks', contentDiv);
+//     return fullResponseText;
+// }
+/**
+ * [REFACTORED & COMPLETE] Streams response from LLM API.
+ * This function is now responsible ONLY for fetching data and streaming it back via a callback.
+ * It no longer interacts with the DOM.
+ *
+/**
+ * [REWRITTEN] A more robust function to stream responses from LLM APIs.
+ * It uses modern stream APIs to prevent data loss and parsing errors.
+ */
+export async function streamLLMResponse(agent, messages, onChunk) {
+    const project = stateManager.getProject();
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
     if (!modelData) throw new Error("Model data not found for active agent.");
 
-    const project = stateManager.getProject();
-    const provider = modelData.provider;
-    const body = { model: agent.model, messages: messages, stream: true };
-    const params = {
-        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
-        seed: parseInt(agent.seed, 10),
-    };
-    if (agent.stop_sequences) params.stop = agent.stop_sequences.split(',').map(s => s.trim());
+    const statusMessage = `Responding with ${modelData?.name || agent.model}...`;
+    stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
 
-    let url, headers;
+    const provider = modelData.provider;
+    let url, headers, body;
+
+    // Setup request details based on provider
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
-        Object.assign(body, params);
+        body = { model: agent.model, messages, stream: true, ...agent.parameters }; // Simplified params
     } else { // ollama
-        url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
+        url = `${project.globalsettings.ollamaBaseUrl}/api/chat`;
         headers = { 'Content-Type': 'application/json' };
-        body.options = params;
+        body = { model: agent.model, messages, stream: true, options: agent.parameters };
     }
 
-    const response = await fetchWithTimeout(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(body),
-        signal: stateManager.getState().abortController?.signal // ยังคง signal เดิมไว้สำหรับปุ่ม Stop
-    });
+    try {
+        const response = await fetchWithTimeout(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            signal: stateManager.getState().abortController?.signal
+        });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${errorText}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let fullResponseText = '';
-    let buffer = '';
-
-const streamingContentSpan = contentDiv.querySelector('.streaming-content');
-    if (!streamingContentSpan) {
-        contentDiv.innerHTML += " Error: UI render target not found.";
-        return;
-    }
-    streamingContentSpan.innerHTML = ''; // [FIX] Clear loading dots
-
-    let streamDone = false; // [FIX] Flag to break the outer loop
-
-    while (!streamDone) {
-        if (stateManager.getState().abortController?.signal.aborted) {
-            streamDone = true;
-            break;
-        }
-        const { done, value } = await reader.read();
-        if (done) {
-            streamDone = true;
-            break;
+        if (!response.ok || !response.body) {
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // Keep the last, possibly incomplete, line
+        // Use modern stream processing for robustness
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let fullResponseText = '';
 
-        for (const line of lines) {
-            if (line.trim() === '') continue;
-            let token = '';
-            try {
-                 if (provider === 'openrouter') {
-                    if (line.startsWith('data: ')) {
-                        const jsonStr = line.substring(6);
-                        if (jsonStr.trim() === '[DONE]') {
-                            streamDone = true; // [FIX] Set flag
-                            break;
-                        }
-                        const data = JSON.parse(jsonStr);
-                        token = data.choices[0]?.delta?.content || '';
-                    }
-                } else { // ollama
-                    const data = JSON.parse(line);
-                    token = data.message?.content || '';
-                    if(data.done) {
-                        streamDone = true; // [FIX] Set flag
-                        break;
-                    }
-                }
-            } catch (e) { console.warn("Error parsing stream chunk:", e); }
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
 
-            if (token) {
-                fullResponseText += token;
-                if (agent.useMarkdown && window.marked) {
-                    streamingContentSpan.innerHTML = marked.parse(fullResponseText);
-                } else {
-                    streamingContentSpan.textContent = fullResponseText;
+            // The stream might send multiple "data:" chunks at once
+            const lines = value.split('\n').filter(line => line.startsWith('data:'));
+
+            for (const line of lines) {
+                const jsonStr = line.replace(/^data: /, '').trim();
+                if (jsonStr === '[DONE]') break;
+
+                try {
+                    const data = JSON.parse(jsonStr);
+                    const token = data.choices?.[0]?.delta?.content || '';
+                    if (token) {
+                        fullResponseText += token;
+                        onChunk(token);
+                    }
+                } catch (e) {
+                    console.warn("Skipping malformed JSON chunk during stream:", jsonStr);
                 }
             }
         }
-        // [FIX] If the inner loop broke because of a "done" message, break the outer loop too
-        if (streamDone) break;
+        return fullResponseText; // Return the complete text
+
+    } catch (error) {
+        console.error("Streaming failed:", error);
+        stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
+        // Re-throw the error so the calling function can handle it
+        throw error;
     }
-    
-    stateManager.bus.publish('ui:enhanceCodeBlocks', contentDiv);
-    return fullResponseText;
 }
 
 export async function generateAndRenameSession(history){

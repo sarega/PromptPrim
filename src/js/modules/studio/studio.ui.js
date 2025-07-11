@@ -6,18 +6,23 @@
 import { stateManager } from '../../core/core.state.js';
 import { toggleDropdown } from '../../core/core.ui.js';
 
+import { renderAgentPresets } from '../agent/agent.ui.js';
+import { renderAgentGroups } from '../group/group.ui.js';
+import { loadAndRenderMemories } from '../memory/memory.ui.js';
+import { renderSummaryLogs } from '../summary/summary.ui.js';
+
 function renderStudioContent() {
     const assetsContainer = document.querySelector('#studio-panel .studio-assets-container');
     if (!assetsContainer) return;
 
-    assetsContainer.innerHTML = ''; // Clear old content before re-rendering
+    // 1. [CRITICAL FIX] ล้างเนื้อหาเก่าทั้งหมดทิ้งก่อนเสมอ
+    assetsContainer.innerHTML = ''; 
 
-    // We use dynamic imports to prevent circular dependency issues and ensure
-    // the render functions are available when needed.
-    import('../agent/agent.ui.js').then(m => m.renderAgentPresets(assetsContainer));
-    import('../group/group.ui.js').then(m => m.renderAgentGroups(assetsContainer));
-    import('../memory/memory.ui.js').then(m => m.loadAndRenderMemories(assetsContainer));
-    import('../summary/summary.ui.js').then(m => m.renderSummaryLogs(assetsContainer));
+    // 2. เรียกใช้ฟังก์ชันย่อยเพื่อ "เติมข้อมูล" ลงใน container ที่ว่างเปล่า
+    renderAgentPresets(assetsContainer);
+    renderAgentGroups(assetsContainer);
+    loadAndRenderMemories(assetsContainer);
+    renderSummaryLogs(assetsContainer);
 }
 
 /**
@@ -31,50 +36,47 @@ export function initStudioUI() {
     studioPanel.addEventListener('click', (e) => {
         const target = e.target;
         const actionTarget = target.closest('[data-action]');
-        
-        // [FIX] ย้ายการประกาศ itemContext มาไว้ตรงนี้เพื่อให้รู้จักตัวแปร
-        const itemContext = target.closest('.item'); 
+        const itemContext = target.closest('.item');
 
-        // จัดการการเลือก Item (Agent/Group)
-        if (itemContext && !actionTarget) {
-            e.preventDefault();
-            const agentName = itemContext.dataset.agentName;
-            const groupName = itemContext.dataset.groupName;
-            if (agentName) {
-                stateManager.bus.publish('entity:select', { type: 'agent', name: agentName });
-            } else if (groupName) {
-                stateManager.bus.publish('entity:select', { type: 'group', name: groupName });
-            }
-            return;
-        }
-
-        // จัดการปุ่ม Action ต่างๆ
+        // Case 1: An action button was clicked (e.g., +, edit, delete)
         if (actionTarget) {
             e.preventDefault();
             e.stopPropagation();
-
             const action = actionTarget.dataset.action;
             let data = { ...actionTarget.dataset, ...itemContext?.dataset };
-            
-            if (data.data) Object.assign(data, JSON.parse(data.data));
-            if (data.logId) data.logId = data.logId; // ตรวจสอบให้แน่ใจว่ามี logId
-            
             if (action === 'toggle-menu') {
                 toggleDropdown(e);
             } else {
                 stateManager.bus.publish(action, data);
                 actionTarget.closest('.dropdown.open')?.classList.remove('open');
             }
+            return; // จบการทำงานทันที
         }
+
+        // Case 2: An item itself was clicked (for staging/selecting)
+        if (itemContext) {
+            e.preventDefault();
+            const agentName = itemContext.dataset.agentName;
+            const groupName = itemContext.dataset.groupName;
+            
+            if (agentName) {
+                stateManager.bus.publish('studio:itemClicked', { type: 'agent', name: agentName });
+            } else if (groupName) {
+                stateManager.bus.publish('studio:itemClicked', { type: 'group', name: groupName });
+            }
+            return; // จบการทำงานทันที
+        }
+
+        // Case 3: [DEFINITIVE FIX] Clicked away (only runs if not an item and not an action)
+        // ถ้าคลิกนอกพื้นที่ Item ให้ล้าง Staging ทิ้ง
+        stateManager.setStagedEntity(null);
     });
-    // --- Subscriptions to re-render the studio content whenever data changes ---
+
+    // Subscriptions to re-render the studio content
     stateManager.bus.subscribe('project:loaded', renderStudioContent);
     stateManager.bus.subscribe('entity:selected', renderStudioContent);
-    stateManager.bus.subscribe('agent:listChanged', renderStudioContent);
-    stateManager.bus.subscribe('group:listChanged', renderStudioContent);
-    stateManager.bus.subscribe('memory:listChanged', renderStudioContent);
-    stateManager.bus.subscribe('summary:listChanged', renderStudioContent);
     stateManager.bus.subscribe('studio:contentShouldRender', renderStudioContent);
     
-    console.log("✅ Studio UI and its dedicated event listener initialized.");
+    // [KEY FIX] ต้องดักฟัง Event นี้เพื่อให้ UI วาดไฮไลท์สีเหลืองใหม่
+    stateManager.bus.subscribe('entity:staged', renderStudioContent);
 }

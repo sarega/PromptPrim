@@ -10,12 +10,18 @@ import { toggleDropdown } from '../../core/core.ui.js';
 function createGroupElement(name) {
     const project = stateManager.getProject();
     const activeEntity = project.activeEntity;
+    // [FIX] ดึง Staged Entity มาตรวจสอบ
+    const stagedEntity = stateManager.getStagedEntity();
+
     const item = document.createElement('div');
-    item.className = 'item group-item'; // Add specific class for styling
+    item.className = 'item group-item';
     item.dataset.groupName = name;
 
-    if (activeEntity && activeEntity.type === 'group' && activeEntity.name === name) {
-        item.classList.add('active');
+    // [FIX] เพิ่ม Logic การไฮไลท์สีเหลืองสำหรับ Staging
+    if (activeEntity?.type === 'group' && activeEntity.name === name) {
+        item.classList.add('active'); // สีเขียว
+    } else if (stagedEntity?.type === 'group' && stagedEntity.name === name) {
+        item.classList.add('staged'); // สีเหลืองกระพริบ
     }
 
     item.innerHTML = `
@@ -31,7 +37,6 @@ function createGroupElement(name) {
         </div>
     </div>`;
     
-    // All event listeners are now handled by delegation in initGroupUI for robustness.
     return item;
 }
 
@@ -42,15 +47,12 @@ function createGroupElement(name) {
  * @param {HTMLElement} assetsContainer - The parent element to render into.
  */
 export function renderAgentGroups(assetsContainer) {
-    // Guard Clause: ตรวจสอบ container
-    if (!assetsContainer || typeof assetsContainer.insertAdjacentHTML !== 'function') {
-        console.error('Invalid container passed to renderAgentGroups:', assetsContainer);
-        return;
-    }
-    
+     if (!assetsContainer) return;
+
     const project = stateManager.getProject();
     if (!project || !project.agentGroups) return;
-    
+
+    // [FIX] กลับมาใช้ Template Literal ที่อ่านง่ายและดีกว่า
     const groupSectionHTML = `
         <details class="collapsible-section" open>
             <summary class="section-header">
@@ -64,10 +66,11 @@ export function renderAgentGroups(assetsContainer) {
     `;
     assetsContainer.insertAdjacentHTML('beforeend', groupSectionHTML);
 
-
-    const listContainer = assetsContainer.querySelector('#agentGroupList');
+    // ค้นหา list container ที่เพิ่งสร้างขึ้น
+    const listContainer = assetsContainer.querySelector('#agentGroupList:last-of-type');
     if (!listContainer) return;
 
+    // วาด item แต่ละอันลงไป
     const groups = project.agentGroups;
     for (const name in groups) {
         listContainer.appendChild(createGroupElement(name));
@@ -173,12 +176,47 @@ export function updateModeratorDropdown(selectedModerator = null) {
     }
 }
 
+// export function initGroupUI() {
+//     stateManager.bus.subscribe('group:editorShouldClose', hideAgentGroupEditor);
+
+//     const groupEditorModal = document.getElementById('agent-group-editor-modal');
+//     if (groupEditorModal) {
+//         // Listener สำหรับปุ่ม Save/Cancel
+//         groupEditorModal.addEventListener('click', (e) => {
+//             if (e.target.matches('.modal-actions .btn:not(.btn-secondary)')) {
+//                 stateManager.bus.publish('group:save');
+//             } else if (e.target.matches('.btn-secondary') || e.target.closest('.modal-close-btn')) {
+//                 hideAgentGroupEditor();
+//             }
+//         });
+
+//         // Listener สำหรับปุ่ม +/-
+//         groupEditorModal.addEventListener('click', (e) => {
+//             if (e.target.matches('.stepper-btn')) {
+//                 const input = e.target.parentElement.querySelector('input[type="number"]');
+//                 if (!input) return;
+//                 const step = parseInt(e.target.dataset.step, 10);
+//                 const min = parseInt(input.min, 10);
+//                 const max = parseInt(input.max, 10);
+//                 let currentValue = parseInt(input.value, 10);
+//                 let newValue = currentValue + step;
+//                 if (newValue < min) newValue = min;
+//                 if (newValue > max) newValue = max;
+//                 input.value = newValue;
+//             }
+//         });
+//     }
+
+//     // [FIX] Listener สำหรับ Select Flow ให้เรียกใช้ฟังก์ชันที่ถูกต้อง
+//     document.getElementById('group-flow-select')?.addEventListener('change', updateGroupFlowControls);
+// }
+
 export function initGroupUI() {
     stateManager.bus.subscribe('group:editorShouldClose', hideAgentGroupEditor);
 
     const groupEditorModal = document.getElementById('agent-group-editor-modal');
     if (groupEditorModal) {
-        // Listener สำหรับปุ่ม Save/Cancel
+        // Listener for Save/Cancel buttons
         groupEditorModal.addEventListener('click', (e) => {
             if (e.target.matches('.modal-actions .btn:not(.btn-secondary)')) {
                 stateManager.bus.publish('group:save');
@@ -187,24 +225,18 @@ export function initGroupUI() {
             }
         });
 
-        // Listener สำหรับปุ่ม +/-
+        // Listener for stepper buttons (+/-)
         groupEditorModal.addEventListener('click', (e) => {
             if (e.target.matches('.stepper-btn')) {
                 const input = e.target.parentElement.querySelector('input[type="number"]');
                 if (!input) return;
-                const step = parseInt(e.target.dataset.step, 10);
-                const min = parseInt(input.min, 10);
-                const max = parseInt(input.max, 10);
-                let currentValue = parseInt(input.value, 10);
-                let newValue = currentValue + step;
-                if (newValue < min) newValue = min;
-                if (newValue > max) newValue = max;
+                let newValue = parseInt(input.value, 10) + parseInt(e.target.dataset.step, 10);
+                newValue = Math.max(input.min, Math.min(input.max, newValue));
                 input.value = newValue;
             }
         });
     }
 
-    // [FIX] Listener สำหรับ Select Flow ให้เรียกใช้ฟังก์ชันที่ถูกต้อง
     document.getElementById('group-flow-select')?.addEventListener('change', updateGroupFlowControls);
+    console.log("✅ Group UI Initialized (Studio listener removed).");
 }
-

@@ -2,6 +2,21 @@
    FILE: src/styles/layout/_main-area.css (แก้ไขแล้ว)
    DESCRIPTION: ปรับปรุง Layout สำหรับมือถือให้เป็นแบบ Sticky Header
    =============================================== */
+/* Container หลักของข้อความแชททั้งหมด */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    
+    /* [KEY] สั่งให้จัดเรียงคอลัมน์ของ bubble ให้อยู่ตรงกลางแนวนอน */
+    align-items: center; 
+    
+    /* [KEY] เพิ่ม padding ด้านข้างแบบ Responsive และด้านล่างให้มากขึ้น */
+    padding: 20px 6vw 40px 6vw; 
+}
+
 
 .main-chat-area {
     flex-grow: 1;
@@ -71,16 +86,6 @@
     font-size: 1.15rem;
     font-weight: 600;
     flex-grow: 1;
-}
-
-
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 25px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
 }
 
 /* Chat Input & Status Panel styles remain at the bottom */

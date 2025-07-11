@@ -133,13 +133,22 @@ export function applyFontSettings() {
 }
 
 export function updateStatus({ message, state }) {
-    document.getElementById('statusText').textContent = message || 'Ready';
+    const statusText = document.getElementById('statusText');
     const dot = document.getElementById('statusDot');
-    dot.className = 'status-dot';
-    if (state === 'connected') dot.classList.add('connected');
-    else if (state === 'error') dot.classList.add('error');
-}
+    if (!statusText || !dot) return;
 
+    statusText.textContent = message || 'Ready';
+    dot.className = 'status-dot'; // รีเซ็ตคลาสสีทั้งหมด
+
+    if (state === 'connected') {
+        dot.classList.add('connected'); // สีเขียว
+    } else if (state === 'error') {
+        dot.classList.add('error'); // สีแดง
+    } else if (state === 'loading') {
+        // [FIX] เพิ่ม state 'loading' เพื่อแสดงผลเป็นสีส้ม
+        dot.classList.add('warning');
+    }
+}
 
 export function initCoreUI() {
     // Display the app version from environment variables provided by Vite.
