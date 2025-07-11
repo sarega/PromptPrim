@@ -4,13 +4,17 @@
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
+import { createDropdown } from '../../core/core.ui.js';
 
-// --- Private Helper Functions ---
-
-// [MODIFIED] แก้ไขให้สร้างปุ่มควบคุม (Load, View, Delete) และผูก Event กับ Event Bus
+/**
+ * [RESTORED] This is your original function to create a log element,
+ * which correctly displays the timestamp.
+ * @param {object} log - The summary log object.
+ * @returns {HTMLElement} The created element.
+ */
 function createSummaryLogElement(log) {
     const item = document.createElement('div');
-    item.className = 'summary-log-item';
+    item.className = 'item summary-log-item'; // ใช้ item class หลัก
     item.dataset.logId = log.id;
 
     const project = stateManager.getProject();
@@ -19,69 +23,80 @@ function createSummaryLogElement(log) {
         item.classList.add('active');
     }
 
-    const date = new Date(log.timestamp);
-    const timeString = date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const timestamp = new Date(log.timestamp).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
 
-    item.innerHTML = `
-        <div class="summary-log-item-header">
-            <span class="summary-log-item-title" title="${log.summary}">${log.summary}</span>
-            <div class="summary-log-item-actions">
-                <button class="btn-icon btn-small" data-action="load" title="Load as context">&#11139;</button>
-                <button class="btn-icon btn-small" data-action="view" title="View content">&#128269;</button>
-                <button class="btn-icon btn-small danger" data-action="delete" title="Delete summary">&#128465;</button>
-            </div>
-        </div>
-        <div class="summary-log-item-meta">
-            <span>${timeString}</span>
-        </div>
-    `;
+    const dropdownOptions = [
+        { label: 'View', action: 'summary:view' },
+        { label: 'Load to Context', action: 'summary:load' }, // เดิมคือ Upload
+        { label: 'Delete', action: 'summary:delete', isDestructive: true }
+    ];
+    const itemDropdown = createDropdown(dropdownOptions);
+    
+    // [FIX] แก้ไขโครงสร้าง HTML ให้เหมือนกับ item อื่นๆ (ใช้ item-header และ item-actions)
+    const itemHeader = document.createElement('div');
+    itemHeader.className = 'item-header';
 
-    // ใช้ Event Bus แทน onclick โดยตรง
-    item.querySelector('[data-action="load"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        stateManager.bus.publish('summary:load', { logId: log.id });
-    });
+    const itemName = document.createElement('span');
+    itemName.className = 'item-name';
+    itemName.innerHTML = `<span class="item-icon">💡</span> ${log.summary}`;
+    itemName.title = `${log.summary}\nCreated: ${timestamp}`;
 
-    item.querySelector('[data-action="view"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        stateManager.bus.publish('summary:view', { logId: log.id });
-    });
+    const itemActions = document.createElement('div');
+    itemActions.className = 'item-actions';
+    itemActions.appendChild(itemDropdown);
+    
+    itemHeader.appendChild(itemName);
+    itemHeader.appendChild(itemActions);
+    item.appendChild(itemHeader);
 
-    item.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
-        e.stopPropagation();
-        stateManager.bus.publish('summary:delete', { logId: log.id });
-    });
-
+    // Event listener จะถูกจัดการโดย studio.ui.js อยู่แล้ว
     return item;
 }
 
-// --- Exported UI Functions ---
+/**
+ * [REFACTORED] Renders the summary logs by grouping them by session
+ * into a specific container.
+ * @param {HTMLElement} assetsContainer - The main container for all studio assets.
+ */
+export function renderSummaryLogs(assetsContainer) {
+    if (!assetsContainer || typeof assetsContainer.insertAdjacentHTML !== 'function') return;
 
-export function renderSummaryLogs() {
     const project = stateManager.getProject();
     if (!project || !project.summaryLogs) return;
 
-    const container = document.getElementById('summaryLogList');
-    container.innerHTML = '';
-    
-    // Group logs by session ID to display them neatly
+    const summarySectionHTML = `
+        <details class="collapsible-section" open>
+            <summary class="section-header">
+                <h3>💡 Summary Logs</h3>
+            </summary>
+            <div class="section-box">
+                <div id="summaryLogList" class="item-list"></div>
+            </div>
+        </details>
+    `;
+    assetsContainer.insertAdjacentHTML('beforeend', summarySectionHTML);
+
+    const listContainer = assetsContainer.querySelector('#summaryLogList');
+    if (!listContainer) return;
+
+    // Group logs by session ID to display them neatly, preserving your original logic.
     const logsBySession = project.summaryLogs.reduce((acc, log) => {
         const key = log.sourceSessionId;
-        const session = project.chatSessions.find(s => s.id === key);
-        if (!acc[key]) {
-            acc[key] = {
-                name: session ? session.name : "Unknown Session",
-                logs: []
-            };
+        if (key) {
+            const session = project.chatSessions.find(s => s.id === key);
+            if (!acc[key]) {
+                acc[key] = {
+                    name: session ? session.name : "Unknown Session",
+                    logs: []
+                };
+            }
+            acc[key].logs.push(log);
         }
-        acc[key].logs.push(log);
         return acc;
     }, {});
 
-    const activeSessionId = project.activeSessionId;
-
     if (Object.keys(logsBySession).length === 0) {
-        container.innerHTML = `<p class="no-logs-message">No summaries yet.</p>`;
+        listContainer.innerHTML = `<p class="no-items-message">No summaries have been generated yet.</p>`;
         return;
     }
 
@@ -90,7 +105,7 @@ export function renderSummaryLogs() {
         const sessionLogs = group.logs.sort((a, b) => b.timestamp - a.timestamp);
         
         const details = document.createElement('details');
-        details.className = 'summary-group';
+        details.className = 'collapsible-section';
         
         const summary = document.createElement('summary');
         summary.textContent = `For: ${group.name}`;
@@ -100,35 +115,62 @@ export function renderSummaryLogs() {
             details.appendChild(createSummaryLogElement(log));
         });
 
-        // Auto-open the details for the currently active session if it has logs
-        if(sessionId === activeSessionId && sessionLogs.length > 0) {
+        // Auto-open the details for the currently active session
+        if (sessionId === project.activeSessionId && sessionLogs.length > 0) {
             details.open = true;
         }
 
-        container.appendChild(details);
+        listContainer.appendChild(details);
     }
 }
+
 
 export function showSummaryModal(logId) {
     const project = stateManager.getProject();
     const log = project.summaryLogs.find(l => l.id === logId);
     if (!log) return;
 
-    document.getElementById('view-summary-title').textContent = log.summary;
-    document.getElementById('view-summary-content').textContent = log.content;
-    document.getElementById('view-summary-modal').style.display = 'flex';
-}
-
-export function hideSummaryModal() {
-    document.getElementById('view-summary-modal').style.display = 'none';
+    const modal = document.getElementById('view-summary-modal');
+    if(modal) {
+        modal.querySelector('#view-summary-title').textContent = log.summary;
+        modal.querySelector('#view-summary-content').textContent = log.content;
+        modal.style.display = 'flex';
+    }
 }
 
 export function initSummaryUI() {
-    stateManager.bus.subscribe('project:loaded', renderSummaryLogs);
-    stateManager.bus.subscribe('session:loaded', renderSummaryLogs);
-    stateManager.bus.subscribe('summary:listChanged', renderSummaryLogs);
+    // We remove the old subscribers that caused errors.
+    // Event listeners for clicks on summary items should be handled
+    // by a parent listener in the Studio modal to be robust.
+    const studioPanel = document.getElementById('studio-panel');
+        if (!studioPanel) return;
 
-    document.querySelector('#view-summary-modal .btn-secondary').addEventListener('click', hideSummaryModal);
+        studioPanel.addEventListener('click', (e) => {
+            const target = e.target.closest('.summary-log-item a');
+            if (!target) return;
 
+            e.preventDefault();
+            const logId = target.closest('.summary-log-item').dataset.logId;
+            const action = target.dataset.action; // สมมติว่าใน a มี data-action="view" หรือ "load"
+
+            if (action === 'view') {
+                stateManager.bus.publish('summary:view', { logId });
+            } else if (action === 'load') {
+                stateManager.bus.publish('summary:load', { logId });
+            } else if (action === 'delete') {
+                stateManager.bus.publish('summary:delete', { logId });
+            }
+        });
+
+    // const viewSummaryModal = document.getElementById('view-summary-modal');
+    // viewSummaryModal?.querySelector('.btn-secondary')?.addEventListener('click', () => {
+    //     viewSummaryModal.style.display = 'none';
+    // });
+        document.querySelector('#view-summary-modal .btn-secondary')?.addEventListener('click', () => {
+        document.getElementById('view-summary-modal').style.display = 'none';
+    });
+
+    stateManager.bus.subscribe('summary:view', ({ logId }) => showSummaryModal(logId));
+    
     console.log("Summary UI Initialized.");
 }

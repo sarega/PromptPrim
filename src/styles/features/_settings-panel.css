@@ -48,3 +48,10 @@
     overflow-y: auto;
     padding: 20px;
 }
+
+body.dark-mode .settings-header .close-settings-btn {
+    /* ใช้ตัวแปร --text-dark ซึ่งจะเปลี่ยนเป็นสีขาวนวลใน Dark Mode
+      ทำให้มองเห็นได้ชัดเจนบนพื้นหลังที่มืด 
+    */
+    color: var(--text-dark);
+}

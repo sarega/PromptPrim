@@ -1,191 +1,185 @@
 // ===============================================
 // FILE: src/js/modules/chat/chat.group.js (NEW)
-// DESCRIPTION: Contains the core logic for handling group chat conversations.
+// DESCRIPTION: Contains all logic for handling group chat conversations.
 // ===============================================
 import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
 import { streamLLMResponse, callLLM } from '../../core/core.api.js';
-import { buildPayloadMessages } from './chat.handlers.js';
-import { addMessageToUI } from '../chat/chat.ui.js';
 import { dbRequest } from '../../core/core.db.js';
-import { stopGeneration } from './chat.handlers.js';
 import { showCustomAlert } from '../../core/core.ui.js';
+import * as ChatUI from './chat.ui.js';
+import * as ChatHandlers from './chat.handlers.js';
+
 
 /**
- * Handles the "Round Robin" group chat flow.
- * @param {object} project - The current project state.
- * @param {object} session - The active chat session.
- * @param {object} group - The active agent group.
+ * ฟังก์ชันหลักที่ควบคุมการทำงานของ Group Chat แต่ละรอบ
+ * @param {object} project The current project state.
+ * @param {object} session The active chat session.
+ * @param {object} group The active agent group.
  */
-export async function handleGroupChatRoundRobin(project, session, group) {
-    // 1. Set group chat state to running
-    session.groupChatState = {
-        isRunning: true,
-        currentTurn: 0,
-        nextMemberIndex: 0,
-    };
-    stateManager.setLoading(true);
-    stateManager.bus.publish('ui:showLoadingIndicator');
-    stateManager.newAbortController();
+export async function handleGroupChatTurn(project, session, group) {
+    stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
 
     try {
-        // Loop through agents for the max number of turns
-        for (let i = 0; i < group.maxTurns; i++) {
-            if (stateManager.getState().abortController?.signal.aborted) {
-                console.log('Group chat stopped by user.');
-                break;
-            }
-
-            const currentAgentName = group.members[session.groupChatState.nextMemberIndex];
-            const currentAgent = project.agentPresets[currentAgentName];
-
-            if (!currentAgent || !currentAgent.model) {
-                console.warn(`Skipping agent ${currentAgentName} due to missing model.`);
-                // Move to the next agent without consuming a turn
-                session.groupChatState.nextMemberIndex = (session.groupChatState.nextMemberIndex + 1) % group.members.length;
-                continue;
-            }
-
-            // 2. Add a placeholder UI for the thinking agent
-            const messageIndex = session.history.length;
-            session.history.push({ role: 'assistant', content: '...', speaker: currentAgentName });
-            const messageElement = addMessageToUI('assistant', '', messageIndex, currentAgentName, true);
-
-            // 3. Prepare messages and call the LLM
-            const requestMessages = buildPayloadMessages(session.history.slice(0, -1), currentAgentName, session);
-            const assistantMsgDiv = messageElement.querySelector('.message-content');
-            const responseText = await streamLLMResponse(assistantMsgDiv, currentAgent, requestMessages, currentAgentName);
-
-            // 4. Update history with the actual response
-            session.history[messageIndex] = { role: 'assistant', content: responseText, speaker: currentAgentName };
-            session.updatedAt = Date.now();
-            await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-
-            // 5. Update for the next turn
-            session.groupChatState.currentTurn++;
-            session.groupChatState.nextMemberIndex = (session.groupChatState.nextMemberIndex + 1) % group.members.length;
+        if (group.flowType === 'round-robin') {
+            await runRoundRobin(project, session, group);
+        } else if (group.flowType === 'auto-moderator') {
+            await runAutoModerator(project, session, group);
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
-            console.error('Error during group chat:', error);
-            const lastMessageIndex = session.history.length - 1;
-            session.history[lastMessageIndex].content = `Error: ${error.message}`;
-            stateManager.bus.publish('ui:renderChatMessages');
+            console.error("Error during group chat turn:", error);
+            showCustomAlert(`An error occurred in the group chat: ${error.message}`, "Error");
         }
     } finally {
-        // 6. Clean up and stop loading indicators
-        session.groupChatState.isRunning = false;
-        stopGeneration(); // This will also set loading to false and handle other cleanup
+        stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
+        // [FIX] เพิ่มการคืนค่าสถานะกลับเป็นปกติเมื่อ Group Chat ทำงานเสร็จ
+        stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-        stateManager.bus.publish('project:persistRequired');
+        stateManager.bus.publish('context:requestData');
+    }
+}
+
+
+/**
+ * Logic สำหรับโหมด Round Robin
+ */
+async function runRoundRobin(project, session, group) {
+    const maxTurns = group.maxTurns || 1;
+    
+    // [FIX] กรอง Moderator ออกจากรายชื่อสมาชิกก่อนเริ่มทำงาน
+    const members = (group.agents || []).filter(agentName => agentName !== group.moderatorAgent);
+
+    if (members.length === 0) {
+        showCustomAlert("Round Robin mode requires at least one member who is not the moderator.", "Info");
+        return;
+    }
+
+    for (let turn = 0; turn < maxTurns; turn++) {
+        if (maxTurns > 1) {
+            const turnMessage = { role: 'system', content: `--- Round ${turn + 1} of ${maxTurns} ---` };
+            session.history.push(turnMessage);
+            ChatUI.addMessageToUI(turnMessage, session.history.length - 1);
+        }
+        for (const agentName of members) {
+            if (stateManager.getState().abortController?.signal.aborted) return;
+            await executeAgentTurn(project, session, agentName);
+        }
     }
 }
 
 /**
- * Handles the "Automated Moderator" group chat flow.
- * @param {object} project - The current project state.
- * @param {object} session - The active chat session.
- * @param {object} group - The active agent group.
+ * Logic สำหรับโหมด Automated Moderator
  */
-export async function handleGroupChatAutoModerator(project, session, group) {
-    // 1. Initialization
-    session.groupChatState = { isRunning: true, currentTurn: 0 };
-    stateManager.setLoading(true);
-    stateManager.bus.publish('ui:showLoadingIndicator');
-    stateManager.newAbortController();
+// async function runAutoModerator(project, session, group) {
+//     const maxTurns = group.maxTurns || 1;
+//     const moderator = project.agentPresets[group.moderatorAgent];
 
-    const moderatorAgent = project.agentPresets[group.moderatorAgent];
-    if (!moderatorAgent || !moderatorAgent.model) {
-        showCustomAlert(`Moderator agent '${group.moderatorAgent}' is not configured correctly.`, 'Error');
-        stopGeneration();
+//     if (!moderator) {
+//         throw new Error(`Moderator agent '${group.moderatorAgent}' not found.`);
+//     }
+
+//     for (let turn = 0; turn < maxTurns; turn++) {
+//         if (stateManager.getState().abortController?.signal.aborted) {
+//             console.log("Group chat (Auto-Moderator) stopped by user.");
+//             return;
+//         }
+//         stateManager.bus.publish('status:update', { 
+//             message: `Moderator '${group.moderatorAgent}' is deciding...`, 
+//             state: 'loading' 
+//         });
+
+//         // [Logic] ให้ Moderator ตัดสินใจ
+//         const conversationForModerator = session.history.map(m => `${m.speaker || m.role}: ${m.content}`).join('\n');
+//         const availableAgents = group.agents.join(', ');
+//         const moderatorPrompt = `Based on the following conversation, choose the single most appropriate agent to speak next from this list: [${availableAgents}]. Respond with ONLY the agent's name.\n\nConversation:\n${conversationForModerator}`;
+        
+//         let nextAgentName;
+//         try {
+//             const response = await callLLM(moderator, [{ role: 'user', content: moderatorPrompt }]);
+//             // พยายามหาชื่อที่ตรงที่สุดจาก response ของ moderator
+//             nextAgentName = group.agents.find(agent => response.includes(agent));
+//             if (!nextAgentName) throw new Error("Moderator did not return a valid agent name.");
+//         } catch(err) {
+//             showCustomAlert(`Moderator failed: ${err.message}. Stopping turn.`, "Error");
+//             break; // หยุด Loop ถ้า Moderator ทำงานผิดพลาด
+//         }
+
+//         // [Logic] แสดงผลการตัดสินใจของ Moderator และให้ Agent ที่ถูกเลือกตอบ
+//         const moderatorDecisionMessage = { role: 'system', content: `[Moderator selected ${nextAgentName} to speak.]` };
+//         session.history.push(moderatorDecisionMessage);
+//         ChatUI.addMessageToUI(moderatorDecisionMessage, session.history.length - 1);
+
+//         await executeAgentTurn(project, session, nextAgentName);
+//     }
+// }
+
+// [REVISED] แก้ไข runAutoModerator ให้รับรู้เรื่อง Timer
+async function runAutoModerator(project, session, group) {
+    const timerDuration = (group.timerInSeconds || 0) * 1000; // แปลงเป็น ms
+
+    // ทำงานรอบแรกทันที
+    const keepGoing = await executeModeratorTurn(project, session, group);
+
+    // ถ้าตั้งเวลาไว้ และรอบแรกสำเร็จ ให้เริ่ม Loop
+    if (timerDuration > 0 && keepGoing) {
+        session.groupChatState.timerId = setTimeout(() => {
+            // เรียกตัวเองซ้ำเพื่อทำงานรอบถัดไป
+            // (เป็นการวางโครงสร้างไว้ ยังต้องปรับปรุงเพิ่มเติมเพื่อให้สมบูรณ์)
+            if (session.groupChatState.isRunning) {
+                 runAutoModerator(project, session, group);
+            }
+        }, timerDuration);
+    }
+}
+
+
+
+// [NEW] แยก Logic การทำงานของ Moderator ออกมาเป็นฟังก์ชันย่อย
+async function executeModeratorTurn(project, session, group) {
+    const moderator = project.agentPresets[group.moderatorAgent];
+    if (!moderator) throw new Error("Moderator agent not found");
+
+    // ... โค้ดการเรียก LLM ของ Moderator ทั้งหมด ...
+    // ... ตั้งแต่ stateManager.bus.publish... จนถึง ... if (!nextAgentName) ...
+    // ...
+
+    await executeAgentTurn(project, session, nextAgentName);
+    return true; // คืนค่าว่าทำงานสำเร็จ
+}
+
+
+
+/**
+ * ฟังก์ชันย่อยสำหรับให้ Agent 1 คนทำงาน (สร้าง placeholder, คุยกับ LLM, อัปเดต UI)
+ * @param {string} agentName - ชื่อของ Agent ที่จะให้ทำงาน
+ */
+async function executeAgentTurn(project, session, agentName) {
+    const agent = project.agentPresets[agentName];
+    if (!agent || !agent.model) {
+        console.warn(`Skipping turn for agent '${agentName}' because they have no model configured.`);
         return;
     }
 
-    try {
-        for (let i = 0; i < group.maxTurns; i++) {
-            if (stateManager.getState().abortController?.signal.aborted) {
-                console.log('Group chat stopped by user.');
-                break;
-            }
-
-            // 2. Moderator's Turn
-            stateManager.bus.publish('status:update', { message: `Moderator '${group.moderatorAgent}' is thinking...`, state: 'loading' });
-
-            const conversationHistory = session.history
-                .map(m => `${m.speaker || m.role}: ${typeof m.content === 'string' ? m.content : '[multimodal content]'}`)
-                .join('\n');
-            
-            // [FIX] Provide the moderator with a list of members to choose from, excluding itself.
-            const selectableAgents = group.members.filter(m => m !== group.moderatorAgent).join(', ');
-
-            const moderatorPrompt = `You are the moderator of a group chat. Your role is to analyze the ongoing conversation and decide which agent should speak next to best advance the discussion towards the user's goal.
-
-**Available Agents to choose from:**
-${selectableAgents}
-
-**Conversation History:**
-${conversationHistory}
-
-**Your Task:**
-Based on the history, determine the most suitable agent to contribute next. Your response MUST be a valid JSON object containing a single key, "next_speaker", with the name of one of the available agents as the value.
-
-Example Response:
-{"next_speaker": "Creative Writer"}`;
-
-            const moderatorRequestMessages = [{ role: 'user', content: moderatorPrompt }];
-            const moderatorResponse = await callLLM(moderatorAgent, moderatorRequestMessages);
-
-            let nextAgentName;
-            try {
-                const jsonResponse = JSON.parse(moderatorResponse.match(/{.*}/s)[0]);
-                nextAgentName = jsonResponse.next_speaker;
-                if (!group.members.includes(nextAgentName)) {
-                    throw new Error(`Moderator selected an invalid agent: ${nextAgentName}`);
-                }
-            } catch (err) {
-                console.error("Failed to parse moderator response:", err, "Falling back to random agent.");
-                const otherMembers = group.members.filter(m => m !== group.moderatorAgent);
-                nextAgentName = otherMembers[Math.floor(Math.random() * otherMembers.length)];
-                if (!nextAgentName) {
-                     showCustomAlert("Moderator failed to select a valid agent. Stopping chat.", "Error");
-                     break;
-                }
-            }
-            
-            session.history.push({ role: 'system', content: `[Moderator selected ${nextAgentName} to speak.]` });
-            stateManager.bus.publish('ui:renderChatMessages');
-
-            // 3. Selected Agent's Turn
-            const currentAgent = project.agentPresets[nextAgentName];
-            if (!currentAgent || !currentAgent.model) {
-                console.warn(`Skipping agent ${nextAgentName} due to missing model.`);
-                continue;
-            }
-
-            stateManager.bus.publish('status:update', { message: `Agent '${nextAgentName}' is responding...`, state: 'loading' });
-
-            const messageIndex = session.history.length;
-            session.history.push({ role: 'assistant', content: '...', speaker: nextAgentName });
-            const messageElement = addMessageToUI('assistant', '', messageIndex, nextAgentName, true);
-
-            const requestMessages = buildPayloadMessages(session.history.slice(0, -1), nextAgentName, session);
-            const assistantMsgDiv = messageElement.querySelector('.message-content');
-            const responseText = await streamLLMResponse(assistantMsgDiv, currentAgent, requestMessages, nextAgentName);
-
-            session.history[messageIndex] = { role: 'assistant', content: responseText, speaker: nextAgentName };
-            session.updatedAt = Date.now();
-            await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-
-            session.groupChatState.currentTurn++;
-        }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error('Error during auto-moderator group chat:', error);
-            showCustomAlert(`An error occurred in the group chat: ${error.message}`, "Error");
-        }
-    } finally {
-        session.groupChatState.isRunning = false;
-        stopGeneration();
-        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-        stateManager.bus.publish('project:persistRequired');
+    // 1. สร้าง Placeholder ใน State และ UI
+    const placeholderMessage = { role: 'assistant', content: '...', speaker: agentName, isLoading: true };
+    session.history.push(placeholderMessage);
+    const assistantMsgIndex = session.history.length - 1;
+    const placeholderElement = ChatUI.addMessageToUI(placeholderMessage, assistantMsgIndex);
+    const contentDiv = placeholderElement?.querySelector('.message-content');
+    
+    if (!contentDiv) {
+        console.error(`Could not create UI placeholder for agent ${agentName}.`);
+        session.history[assistantMsgIndex] = { ...placeholderMessage, content: 'UI Error', isLoading: false, isError: true };
+        return;
     }
+
+    // 2. คุยกับ LLM และ Stream ผลลัพธ์
+    const messagesForLLM = ChatHandlers.buildPayloadMessages(session.history.slice(0, -1), agentName, session);
+    const finalResponseText = await streamLLMResponse(contentDiv, agent, messagesForLLM);
+    
+    // 3. อัปเดต History ด้วยคำตอบที่สมบูรณ์
+    session.history[assistantMsgIndex] = { role: 'assistant', content: finalResponseText, speaker: agentName, isLoading: false };
+    
+    // 4. วาด UI ใหม่อีกครั้งเพื่อแสดงผลลัพธ์สุดท้ายที่สวยงาม (ลบ loading, จัด format code)
+    ChatUI.renderMessages();
 }

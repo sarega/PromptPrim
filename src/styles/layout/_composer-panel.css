@@ -1,0 +1,209 @@
+/* --- Composer as a Bottom Frame --- */
+.composer-panel {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    flex-basis: 35vh; /* Default height */
+    min-height: 100px;
+    width: 100%;
+    background-color: var(--bg-color-secondary);
+    border-top: 1px solid var(--border-color);
+    transition: flex-basis 0.3s ease, min-height 0.3s ease;
+    overflow: hidden;
+    position: relative; /* For fullscreen child */
+    z-index: 5;
+}
+
+.composer-panel.collapsed {
+    flex-basis: 0 !important; /* Use !important to override resizing */
+    min-height: 0 !important;
+    border-top-width: 0;
+    overflow: hidden;
+}
+
+.composer-panel.collapsed > * {
+    display: none;
+}
+
+.composer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 15px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.composer-header h3 {
+    margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px;
+}
+
+.composer-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.composer-editor {
+    flex-grow: 1;
+    padding: 15px 50px; /* [FIX] เพิ่ม padding ซ้าย-ขวา */
+    outline: none;
+    line-height: 1.6;
+    overflow-y: auto;
+    /* margin: 10px 50px 20px; */
+}
+
+/* --- Fullscreen Mode for Composer --- */
+.composer-panel.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2500;
+    flex-basis: 100vh !important;
+    min-height: 100vh !important;
+    border: none;
+}
+
+/* Styles for Composer Toolbar */
+/* ลบ Rule ของ .composer-toolbar เก่าทิ้งไป */
+
+/* [MODIFIED] สไตล์สำหรับ Header ใหม่ */
+.composer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* จัด Title, Tools, Actions ให้กระจายตัว */
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 10px;
+}
+
+.composer-title-area {
+    flex: 1;
+}
+
+/* [NEW] สไตล์สำหรับ Tools ที่อยู่ตรงกลาง */
+.composer-tools-area {
+    display: flex;
+    justify-content: center; /* จัดปุ่มให้อยู่ตรงกลาง */
+    align-items: center;
+    gap: 4px;
+    flex: 2; /* ให้พื้นที่ตรงกลางมากกว่าส่วนอื่น */
+}
+
+.composer-actions {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end; /* จัดปุ่มชิดขวา */
+}
+
+/* [NEW] ลดขนาดปุ่มใน Tools และไอคอน */
+.composer-tools-area .btn-icon.small {
+    width: 28px;
+    height: 28px;
+}
+
+.composer-tools-area .btn-icon.small .material-symbols-outlined {
+    font-size: 18px; /* ลดขนาดไอคอน */
+}
+
+.composer-tools-area .dropdown .btn-icon.small {
+    font-size: 1rem; /* ขนาดสำหรับปุ่ม H1, P */
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 18px;
+    background-color: var(--border-color);
+    margin: 0 4px;
+}
+
+
+.composer-toolbar .btn-icon.is-active {
+    background-color: var(--primary-color-dark); 
+    color: var(--text-dark);
+}
+
+/* Dark Mode Adjustments */
+body.dark-mode .composer-toolbar {
+    background-color: #2d3748;
+    border-bottom-color: #4a5568;
+}
+
+/* Dark Mode Adjustments (ตรวจสอบว่ามีอยู่แล้ว) */
+body.dark-mode .composer-toolbar .btn-icon.is-active {
+    background-color: var(--accent-color-dark);
+    color: white;
+}
+
+/* [NEW] Force indentation for lists inside the composer */
+.composer-editor ul,
+.composer-editor ol {
+    padding-left: 30px;
+    list-style-position: inside;
+}
+
+/* แก้ไข Rule เดิมโดยการลบ display: grid ออก */
+#color-palette {
+    /* display: grid; */ /* <-- ลบหรือ Comment บรรทัดนี้ */
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    padding: 10px;
+    width: 150px;
+}
+
+/* เพิ่ม Rule ใหม่นี้เข้าไป */
+.dropdown.open #color-palette {
+    display: grid; /* <-- ย้าย display: grid มาไว้ที่นี่ */
+}
+.color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    transition: transform 0.1s ease;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+}
+
+* ===============================================
+   COMPOSER EDITOR & CONTENT STYLES
+   =============================================== */
+
+.composer-editor {
+    flex-grow: 1;
+    padding: 15px 20px;
+    outline: none;
+    line-height: 1.6;
+    overflow-y: auto;
+    color: #1a202c; /* [FIX 1] กำหนดสีเริ่มต้นเป็นสีดำเข้ม */
+   
+}
+
+/* [FIX 2] ปลดล็อก font-size และกำหนดขนาด + ระยะห่างของ Heading */
+.composer-editor * {
+    font-size: inherit;
+}
+.composer-editor h1,
+.composer-editor h2,
+.composer-editor h3 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    line-height: 1.3;
+}
+.composer-editor h1 { font-size: 2em; font-weight: 600; }
+.composer-editor h2 { font-size: 1.5em; font-weight: 600; }
+.composer-editor h3 { font-size: 1.25em; font-weight: 600; }
+.composer-editor p { font-size: 1em; font-weight: normal; }
+
+/* [FIX 3] ทำให้ Bullet อยู่ข้างในและไม่ตกขอบ */
+.composer-editor ul,
+.composer-editor ol {
+    padding-left: 30px;
+    list-style-position: inside;
+}

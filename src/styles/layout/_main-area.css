@@ -2,12 +2,27 @@
    FILE: src/styles/layout/_main-area.css (แก้ไขแล้ว)
    DESCRIPTION: ปรับปรุง Layout สำหรับมือถือให้เป็นแบบ Sticky Header
    =============================================== */
+/* Container หลักของข้อความแชททั้งหมด */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    
+    /* [KEY] สั่งให้จัดเรียงคอลัมน์ของ bubble ให้อยู่ตรงกลางแนวนอน */
+    align-items: center; 
+    
+    /* [KEY] เพิ่ม padding ด้านข้างแบบ Responsive และด้านล่างให้มากขึ้น */
+    padding: 20px 6vw 40px 6vw; 
+}
+
 
 .main-chat-area {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background: var(--white-alpha-50);
+    background: var(--bg-workspace-chat); /* <--- เปลี่ยนตรงนี้ */
     transition: width 0.3s ease-in-out;
     position: relative;
     width: 100%; 
@@ -21,6 +36,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    /* ปรับแก้ padding ตรงนี้เพื่อเพิ่ม/ลดความสูงของ Header */
+    padding-top: 0.2rem;
+    padding-bottom: 0.2 rem;
+    gap: 0.75rem; /* Provides spacing between header items */
     transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
     flex-shrink: 0;
     will-change: transform, max-height; /* Performance hint for browser */
@@ -28,20 +47,52 @@
     z-index: 10;
 }
 
+.main-content-wrapper {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Important for containing the composer */
+    position: relative;
+}
+
+#hamburger-btn, #toggle-composer-btn {
+    font-size: 2rem;
+    line-height: 1; /* Ensure proper vertical alignment */
+    padding: 0.25rem; /* Adjust padding for a better feel */
+}
+
+
+#hamburger-btn {
+    display: block;
+    transition: transform 0.3s ease;
+}
+
+#hamburger-btn.is-collapsed {
+    transform: scaleX(1);
+}
+
+.chat-header .chat-title {
+    margin-right: auto; /* This pushes elements after it to the right */
+}
+
+#toggle-composer-btn {
+    transition: transform 0.3s ease;
+}
+
+#toggle-composer-btn.is-collapsed {
+    transform: scaleX(1);
+}
 .chat-title {
     font-size: 1.15rem;
     font-weight: 600;
     flex-grow: 1;
 }
 
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 25px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+/* Chat Input & Status Panel styles remain at the bottom */
+.chat-input-wrapper, #status-panel {
+    flex-shrink: 0; /* Prevent these from shrinking */
 }
+
 
 #status-panel {
     padding: 8px 15px;
@@ -64,9 +115,9 @@
     font-size: inherit; /* Force the icon to inherit the button's font size, fixing the size issue. */
 }
 
-.app-wrapper.sidebar-collapsed #collapse-sidebar-btn .icon-wrapper {
-    transform: scaleX(-1); /* [FIX] Flip horizontally instead of rotating to maintain vertical alignment. */
-}
+/* .app-wrapper.sidebar-collapsed #collapse-sidebar-btn .icon-wrapper {
+    transform: scaleX(-1); 
+} */
 
 /* --- Other styles remain unchanged --- */
 
@@ -133,4 +184,22 @@
         border-top-width: 0;
         overflow: hidden;
     }
+}
+/* เมื่อ Main Chat Panel มีคลาส .focus-mode */
+.main-chat-area.focus-mode .chat-messages,
+.main-chat-area.focus-mode #resizer-row { /* <-- เพิ่มการซ่อน resizer เข้าไปด้วย */
+    /* ซ่อนหน้าต่างแชทและ resizer */
+    display: none;
+}
+
+.main-chat-area.focus-mode .main-content-wrapper {
+    /* ทำให้ Wrapper ขยายเต็มพื้นที่ */
+    height: 100%;
+}
+
+.main-chat-area.focus-mode .composer-panel {
+    /* ทำให้ Composer ขยายเต็มพื้นที่ของ Wrapper */
+    flex-basis: 100% !important;
+    min-height: 100% !important;
+    border-top: none; /* เอาเส้นขอบบนออก */
 }

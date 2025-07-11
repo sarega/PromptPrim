@@ -4,9 +4,11 @@
    =============================================== */
 
 .btn {
-    background: var(--background-gradient);
-    color: white;
-    border: none;
+    /* [FIX] เปลี่ยนมาใช้พื้นหลังสีทึบและเพิ่มเส้นขอบ */
+    background-color: var(--btn-primary-bg);     /* <--- เปลี่ยนตรงนี้ */
+    border: 1px solid var(--btn-primary-border); /* <--- และตรงนี้ */
+    color: var(--btn-text-color);
+    
     padding: 10px 18px;
     border-radius: 8px;
     cursor: pointer;

@@ -2,35 +2,47 @@
    FILE: src/styles/components/_modals.css
    DESCRIPTION: Generic styles for all modal dialogs.
    =============================================== */
-
+/* 1. สไตล์พื้นฐานสำหรับ Modal Overlay (ไม่มีการเปลี่ยนแปลง) */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: none; /* Controlled by JS */
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
     align-items: center;
     justify-content: center;
     z-index: 2000;
 }
 
+/* 2. สไตล์พื้นฐานสำหรับ "กล่อง" Modal ทุกประเภท */
 .modal-box {
     background: white;
     padding: 25px;
     border-radius: 15px;
     width: 90%;
-    max-width: 550px;
+    max-width: 550px; /* ขนาดเริ่มต้น */
     box-shadow: 0 5px 20px rgba(0,0,0,0.2);
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    /* --- เอา resize และ min-width/height ออกจากตรงนี้ --- */
 }
 
+/* 3. [NEW] คลาสเสริมสำหรับ Modal ที่ต้องการให้ปรับขนาดได้เท่านั้น */
+.modal-box.is-resizable {
+    overflow: auto;   /* ต้องมีเพื่อให้ resize ทำงาน */
+    resize: both;     /* ทำให้ปรับขนาดได้ */
+    min-width: 450px;  /* กำหนดขนาดเล็กสุด */
+    min-height: 300px; /* กำหนดขนาดเล็กสุด */
+}
+
+
+/* 4. สไตล์ส่วนอื่นๆ ของ Modal (ไม่มีการเปลี่ยนแปลง) */
 .modal-body {
     overflow-y: auto;
-    padding-right: 15px; /* For scrollbar */
+    padding-right: 15px;
 }
 
 .modal-box h3 {

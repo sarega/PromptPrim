@@ -13,6 +13,9 @@ export async function generateAgentProfile() {
         return;
     }
 
+    // [DEBUG 2] ตรวจสอบว่า Handler ได้รับ Event และมี Prompt ถูกต้อง
+    console.log("🧠 generateAgentProfile handler received event. Enhancer Prompt:", enhancerPrompt);
+
     stateManager.bus.publish('agent:enhancerStatus', { text: 'Generating profile...', color: 'var(--text-dark)' });
 
     const utilityAgent = stateManager.getProject().globalSettings.systemUtilityAgent;
@@ -25,11 +28,16 @@ export async function generateAgentProfile() {
 
     try {
         const responseText = await callLLM(utilityAgent, [{ role: 'user', content: metaPrompt }]);
+        
+        // [DEBUG 3] ดูผลลัพธ์ดิบๆ ที่ได้จาก LLM
+        console.log("🤖 Raw response from LLM:", responseText);
+
         const jsonMatch = responseText.match(/{.*}/s);
         if (!jsonMatch) throw new Error("LLM did not return a valid JSON object.");
         
         const parsedResponse = JSON.parse(jsonMatch[0]);
         stateManager.bus.publish('agent:profileGenerated', parsedResponse);
+
         stateManager.bus.publish('agent:enhancerStatus', { text: 'Profile generated successfully!', color: 'var(--success-color)' });
 
     } catch (error) {
@@ -73,8 +81,8 @@ export function saveAgentPreset() {
             if (session.linkedEntity?.type === 'agent' && session.linkedEntity.name === oldName) session.linkedEntity.name = newName;
         });
         Object.values(project.agentGroups).forEach(group => {
-           const memberIndex = group.members.indexOf(oldName);
-           if (memberIndex > -1) group.members[memberIndex] = newName;
+           const memberIndex = group.agents.indexOf(oldName);
+           if (memberIndex > -1) group.agents[memberIndex] = newName;
            if(group.moderatorAgent === oldName) group.moderatorAgent = newName;
         });
         if (project.activeEntity.type === 'agent' && project.activeEntity.name === oldName) project.activeEntity.name = newName;
@@ -89,9 +97,11 @@ export function saveAgentPreset() {
 
     stateManager.setProject(project);
     stateManager.updateAndPersistState(); // Save to DB
-    stateManager.bus.publish('agent:listChanged'); // Re-render agent list
-    stateManager.bus.publish('entity:selected', project.activeEntity); // Update active entity UI
-    stateManager.bus.publish('agent:editorShouldClose'); // Announce that editor should be hidden
+    stateManager.bus.publish('studio:contentShouldRender');
+    stateManager.bus.publish('agent:editorShouldClose');
+    // stateManager.bus.publish('agent:listChanged'); // Re-render agent list
+    // stateManager.bus.publish('entity:selected', project.activeEntity); // Update active entity UI
+    // stateManager.bus.publish('agent:editorShouldClose'); // Announce that editor should be hidden
 }
 
 export function deleteAgentPreset(agentNameToDelete) {
@@ -104,8 +114,8 @@ export function deleteAgentPreset(agentNameToDelete) {
         
         // Clean up references
         Object.values(project.agentGroups).forEach(group => {
-            group.members = group.members.filter(m => m !== agentNameToDelete);
-            if (group.moderatorAgent === agentNameToDelete) group.moderatorAgent = group.members[0] || '';
+            group.agents = group.agents.filter(m => m !== agentNameToDelete);
+            if (group.moderatorAgent === agentNameToDelete) group.moderatorAgent = group.agents[0] || '';
         });
         project.chatSessions.forEach(session => {
             if (session.linkedEntity?.type === 'agent' && session.linkedEntity.name === agentNameToDelete) {

@@ -1,10 +1,10 @@
 // ===============================================
-// FILE: src/js/modules/project/project.ui.js (แก้ไขสมบูรณ์)
+// FILE: src/js/modules/project/project.ui.js
 // DESCRIPTION: ทำให้ฟังก์ชัน updateProjectTitle เป็นศูนย์กลางการแสดงผลชื่อและสถานะ Dirty
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
-import { toggleDropdown } from '../../core/core.ui.js';
+import { toggleDropdown, showCustomAlert } from '../../core/core.ui.js';
 
 /**
  * [MODIFIED] This function is now the single source of truth for the project title display.
@@ -19,6 +19,23 @@ export function updateProjectTitle(projectName) {
         const nameToShow = projectName || stateManager.getProject()?.name || "Untitled";
         projectTitleEl.textContent = isDirty ? `${nameToShow} *` : nameToShow;
     }
+}
+
+function showSaveAsModal() {
+    const modal = document.getElementById('save-project-modal');
+    const projectNameInput = document.getElementById('project-name-input');
+    const currentProject = stateManager.getProject();
+
+    // Pre-fill the input with a suggestion
+    projectNameInput.value = currentProject ? `${currentProject.name} - Copy` : 'Untitled Project';
+    modal.style.display = 'flex';
+    projectNameInput.focus();
+    projectNameInput.select();
+}
+
+function hideSaveAsModal() {
+    const modal = document.getElementById('save-project-modal');
+    modal.style.display = 'none';
 }
 
 
@@ -145,14 +162,12 @@ export function renderSummarizationPresetSelector() {
 
 export function initProjectUI() {
     // --- Subscribe to Events ---
-
     stateManager.bus.subscribe('project:loaded', (eventData) => {
         updateProjectTitle(eventData.projectData.name);
         renderEntitySelector();
     });
     stateManager.bus.subscribe('project:nameChanged', (newName) => updateProjectTitle(newName));
     
-    // [FIX] This listener ensures the asterisk ('*') appears/disappears correctly.
     stateManager.bus.subscribe('userDirty:changed', () => {
         updateProjectTitle();
     });
@@ -161,6 +176,9 @@ export function initProjectUI() {
     stateManager.bus.subscribe('agent:listChanged', renderEntitySelector);
     stateManager.bus.subscribe('group:listChanged', renderEntitySelector);
     stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
+    
+    // Listen for events to show/hide the modal
+    stateManager.bus.subscribe('ui:showSaveAsModal', showSaveAsModal);
 
     // --- Setup Event Listeners ---
     const projectDropdownWrapper = document.querySelector('.sidebar-bottom-row .dropdown');
@@ -170,24 +188,45 @@ export function initProjectUI() {
             toggleButton.addEventListener('click', toggleDropdown);
         }
 
-        const dropdownContent = projectDropdownWrapper.querySelector('.dropdown-content');
-        if (dropdownContent) {
-            const handleMenuAction = (selector, eventName, eventData = {}) => {
-                const link = dropdownContent.querySelector(selector);
-                if (link) {
-                    link.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        stateManager.bus.publish(eventName, eventData);
-                        projectDropdownWrapper.classList.remove('open');
-                    });
+        // Use event delegation for the dropdown menu itself
+        projectDropdownWrapper.addEventListener('click', (e) => {
+            const target = e.target.closest('a');
+            if (!target) return;
+
+            const action = target.dataset.action;
+            if (action) {
+                e.preventDefault();
+                const eventMap = {
+                    'newProject': { name: 'project:new' },
+                    'openProject': { name: 'project:open' },
+                    'saveProject': { name: 'project:save', data: false },
+                    'saveProjectAs': { name: 'project:save', data: true }, // This will trigger the modal via the handler
+                    'exportChat': { name: 'project:exportChat' }
+                };
+                if (eventMap[action]) {
+                    stateManager.bus.publish(eventMap[action].name, eventMap[action].data);
                 }
-            };
-            handleMenuAction('a[data-action="newProject"]', 'project:new');
-            handleMenuAction('a[data-action="openProject"]', 'project:open');
-            handleMenuAction('a[data-action="saveProject"]', 'project:save', false);
-            handleMenuAction('a[data-action="saveProjectAs"]', 'project:save', true);
-            handleMenuAction('a[data-action="exportChat"]', 'project:exportChat');
-        }
+                projectDropdownWrapper.classList.remove('open');
+            }
+        });
+    }
+
+    // --- Setup Modal Listeners using Event Delegation ---
+    const saveProjectModal = document.getElementById('save-project-modal');
+    if (saveProjectModal) {
+        saveProjectModal.addEventListener('click', (e) => {
+            if (e.target.matches('.btn:not(.btn-secondary)')) { // Save button
+                const newName = document.getElementById('project-name-input').value.trim();
+                if (newName) {
+                    stateManager.bus.publish('project:saveConfirm', { projectName: newName });
+                    hideSaveAsModal(); // Hide modal on successful action
+                } else {
+                    showCustomAlert('Please enter a project name.');
+                }
+            } else if (e.target.matches('.btn-secondary') || e.target === saveProjectModal) { // Cancel or overlay click
+                hideSaveAsModal();
+            }
+        });
     }
     
     document.getElementById('load-project-input').addEventListener('change', (e) => stateManager.bus.publish('project:fileSelectedForOpen', e));

@@ -1,35 +1,54 @@
-/* ===============================================
-   FILE: src/styles/components/_code-block.css
-   DESCRIPTION: Styles for code blocks and copy button.
-   =============================================== */
+Code block css
 
-.message-content pre {
-    background-color: #282c34;
-    color: #abb2bf;
-    padding: 1em;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin: 0; /* Wrapper will handle margin */
-}
-
-.message-content code {
-    font-family: 'Courier New', Courier, monospace;
-    background-color: #f0f0f0;
-    padding: 0.2em 0.4em;
-    border-radius: 4px;
-}
-
-/* Reset inner code tag style inside a pre block */
-.message-content pre code {
-    background-color: transparent;
-    padding: 0;
-}
+/* ========================================================
+   == DEFINITIVE STYLES FOR CODE BLOCKS & SYNTAX THEME  ==
+   ======================================================== */
 
 .code-block-wrapper {
     position: relative;
-    margin: 1em 0;
+    margin: 0.8em 0; /* ระยะห่างบน-ล่างของ code block ทั้งก้อน */
 }
 
+/* 1. สร้างกฎที่ใช้ร่วมกันสำหรับ Code Block ทั้งใน Chat และ Composer */
+.message-content pre,
+.composer-editor pre {
+    background-color: #f1f5f9; /* สีพื้นหลังสำหรับ Light Theme */
+    color: #24292e;            /* สีตัวอักษรสำหรับ Light Theme */
+    padding: 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+
+/* 2. Dark Mode Override สำหรับทั้งสองส่วน */
+body.dark-mode .message-content pre,
+body.dark-mode .composer-editor pre {
+    background-color: #2d3748; /* สีพื้นหลังสำหรับ Dark Theme */
+    color: #c9d1d9;            /* สีตัวอักษรสำหรับ Dark Theme */
+}
+
+/* 3. Reset สไตล์สำหรับ <code> ที่อยู่ข้างใน (ยังคงเดิม) */
+.message-content pre code,
+.composer-editor pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.message-content code {
+    font-family: 'Fira Mono', 'Menlo', 'Consolas', monospace;
+    background-color: rgba(175, 184, 193, 0.2);
+    padding: .2em .4em;
+    margin: 0;
+    font-size: 85%;
+    border-radius: 6px;
+}
+
+/* 4. Copy Button (Preserved and integrated) */
 .copy-code-btn {
     position: absolute;
     top: 8px;
@@ -42,17 +61,33 @@
     font-size: 0.8rem;
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.2s ease-in-out, background-color 0.2s ease;
+    transition: opacity 0.2s ease-in-out;
 }
 
 .code-block-wrapper:hover .copy-code-btn {
     opacity: 1;
 }
 
-.copy-code-btn:hover {
-    background-color: #2d3748;
+/* ========================================================
+   == DEFINITIVE FIX FOR SCROLLBAR IN CODE BLOCKS       ==
+   ======================================================== */
+
+/* --- Dark Mode Override for the scrollbar INSIDE the <pre> tag --- */
+
+/* 1. สไตล์สำหรับ "ราง" ของ Scrollbar ใน Code Block */
+body.dark-mode .message-content pre::-webkit-scrollbar {
+    background-color: #2d3748; /* สีพื้นหลังของรางให้เข้ากับ Code Block */
+    height: 8px; /* ทำให้ Scrollbar แนวนอนไม่หนาเกินไป */
+    width: 8px;  /* สำหรับ Scrollbar แนวตั้ง (ถ้ามี) */
 }
 
-.copy-code-btn.copied {
-    background-color: var(--success-color);
+/* 2. สไตล์สำหรับ "ตัวเลื่อน" ของ Scrollbar */
+body.dark-mode .message-content pre::-webkit-scrollbar-thumb {
+    background-color: #718096; /* สีของตัวเลื่อน */
+    border-radius: 4px;
+}
+
+/* 3. สไตล์ตอนเอาเมาส์ไปวางบนตัวเลื่อน */
+body.dark-mode .message-content pre::-webkit-scrollbar-thumb:hover {
+    background-color: #a0aec0;
 }

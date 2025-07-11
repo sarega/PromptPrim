@@ -7,8 +7,8 @@
     background: white;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 6px 10px;
-    margin-bottom: 4px;
+    padding: 4px 10px;
+    margin-bottom: 3px;
     transition: all 0.2s ease;
     position: relative;
     cursor: pointer;
@@ -45,7 +45,7 @@
 
 /* --- Inactive Memory Styling --- */
 .memory-item.inactive .item-name {
-    color: #416e9f;
+    color: #8caac9;
 }
 
 
@@ -79,8 +79,12 @@
 
 .item-actions {
     display: flex;
-    gap: 5px;
     align-items: center;
+}
+
+/* [FIX] Use margin for more reliable spacing instead of gap */
+.item-actions > *:not(:last-child) {
+    margin-right: 2px;
 }
 
 .collapsible-section summary {
@@ -147,4 +151,45 @@
 
 .memory-toggle.active::after {
     transform: translateX(16px);
+}
+
+/* [ADD THIS] เพิ่มเอฟเฟกต์ hover สำหรับ Item ที่ไม่ได้ถูกเลือกใน Light Mode */
+.item-list > .item:not(.active):hover {
+    background-color: #eef2f7; /* หรือ var(--bg-workspace-studio) */
+    border-color: #d1d8e0;
+}
+
+/* --- Staged Item Styling --- */
+.item-list > .item.staged {
+    /* ใช้ outline เพื่อไม่ให้กระทบ layout เดิม */
+    outline: 2px solid #FBCF35; /* สีเหลืองทอง */
+    outline-offset: -2px; /* ทำให้เส้นขอบอยู่ด้านใน */
+    
+    /* เพิ่ม animation การกระพริบของ box-shadow */
+    animation: pulse-yellow 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes pulse-yellow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 207, 53, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(251, 207, 53, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 207, 53, 0);
+  }
+}
+
+/* --- Staged Item Styling --- */
+.item-list > .item.staged {
+    outline: 2px solid #FBCF35; /* เส้นขอบสีเหลืองทอง */
+    outline-offset: -2px; /* ทำให้เส้นขอบอยู่ด้านใน */
+    animation: pulse-yellow 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes pulse-yellow {
+  0% { box-shadow: 0 0 0 0 rgba(251, 207, 53, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(251, 207, 53, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 207, 53, 0); }
 }

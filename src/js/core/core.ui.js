@@ -1,9 +1,50 @@
 // ===============================================
-// FILE: src/js/core/core.ui.js (แก้ไขสมบูรณ์)
-// DESCRIPTION: เรียกใช้ makeSidebarResizable() เพื่อให้ resizer กลับมาทำงาน
+// FILE: src/js/core/core.ui.js
+// DESCRIPTION: 
 // ===============================================
 
 import { stateManager } from './core.state.js';
+
+
+/**
+ * Creates a reusable dropdown menu component.
+ * @param {Array<object>} options - An array of option objects.
+ * Each object should have: { label: string, action: string, data?: object, isDestructive?: boolean }
+ * @returns {HTMLElement} The created dropdown element.
+ */
+export function createDropdown(options) {
+    const dropdown = document.createElement('div');
+    dropdown.className = 'dropdown align-right';
+
+    const button = document.createElement('button');
+    button.className = 'btn-icon';
+    button.innerHTML = '&#8942;';
+    button.title = 'More options';
+    // [CRITICAL FIX] เพิ่มบรรทัดนี้เพื่อให้ Event Listener รู้ว่าต้องทำอะไร
+    button.dataset.action = 'toggle-menu';
+
+    const content = document.createElement('div');
+    content.className = 'dropdown-content';
+
+    // ... โค้ดส่วนที่เหลือของฟังก์ชันเหมือนเดิมทุกประการ ...
+    
+    options.forEach(opt => {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = opt.label;
+        if (opt.isDestructive) {
+            link.classList.add('is-destructive');
+        }
+        link.dataset.action = opt.action;
+        if (opt.data) {
+            link.dataset.data = JSON.stringify(opt.data);
+        }
+        content.appendChild(link);
+    });
+
+    dropdown.append(button, content);
+    return dropdown;
+}
 
 // --- Exported UI Functions ---
 export function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
@@ -32,27 +73,58 @@ export function toggleMobileSidebar() {
 }
 
 export function toggleSidebarCollapse() { document.querySelector('.app-wrapper').classList.toggle('sidebar-collapsed'); }
-
+// -- simplify
 export function toggleDropdown(event) {
     event.stopPropagation();
-    const dropdown = event.currentTarget.closest('.dropdown');
-    const parentItem = event.currentTarget.closest('.item');
+    const dropdown = event.target.closest('.dropdown');
+    if (!dropdown) return;
+
+    const content = dropdown.querySelector('.dropdown-content');
     const wasOpen = dropdown.classList.contains('open');
-    
+
+    // ปิด Dropdown อื่นๆ ทั้งหมดก่อนเสมอ
     document.querySelectorAll('.dropdown.open').forEach(d => {
-        d.classList.remove('open');
-        const parent = d.closest('.item');
-        if (parent) parent.classList.remove('z-index-front');
+        if (d !== dropdown) {
+            d.classList.remove('open');
+        }
     });
 
+    // [REVERT] ถ้าเมนูกำลังจะถูกเปิด ให้คำนวณทิศทาง
     if (!wasOpen) {
-        dropdown.classList.add('open');
-        if (parentItem) {
-            parentItem.classList.add('z-index-front');
+        // ทำให้เมนูมองเห็นได้ชั่วคราวเพื่อวัดขนาดที่แท้จริง
+        content.style.visibility = 'hidden';
+        content.style.display = 'block';
+        const menuHeight = content.offsetHeight;
+        // คืนค่าการแสดงผลกลับไปเหมือนเดิม
+        content.style.visibility = '';
+        content.style.display = '';
+
+        const buttonRect = event.target.closest('button').getBoundingClientRect();
+        const spaceBelow = window.innerHeight - buttonRect.bottom;
+
+        // ถ้าพื้นที่ด้านล่างไม่พอ และพื้นที่ด้านบนมีมากกว่า ให้เพิ่มคลาส .opens-up
+        if (spaceBelow < menuHeight && buttonRect.top > menuHeight) {
+            content.classList.add('opens-up');
+        } else {
+            // ถ้าพื้นที่พอ ให้ลบคลาสออกเสมอ
+            content.classList.remove('opens-up');
         }
     }
+
+    // สลับการแสดงผลของเมนูที่ถูกคลิก
+    dropdown.classList.toggle('open');
 }
 
+// [NEW] เพิ่ม Listener กลางสำหรับปิด Dropdown เมื่อคลิกนอกพื้นที่
+// เราจะเรียกใช้ฟังก์ชันนี้เพียงครั้งเดียวใน main.js
+export function initGlobalDropdownListener() {
+    document.addEventListener('click', (e) => {
+        const openDropdown = document.querySelector('.dropdown.open');
+        if (openDropdown && !openDropdown.contains(e.target)) {
+            openDropdown.classList.remove('open');
+        }
+    });
+}
 export function applyFontSettings() {
     const project = stateManager.getProject();
     if (project?.globalSettings?.fontFamilySelect) {
@@ -61,119 +133,30 @@ export function applyFontSettings() {
 }
 
 export function updateStatus({ message, state }) {
-    document.getElementById('statusText').textContent = message || 'Ready';
+    const statusText = document.getElementById('statusText');
     const dot = document.getElementById('statusDot');
-    dot.className = 'status-dot';
-    if (state === 'connected') dot.classList.add('connected');
-    else if (state === 'error') dot.classList.add('error');
-}
+    if (!statusText || !dot) return;
 
-export function makeSidebarResizable() {
-    const verticalResizer = document.querySelector('.sidebar-resizer');
-    const horizontalResizer = document.querySelector('.sidebar-horizontal-resizer');
-    const sidebar = document.querySelector('.sidebar');
-    const sessionsFrame = document.querySelector('.sessions-frame');
-    const memoriesFrame = document.querySelector('.memories-frame');
+    statusText.textContent = message || 'Ready';
+    dot.className = 'status-dot'; // รีเซ็ตคลาสสีทั้งหมด
 
-    if (!verticalResizer || !horizontalResizer || !sidebar || !sessionsFrame || !memoriesFrame) {
-        console.warn("Resizable sidebar elements not found. Resizing will be disabled.");
-        return;
-    }
-
-    let isVerticalResizing = false;
-    let isHorizontalResizing = false;
-
-    const verticalMoveHandler = (e) => {
-        if (!isVerticalResizing) return;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const sidebarContent = document.querySelector('.sidebar-content');
-        if (!sidebarContent) return;
-
-        const sidebarRect = sidebarContent.getBoundingClientRect();
-        let newHeight = clientY - sidebarRect.top;
-        const totalHeight = sidebarContent.offsetHeight;
-
-        if (newHeight < 100) newHeight = 100;
-        if (newHeight > totalHeight - 100) newHeight = totalHeight - 100;
-        
-        const resizerHeight = verticalResizer.offsetHeight;
-        sessionsFrame.style.flex = `0 1 ${newHeight}px`;
-        memoriesFrame.style.flex = `1 1 ${totalHeight - newHeight - resizerHeight}px`;
-    };
-
-    const startVerticalResizing = (e) => {
-        e.preventDefault();
-        isVerticalResizing = true;
-        document.body.style.cursor = 'ns-resize';
-        document.body.style.userSelect = 'none';
-        window.addEventListener('mousemove', verticalMoveHandler);
-        window.addEventListener('touchmove', verticalMoveHandler, { passive: false });
-        window.addEventListener('mouseup', stopVerticalResizing);
-        window.addEventListener('touchend', stopVerticalResizing);
-    };
-
-    const stopVerticalResizing = () => {
-        isVerticalResizing = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        window.removeEventListener('mousemove', verticalMoveHandler);
-        window.removeEventListener('touchmove', verticalMoveHandler);
-        window.removeEventListener('mouseup', stopVerticalResizing);
-        window.removeEventListener('touchend', stopVerticalResizing);
-        localStorage.setItem('sidebarSplitHeight', sessionsFrame.style.flex);
-    };
-
-    verticalResizer.addEventListener('mousedown', startVerticalResizing);
-    verticalResizer.addEventListener('touchstart', startVerticalResizing, { passive: false });
-
-    const horizontalMoveHandler = (e) => {
-        if (!isHorizontalResizing) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        let newWidth = clientX;
-
-        if (newWidth < 250) newWidth = 250;
-        if (newWidth > 600) newWidth = 600;
-
-        sidebar.style.flexBasis = `${newWidth}px`;
-    };
-
-    const startHorizontalResizing = (e) => {
-        e.preventDefault();
-        isHorizontalResizing = true;
-        document.body.style.cursor = 'ew-resize';
-        document.body.style.userSelect = 'none';
-        window.addEventListener('mousemove', horizontalMoveHandler);
-        window.addEventListener('touchmove', horizontalMoveHandler, { passive: false });
-        window.addEventListener('mouseup', stopHorizontalResizing);
-        window.addEventListener('touchend', stopHorizontalResizing);
-    };
-
-    const stopHorizontalResizing = () => {
-        isHorizontalResizing = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        window.removeEventListener('mousemove', horizontalMoveHandler);
-        window.removeEventListener('touchmove', horizontalMoveHandler);
-        window.removeEventListener('mouseup', stopHorizontalResizing);
-        window.removeEventListener('touchend', stopHorizontalResizing);
-        localStorage.setItem('sidebarWidth', sidebar.style.flexBasis);
-    };
-
-    horizontalResizer.addEventListener('mousedown', startHorizontalResizing);
-    horizontalResizer.addEventListener('touchstart', startHorizontalResizing, { passive: false });
-
-    const savedHeight = localStorage.getItem('sidebarSplitHeight');
-    if (savedHeight) {
-        sessionsFrame.style.flex = savedHeight;
-    }
-    const savedWidth = localStorage.getItem('sidebarWidth');
-    if (savedWidth) {
-        sidebar.style.flexBasis = savedWidth;
+    if (state === 'connected') {
+        dot.classList.add('connected'); // สีเขียว
+    } else if (state === 'error') {
+        dot.classList.add('error'); // สีแดง
+    } else if (state === 'loading') {
+        // [FIX] เพิ่ม state 'loading' เพื่อแสดงผลเป็นสีส้ม
+        dot.classList.add('warning');
     }
 }
-
 
 export function initCoreUI() {
+    // Display the app version from environment variables provided by Vite.
+    const versionSpan = document.getElementById('app-version');
+    if (versionSpan) {
+        versionSpan.textContent = import.meta.env.VITE_APP_VERSION || 'N/A';
+    }
+
     // Subscriptions
     stateManager.bus.subscribe('ui:applyFontSettings', applyFontSettings);
     stateManager.bus.subscribe('status:update', updateStatus);
@@ -181,13 +164,10 @@ export function initCoreUI() {
     // Core Event Listeners
     document.querySelector('#settings-btn').addEventListener('click', toggleSettingsPanel);
     document.querySelector('.close-settings-btn').addEventListener('click', toggleSettingsPanel);
-    document.getElementById('collapse-sidebar-btn').addEventListener('click', toggleSidebarCollapse);
+    // document.getElementById('collapse-sidebar-btn').addEventListener('click', toggleSidebarCollapse);
     
     // Mobile UI Listeners
-    const hamburgerBtn = document.getElementById('hamburger-btn');
-    if (hamburgerBtn) {
-        hamburgerBtn.addEventListener('click', toggleMobileSidebar);
-    }
+
     const mobileOverlay = document.getElementById('mobile-overlay');
     if (mobileOverlay) {
         mobileOverlay.addEventListener('click', toggleMobileSidebar);
@@ -210,8 +190,81 @@ export function initCoreUI() {
         if(cancelBtn) cancelBtn.addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'cancel'));
     }
     
-    // [FIX] Call the resizer setup function
-    makeSidebarResizable();
     
     console.log("Core UI Initialized and Listeners Attached.");
+}
+
+/**
+ * Creates and displays a custom context menu at the specified coordinates.
+ * @param {Array<object>} options - Array of menu item objects. e.g., [{ label: 'Copy', action: () => {} }]
+ * @param {MouseEvent|TouchEvent} event - The event that triggered the menu.
+ */
+export function showContextMenu(options, event) {
+    // Remove any existing context menus to prevent duplicates
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+
+    const list = document.createElement('ul');
+
+    options.forEach(option => {
+        const item = document.createElement('li');
+        item.textContent = option.label;
+        if (option.isDestructive) {
+            item.classList.add('destructive');
+        }
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            option.action();
+            // The menu will be closed by the global listener
+        });
+        list.appendChild(item);
+    });
+
+    menu.appendChild(list);
+    document.body.appendChild(menu);
+
+    // Position the menu carefully, ensuring it doesn't go off-screen
+    const { clientX, clientY } = (event.touches) ? event.touches[0] : event;
+    const menuWidth = menu.offsetWidth;
+    const menuHeight = menu.offsetHeight;
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+
+    let top = clientY;
+    let left = clientX;
+
+    if (clientX + menuWidth > screenWidth) {
+        left = screenWidth - menuWidth - 10; // Adjust to not touch the edge
+    }
+    if (clientY + menuHeight > screenHeight) {
+        top = screenHeight - menuHeight - 10; // Adjust to not touch the edge
+    }
+
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+    // By wrapping the style change that triggers the transition in a
+    // requestAnimationFrame, we ensure the browser has processed the
+    // initial state (opacity: 0 from CSS) before transitioning to the final state.
+    requestAnimationFrame(() => {
+        menu.style.opacity = '1';
+        menu.style.transform = 'scale(1)';
+    });
+    // Close menu when clicking anywhere else on the page
+    const closeMenu = () => {
+        menu.remove();
+        document.removeEventListener('click', closeMenu, true);
+    };
+    
+    // Use a timeout to allow the current event to finish before attaching the listener
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu, true);
+    }, 0);
 }

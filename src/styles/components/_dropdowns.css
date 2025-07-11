@@ -170,3 +170,17 @@
 .custom-select-option .item-icon {
     margin-right: 10px;
 }
+
+
+.dropdown-divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--border-color);
+}
+
+/* [NEW] Add this rule for menus that should open upwards */
+.dropdown-content.bottom-up {
+    top: auto; /* ลบค่า top ที่เป็นค่าเริ่มต้นออก */
+    bottom: 100%; /* กำหนดให้ขอบล่างของเมนู อยู่ที่ขอบบนของปุ่ม */
+    margin-bottom: 8px; /* เพิ่มระยะห่างเล็กน้อยระหว่างปุ่มกับเมนู */
+}

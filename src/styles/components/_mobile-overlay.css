@@ -1,0 +1,23 @@
+/*
+ * Styles for the mobile overlay, which dims the background
+ * when a side panel is open.
+ */
+
+#mobile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s linear 0.3s; /* Delay hiding visibility */
+    z-index: 1099; /* This z-index MUST be lower than the side panels' z-index */
+}
+
+#mobile-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease;
+}
