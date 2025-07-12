@@ -17,26 +17,55 @@ import {
 import { openDb, dbRequest, clearObjectStores } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
-import { createNewChatSession, loadChatSession, saveAllSessions } from '../session/session.handlers.js';
 import { scrollToLinkedEntity } from './project.ui.js';
+import { createNewChatSession, loadChatSession, saveAllSessions, saveActiveSession } from '../session/session.handlers.js';
 
-// [NEW] เพิ่มฟังก์ชันนี้สำหรับจัดการ Autosave
+
+/**
+ * [REWRITTEN] ฟังก์ชัน Auto-save ที่มีประสิทธิภาพสูงขึ้น
+ * จะบันทึกแค่ Metadata และ Active Session เท่านั้น
+ */
+async function performAutoSave() {
+    const project = stateManager.getProject();
+    if (!project || !project.id) {
+        console.warn("[AutoSave] Aborted: Project not available for saving.");
+        return false;
+    }
+    
+    console.log('[AutoSave] Persisting essential data to IndexedDB...');
+    try {
+        // 1. บันทึก Metadata ของโปรเจกต์ (ซึ่งเร็วมาก)
+        await persistProjectMetadata(); 
+        
+        // 2. บันทึกเฉพาะ Session ที่กำลังเปิดอยู่ (เร็วขึ้นมาก)
+        await saveActiveSession();
+
+        console.log('[AutoSave] Essential project state successfully persisted.');
+        return true;
+    } catch (error) {
+        console.error('[AutoSave] Failed to persist project state:', error);
+        return false;
+    }
+}
+
+
+// [MODIFIED] แก้ไขฟังก์ชัน setupAutoSaveChanges ให้เรียกใช้ฟังก์ชันใหม่
 export function setupAutoSaveChanges() {
     let saveTimeout;
     stateManager.bus.subscribe('autosave:required', () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(async () => {
             if (stateManager.isAutoSaveDirty()) {
-                console.log('[AutoSave] Persisting project to IndexedDB...');
-                const success = await persistCurrentProject();
+                // เรียกใช้ฟังก์ชัน Auto-save ตัวใหม่ที่เบากว่า
+                const success = await performAutoSave();
                 if (success) {
-                    // [FIX] แก้ไขการอัปเดต state ให้เรียกผ่าน stateManager
                     stateManager.setAutoSaveDirty(false);
                 }
             }
-        }, 2000);
+        }, 2000); // หน่วงเวลา 2 วินาที
     });
 }
+
 
 // [NEW] เพิ่มฟังก์ชันนี้สำหรับอัปเดต Global Settings
 export function updateGlobalSettings(settings) {
@@ -455,8 +484,6 @@ export function migrateProjectData(projectData) {
 
 
 export async function selectEntity(type, name) {
-    console.log(`🟢 [CONFIRMED] selectEntity called with:`, { type, name });
-    console.log("   - Clearing any existing staged entity.");
 
     // [KEY FIX] เมื่อมีการเลือก Entity อย่างเป็นทางการ ให้ล้าง Staging ทิ้งเสมอ
     stateManager.setStagedEntity(null);
@@ -481,28 +508,21 @@ export async function selectEntity(type, name) {
 }
 
 export function handleStudioItemClick({ type, name }) {
-    console.log(`🟡 [HANDLER] handleStudioItemClick received:`, { type, name });
-
     const clickedEntity = { type, name };
     const stagedEntity = stateManager.getStagedEntity();
     const activeEntity = stateManager.getProject().activeEntity;
 
-    console.log(`   - Current Active:`, activeEntity);
-    console.log(`   - Current Staged:`, stagedEntity);
-
     // Case 1: ยืนยันตัวที่ Staging อยู่
     if (stagedEntity && stagedEntity.name === clickedEntity.name && stagedEntity.type === clickedEntity.type) {
-        console.log("   -> DECISION: Confirming staged entity.");
         stateManager.bus.publish('entity:select', clickedEntity);
     } 
     // Case 2: คลิกที่ตัวที่ Active อยู่แล้ว
     else if (activeEntity && activeEntity.name === clickedEntity.name && activeEntity.type === clickedEntity.type) {
-        console.log("   -> DECISION: Clicked active entity. Clearing stage.");
         stateManager.setStagedEntity(null);
     } 
     // Case 3: เริ่ม Staging ตัวใหม่
     else {
-        console.log("   -> DECISION: Staging new entity.");
         stateManager.setStagedEntity(clickedEntity);
     }
 }
+

@@ -244,23 +244,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         console.log("🚀 Application starting...");
 
+        // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---
         initializeUI();
         setupEventSubscriptions();
-        // ChatHandlers.initChatHandlers();
         ProjectHandlers.setupAutoSaveChanges();
 
+        // --- [DEFINITIVE FIX] เพิ่ม try...catch เพื่อจัดการ Error ตอนโหลดโปรเจกต์ ---
         const lastProjectId = localStorage.getItem('lastActiveProjectId');
+        
         if (lastProjectId) {
-            await ProjectHandlers.loadLastProject(lastProjectId);
+            console.log(`Attempting to load last project with ID: ${lastProjectId}`);
+            try {
+                // พยายามโหลดโปรเจกต์ล่าสุดตามปกติ
+                await ProjectHandlers.loadLastProject(lastProjectId);
+            } catch (error) {
+                // --- นี่คือ "ทางออกฉุกเฉิน" ของเรา ---
+                console.error(`[RECOVERY] Failed to load last project (ID: ${lastProjectId}). This is likely due to corrupted data.`, error);
+                
+                // 1. แสดง Alert ที่เป็นมิตรต่อผู้ใช้
+                alert("Could not load your last project due to an error. A new project will be created.");
+                
+                // 2. ล้าง ID ที่มีปัญหาออกจาก localStorage
+                localStorage.removeItem('lastActiveProjectId');
+                
+                // 3. สร้างโปรเจกต์ใหม่เพื่อให้ผู้ใช้สามารถทำงานต่อได้
+                console.log("[RECOVERY] Creating a new project as a fallback.");
+                await ProjectHandlers.createNewProject();
+            }
         } else {
+            // ถ้าไม่มีโปรเจกต์ล่าสุด ก็สร้างใหม่ตามปกติ
             await ProjectHandlers.createNewProject();
         }
+        // --------------------------------------------------------------------
 
         loadingOverlay?.classList.remove('active');
         console.log("🎉 Application initialized successfully.");
 
     } catch (error) {
-        console.error('[Startup Error]', error);
-        loadingOverlay.querySelector('p').textContent = `Error: ${error.message}`;
+        console.error('[FATAL STARTUP ERROR]', error);
+        loadingOverlay.querySelector('p').textContent = `A critical error occurred: ${error.message}`;
     }
 });

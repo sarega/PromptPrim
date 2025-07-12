@@ -8,7 +8,7 @@
 import { showCustomAlert } from '../../core/core.ui.js';
 import { stateManager, SESSIONS_STORE_NAME } from '../../core/core.state.js';
 import { formatTimestamp } from '../../core/core.utils.js'; // <-- ตรวจสอบว่ามีบรรทัดนี้
-import { getDb } from '../../core/core.db.js';
+import { getDb, dbRequest } from '../../core/core.db.js';
 
 
 // --- UI Module Imports ---
@@ -405,7 +405,22 @@ export function saveComposerHeight({ height }) {
 
     if (session && height) {
         session.composerHeight = height;
-        // ไม่ต้องเรียก updateAndPersistState ที่นี่เพื่อลดการเขียน DB ที่ไม่จำเป็น
-        // การเปลี่ยนแปลงจะถูกบันทึกเมื่อมีการกระทำอื่นที่สำคัญเกิดขึ้น
+      
+    }
+}
+
+export async function saveActiveSession() {
+    const project = stateManager.getProject();
+    const activeSession = project?.chatSessions.find(s => s.id === project.activeSessionId);
+
+    if (!activeSession) {
+        console.warn("[AutoSave] Could not find active session to save.");
+        return;
+    }
+
+    try {
+        await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', activeSession);
+    } catch (error) {
+        console.error(`[AutoSave] Failed to save active session (${activeSession.id}):`, error);
     }
 }
