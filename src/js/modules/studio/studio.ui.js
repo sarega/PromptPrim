@@ -73,8 +73,8 @@ export function initStudioUI() {
     });
 
     // Subscriptions to re-render the studio content
-    stateManager.bus.subscribe('project:loaded', renderStudioContent);
-    stateManager.bus.subscribe('entity:selected', renderStudioContent);
+    stateManager.bus.subscribe('entity:selected', renderStudioContent); 
+    // stateManager.bus.subscribe('entity:selected', renderStudioContent);
     stateManager.bus.subscribe('studio:contentShouldRender', renderStudioContent);
     
     // [KEY FIX] ต้องดักฟัง Event นี้เพื่อให้ UI วาดไฮไลท์สีเหลืองใหม่

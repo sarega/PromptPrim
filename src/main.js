@@ -34,6 +34,7 @@ import * as GroupHandlers from './js/modules/group/group.handlers.js';
 import * as MemoryUI from './js/modules/memory/memory.ui.js';
 import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
+import * as ComposerHandlers from './js/modules/composer/composer.handlers.js'; // <-- ตรวจสอบว่ามีบรรทัดนี้
 
 
 // import { initChatHandlers } from './js/modules/chat/chat.handlers.js';
@@ -107,8 +108,30 @@ function setupEventSubscriptions() {
 
     // Session Management
     bus.subscribe('session:new', SessionHandlers.createNewChatSession);
-    bus.subscribe('session:load', ({ sessionId }) => SessionHandlers.loadChatSession(sessionId));
-    bus.subscribe('session:rename', ({ sessionId, event }) => SessionHandlers.renameChatSession(sessionId, event));
+    // bus.subscribe('session:load', ({ sessionId }) => SessionHandlers.loadChatSession(sessionId));
+    // --- [NEW] สร้าง Listener กลางสำหรับจัดการ UI ทั้งหมดหลังโหลด Session ---
+    bus.subscribe('session:loaded', ({ session }) => {
+        // ฟังก์ชันเหล่านี้จะถูกเรียกตามลำดับอย่างเป็นระเบียบ
+        ChatUI.updateChatTitle(session.name);
+        ChatUI.renderMessages(); 
+
+        // [FIX] เรียกใช้ฟังก์ชันจาก Module ที่ถูกต้อง
+        ComposerHandlers.loadComposerContent(); // <--- แก้ไขบรรทัดนี้
+
+        SessionUI.renderSessionList();
+        
+        // ส่ง event ย่อยเพื่อให้โมดูลอื่นทำงานต่อ
+        stateManager.bus.publish('entity:selected', session.linkedEntity);
+        // ไม่จำเป็นต้อง publish context:requestData แล้ว เพราะ UI จะอัปเดตเอง
+    });
+
+    // --- [NEW] สร้าง Listener สำหรับเคลียร์หน้าจอ ---
+    bus.subscribe('session:cleared', () => {
+        ChatUI.clearChat();
+        ComposerUI.setContent('');
+        SessionUI.renderSessionList();
+    });
+    bus.subscribe('session:autoRename', SessionHandlers.handleAutoRename);
     bus.subscribe('session:clone', ({ sessionId, event }) => SessionHandlers.cloneSession(sessionId, event));
     bus.subscribe('session:archive', ({ sessionId, event }) => SessionHandlers.archiveSession(sessionId, event));
     bus.subscribe('session:pin', ({ sessionId, event }) => SessionHandlers.togglePinSession(sessionId, event));

@@ -16,7 +16,7 @@
 }
 
 .message-turn-wrapper.user-turn {
-    align-items: flex-end; /* จัด Bubble ชิดขวา */
+    align-items: flex-end;      /*<-- [FIX] ใช้คุณสมบัตินี้เหมือนเดิม */
 }
 
 .message-turn-wrapper.assistant-turn {
@@ -51,8 +51,14 @@
 .message.user {
     background-color: #eaf5fe;
     color: var(--user-bubble-edit-text-color);
-    width: fit-content; /* ขนาดพอดีกับเนื้อหา */
-
+    
+    /* [DEFINITIVE FIX] ใช้เทคนิค display: table เพื่อให้เกิด "shrink-to-fit" 
+       โดยไม่ทำให้เกิด Layout Calculation ที่หนักหน่วงเหมือน fit-content */
+    display: table;
+    
+    /* ส่วน max-width: 90% และอื่นๆ ยังคงเหมือนเดิม */
+    max-width: 90%; 
+    border-radius: 18px; /* ตรวจสอบว่ามีอยู่ */
 }
 
 .message.assistant {
@@ -421,7 +427,7 @@ body.dark-mode .inline-edit-textarea:focus {
     width: 100%;
     max-width: 820px;
 }
-.message-turn-wrapper.user-turn { align-items: flex-end; }
+
 .message-turn-wrapper.assistant-turn { align-items: flex-start; }
 .message-turn-wrapper.system-turn { align-items: center; }
 
@@ -558,4 +564,21 @@ body.dark-mode .message-content th {
 }
 body.dark-mode .message-content tr:nth-child(even) {
   background-color: #202732;
+}
+
+/* [PATCH] สไตล์สำหรับ Summary Bubble โดยเฉพาะ */
+.message.system-summary-message {
+    width: 100%; /* กว้างเต็มที่เพื่อให้เนื้อหาแสดงผลสวยงาม */
+    max-width: 100%;
+    background: #eef2f7; /* สีพื้นหลังที่ดูอ่อนโยน */
+    color: #4a5568;
+    border: 1px dashed #d1d8e0; /* ใช้เส้นประเพื่อให้ดูแตกต่าง */
+    font-size: 0.9rem;
+    padding: 15px 20px;
+}
+/* สไตล์สำหรับ Dark Mode */
+body.dark-mode .message.system-summary-message {
+    background: #232d3e;
+    color: #a0aec0;
+    border-color: #4a5568;
 }

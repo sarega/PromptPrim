@@ -10,9 +10,6 @@
     flex-direction: column;
     gap: 20px;
     
-    /* [KEY] สั่งให้จัดเรียงคอลัมน์ของ bubble ให้อยู่ตรงกลางแนวนอน */
-    align-items: center; 
-    
     /* [KEY] เพิ่ม padding ด้านข้างแบบ Responsive และด้านล่างให้มากขึ้น */
     padding: 20px 6vw 40px 6vw; 
 }

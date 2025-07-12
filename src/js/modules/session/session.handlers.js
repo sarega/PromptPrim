@@ -73,106 +73,138 @@ export function createNewChatSession() {
     loadChatSession(newSession.id);
 }
 
-/**
- * Loads a given session's data into the UI. This is the single source of truth
- * for displaying a session's content and is responsible for updating all
- * relevant UI components.
- * @param {string | null} sessionId The ID of the session to load, or null to clear the view.
- */
+// export function loadChatSession(sessionId) {
+//     const project = stateManager.getProject();
+//     if (!project) return;
+
+//     // ส่วนจัดการกรณีไม่มี sessionId (เคลียร์หน้าจอ)
+//     if (!sessionId) {
+//         project.activeSessionId = null;
+//         stateManager.updateAndPersistState(project);
+//         // ใช้ setTimeout กับส่วนนี้ด้วยเพื่อความปลอดภัย
+//         setTimeout(() => {
+//             ChatUI.clearChat();
+//             ComposerUI.setContent('');
+//             SessionUI.renderSessionList();
+//         }, 0);
+//         return;
+//     }
+    
+//     const session = project.chatSessions.find(s => s.id === sessionId);
+
+//     // ส่วนจัดการกรณีหา session ไม่เจอ
+//     if (!session) {
+//         console.warn(`Session with ID ${sessionId} not found. Loading most recent session as fallback.`);
+//         const fallbackSession = [...project.chatSessions]
+//             .filter(s => !s.archived)
+//             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        
+//         loadChatSession(fallbackSession ? fallbackSession.id : null);
+//         return;
+//     }
+
+//     // 1. ตั้งค่า active session ใน state
+//     if (project.activeSessionId !== sessionId) {
+//         project.activeSessionId = sessionId;
+//         stateManager.updateAndPersistState(project);
+//     }
+    
+//     // [CRITICAL FIX] หน่วงเวลาการเรียก UI ทั้งหมด
+//     // เพื่อให้แน่ใจว่าทุกโมดูล (ChatUI, ComposerUI, SessionUI) ถูกโหลดพร้อมใช้งานแล้ว
+//     setTimeout(() => {
+//         const composerPanel = document.getElementById('composer-panel');
+//         if (composerPanel) {
+//             // ถ้า session นี้เคยมีการบันทึกความสูงไว้ ให้นำมาใช้
+//             if (session.composerHeight) {
+//                 composerPanel.style.flexBasis = session.composerHeight;
+//             } else {
+//                 // ถ้าไม่เคย ให้ใช้ค่าเริ่มต้น
+//                 composerPanel.style.flexBasis = '35vh';
+//             }
+//         }
+//         // 2. อัปเดต UI ทั้งหมดที่เกี่ยวข้องกับ session
+//         ChatUI.renderMessages(session.history || []);
+//         ComposerUI.setContent(session.composerContent || '');
+//         ChatUI.updateChatTitle(session.name);
+//         SessionUI.renderSessionList(); // วาด Session List ใหม่เพื่อไฮไลท์อันที่เลือก
+//         ChatUI.scrollToBottom();
+
+//         // 3. ตรวจสอบและเลือก agent/group ที่ผูกกับ session นี้
+//         const entity = session.linkedEntity || project.activeEntity;
+//         if (entity) {
+//             project.activeEntity = entity;
+//             stateManager.bus.publish('entity:selected', entity);
+//         }
+//     }, 0); // การใส่ 0 คือการสั่งให้ทำงานทันทีที่ Call Stack ปัจจุบันว่างลง
+
+// }
+
 export function loadChatSession(sessionId) {
     const project = stateManager.getProject();
     if (!project) return;
 
-    // ส่วนจัดการกรณีไม่มี sessionId (เคลียร์หน้าจอ)
+    // --- กรณีไม่มี sessionId, ทำการเคลียร์หน้าจอ ---
     if (!sessionId) {
         project.activeSessionId = null;
-        stateManager.updateAndPersistState(project);
-        // ใช้ setTimeout กับส่วนนี้ด้วยเพื่อความปลอดภัย
-        setTimeout(() => {
-            ChatUI.clearChat();
-            ComposerUI.setContent('');
-            SessionUI.renderSessionList();
-        }, 0);
+        stateManager.setProject(project); // อัปเดต state
+        stateManager.bus.publish('session:cleared'); // ส่ง event สำหรับเคลียร์หน้าจอ
         return;
     }
     
     const session = project.chatSessions.find(s => s.id === sessionId);
 
-    // ส่วนจัดการกรณีหา session ไม่เจอ
+    // --- กรณีหา session ไม่เจอ, โหลดอันล่าสุดแทน ---
     if (!session) {
-        console.warn(`Session with ID ${sessionId} not found. Loading most recent session as fallback.`);
+        console.warn(`Session with ID ${sessionId} not found. Loading most recent as fallback.`);
         const fallbackSession = [...project.chatSessions]
             .filter(s => !s.archived)
             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        
+        // เรียกตัวเองซ้ำด้วย ID ที่ถูกต้อง (ถ้ามี)
         loadChatSession(fallbackSession ? fallbackSession.id : null);
         return;
     }
 
-    // 1. ตั้งค่า active session ใน state
-    if (project.activeSessionId !== sessionId) {
-        project.activeSessionId = sessionId;
-        stateManager.updateAndPersistState(project);
+    // --- ขั้นตอนหลัก: อัปเดต State และประกาศ Event ---
+    project.activeSessionId = sessionId;
+    // เลือก entity ที่ผูกกับ session นี้ให้เป็น active โดยอัตโนมัติ
+    if (session.linkedEntity) {
+        project.activeEntity = { ...session.linkedEntity };
     }
+
+    stateManager.setProject(project); // อัปเดต state ทั้งหมดในครั้งเดียว
+    stateManager.updateAndPersistState(); // สั่งบันทึก state ที่เปลี่ยนไป
     
-    // [CRITICAL FIX] หน่วงเวลาการเรียก UI ทั้งหมด
-    // เพื่อให้แน่ใจว่าทุกโมดูล (ChatUI, ComposerUI, SessionUI) ถูกโหลดพร้อมใช้งานแล้ว
-    setTimeout(() => {
-        const composerPanel = document.getElementById('composer-panel');
-        if (composerPanel) {
-            // ถ้า session นี้เคยมีการบันทึกความสูงไว้ ให้นำมาใช้
-            if (session.composerHeight) {
-                composerPanel.style.flexBasis = session.composerHeight;
-            } else {
-                // ถ้าไม่เคย ให้ใช้ค่าเริ่มต้น
-                composerPanel.style.flexBasis = '35vh';
-            }
-        }
-        // 2. อัปเดต UI ทั้งหมดที่เกี่ยวข้องกับ session
-        ChatUI.renderMessages(session.history || []);
-        ComposerUI.setContent(session.composerContent || '');
-        ChatUI.updateChatTitle(session.name);
-        SessionUI.renderSessionList(); // วาด Session List ใหม่เพื่อไฮไลท์อันที่เลือก
-        ChatUI.scrollToBottom();
-
-        // 3. ตรวจสอบและเลือก agent/group ที่ผูกกับ session นี้
-        const entity = session.linkedEntity || project.activeEntity;
-        if (entity) {
-            project.activeEntity = entity;
-            stateManager.bus.publish('entity:selected', entity);
-        }
-    }, 0); // การใส่ 0 คือการสั่งให้ทำงานทันทีที่ Call Stack ปัจจุบันว่างลง
-
+    // [สำคัญที่สุด] ส่ง Event กลางออกไปเพียง Event เดียว
+    // เพื่อให้ UI module ต่างๆ ไปดักฟังและทำงานของตัวเองตามลำดับ
+    stateManager.bus.publish('session:loaded', { session });
 }
+
 /**
  * Renames a chat session after prompting the user for a new name.
  * @param {string} sessionId - The ID of the session to rename.
  * @param {Event} [event] - The click event, to stop propagation.
  * @param {string} [newNameFromPrompt=null] - An optional new name passed directly.
  */
-export function renameChatSession(sessionId, event, newNameFromPrompt = null) {
+export function renameChatSession(sessionId, event) {
     event?.stopPropagation();
-    const project = getActiveProject();
+    const project = stateManager.getProject();
     const session = project?.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    const newName = newNameFromPrompt || prompt("Enter new name:", session.name);
+    const newName = prompt("Enter new name:", session.name);
+    
     if (newName && newName.trim() && newName.trim() !== session.name) {
-        // 1. Modify state
         session.name = newName.trim();
         session.updatedAt = Date.now();
+        stateManager.updateAndPersistState();
         
-        // 2. Persist changes
-        stateManager.updateAndPersistState(project);
-        
-        // 3. Update UI directly
-        SessionUI.renderSessionList();
+        // ส่งสัญญาณบอก UI ให้วาดใหม่
+        stateManager.bus.publish('session:listChanged');
         if (sessionId === project.activeSessionId) {
-            ChatUI.updateChatTitle(session.name);
+            stateManager.bus.publish('ui:updateChatTitle', { title: session.name });
         }
     }
 }
-
 /**
  * Deletes a chat session after user confirmation.
  * If the deleted session was active, it loads the next most recent session.
@@ -422,5 +454,29 @@ export async function saveActiveSession() {
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', activeSession);
     } catch (error) {
         console.error(`[AutoSave] Failed to save active session (${activeSession.id}):`, error);
+    }
+}
+
+/**
+ * [NEW] จัดการการเปลี่ยนชื่อ session ที่ได้รับมาจาก Event
+ * @param {object} payload - ข้อมูลที่ส่งมากับ Event { sessionId, newName }
+ */
+export function handleAutoRename({ sessionId, newName }) {
+    const project = stateManager.getProject();
+    if (!project) return;
+
+    const session = project.chatSessions.find(s => s.id === sessionId);
+    // ตรวจสอบเพิ่มเติมว่าชื่อยังเป็น Default อยู่หรือไม่ ก่อนจะเปลี่ยน
+    if (!session || session.name !== 'New Chat') return;
+
+    session.name = newName;
+    session.updatedAt = Date.now();
+    stateManager.updateAndPersistState();
+
+    // ส่งสัญญาณบอก UI ให้วาดตัวเองใหม่
+    stateManager.bus.publish('session:listChanged');
+
+    if (project.activeSessionId === sessionId) {
+        stateManager.bus.publish('ui:updateChatTitle', { title: newName });
     }
 }

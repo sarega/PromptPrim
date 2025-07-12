@@ -5,6 +5,8 @@
 
 import { stateManager } from '../../core/core.state.js';
 import { toggleDropdown } from '../../core/core.ui.js';
+import * as SessionHandlers from './session.handlers.js';
+
 
 // --- Private Helper Functions ---
 
@@ -164,9 +166,10 @@ export function initSessionUI() {
                     actionTarget.closest('.dropdown.open')?.classList.remove('open');
                 }
             } else {
-                // If the item itself was clicked (not a button), load the session.
+                // ถ้าคลิกที่ตัว Item เอง (ไม่ใช่ปุ่ม) ให้เรียก Handler โดยตรง
                 if (stateManager.getProject().activeSessionId !== sessionId) {
-                    stateManager.bus.publish('session:load', { sessionId });
+                        // [FIX] เรียกใช้ Handler โดยตรงแทนการส่ง Event
+                        SessionHandlers.loadChatSession(sessionId);
                 }
             }
         });

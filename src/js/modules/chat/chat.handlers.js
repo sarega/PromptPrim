@@ -236,10 +236,12 @@ export async function sendMessage() {
     const input = document.getElementById('chatInput');
     const textContent = input.value.trim();
     if (!textContent && attachedFiles.length === 0) return;
+    
     if (!project.activeEntity?.name) {
         showCustomAlert("Please select an Agent or Group.", "Error");
         return;
     }
+    
     let agentToValidate;
     if (project.activeEntity.type === 'agent') {
         agentToValidate = project.agentPresets[project.activeEntity.name];
@@ -258,13 +260,7 @@ export async function sendMessage() {
     
     let userMessageContent = [];
     if (textContent) {
-        // [FIX] เพิ่ม Logic การตรวจจับ URL ของรูปภาพ
-        const imageUrlRegex = /\.(jpeg|jpg|gif|png|webp|bmp|svg)(?:\?.*)?$/i;
-        if (textContent.startsWith('http') && imageUrlRegex.test(textContent)) {
-            userMessageContent.push({ type: 'image_url', url: textContent });
-        } else {
-            userMessageContent.push({ type: 'text', text: textContent });
-        }
+        userMessageContent.push({ type: 'text', text: textContent });
     }
 
     if (attachedFiles.length > 0) {
@@ -273,24 +269,27 @@ export async function sendMessage() {
         });
     }
 
-    stateManager.updateAndPersistState();
-    
-    // บังคับให้ content เป็น Array เสมอ
     session.history.push({ 
         role: 'user', 
         content: userMessageContent,
         speaker: 'You'
     });
     
-    // --- 3. Clear Inputs & UI ---
+    // [NEW] ตรวจสอบเงื่อนไขเพื่อเริ่มการตั้งชื่ออัตโนมัติ
+    // ทำงานเมื่อเป็น Session ใหม่ และนี่คือข้อความแรก
+    if (session.name === 'New Chat' && session.history.length === 1) {
+        triggerAutoNameGeneration(session); // เรียกใช้ฟังก์ชันใหม่แบบ "fire-and-forget"
+    }
+    
+    // --- 3. Clear Inputs & Update UI ---
     input.value = '';
-    input.style.height = 'auto';
+    input.style.height = 'auto'; // คืนค่าความสูง Textarea
     attachedFiles = [];
     stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
-    console.log("🚀 [Handler] About to call renderMessages...");
-
-    ChatUI.renderMessages();
-    console.log("✅ [Handler] Finished calling renderMessages. Proceeding to AI turn...");
+    stateManager.bus.publish('ui:renderMessages');
+    
+    // บันทึก State ลง DB
+    stateManager.updateAndPersistState();
 
     // --- 4. Execute AI Turn ---
     if (project.activeEntity.type === 'agent') {
@@ -298,6 +297,71 @@ export async function sendMessage() {
     } else {
         const group = project.agentGroups[project.activeEntity.name];
         await GroupChat.handleGroupChatTurn(project, session, group);
+    }
+}
+
+/**
+ * คลาสสำหรับจัดการการแสดงผล Markdown แบบสดๆ จาก Stream
+ * ช่วยแยก Logic การ render UI ออกจากฟังก์ชันหลัก
+ */
+class LiveMarkdownRenderer {
+    constructor(placeholderElement) {
+        this.contentDiv = placeholderElement.querySelector('.message-content .streaming-content');
+        this.accumulatedMarkdown = '';
+        this.isInsideCodeBlock = false; // สถานะว่ากำลังอยู่ใน ```code block``` หรือไม่
+        this.renderTimeout = null;
+        this.debounceDelay = 40; // ms
+        
+        if (!this.contentDiv) {
+            throw new Error("Target content element for rendering not found.");
+        }
+    }
+
+    /**
+     * รับข้อมูล (chunk) ที่ stream มาและจัดคิวเพื่อ render
+     * @param {string} chunk - ส่วนของข้อความที่ได้รับมา
+     */
+    streamChunk = (chunk) => {
+        this.accumulatedMarkdown += chunk;
+        // ใช้ debounce เพื่อไม่ให้ render บ่อยเกินไป
+        clearTimeout(this.renderTimeout);
+        this.renderTimeout = setTimeout(this.render, this.debounceDelay);
+    };
+
+    /**
+     * ตรรกะการ render หลัก
+     * - ถ้าอยู่ใน code block จะแสดงเป็น text ธรรมดาใน <pre> เพื่อความเร็วและถูกต้อง
+     * - ถ้านอก code block จะใช้ marked.parse() เพื่อแสดงผล Markdown
+     */
+    render = () => {
+        try {
+            const inUnclosedCodeBlock = (this.accumulatedMarkdown.match(/```/g) || []).length % 2 === 1;
+
+            if (inUnclosedCodeBlock || this.isInsideCodeBlock) {
+                // เมื่อเข้าสู่ code block แล้ว จะแสดงเป็น <pre> ไปเรื่อยๆ จนกว่าจะปิด
+                const escapedText = this.accumulatedMarkdown
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+                this.contentDiv.innerHTML = `<pre class="streaming-code-preview">${escapedText}</pre>`;
+            } else {
+                // นอก code block ให้ render เป็น Markdown ตามปกติ
+                this.contentDiv.innerHTML = marked.parse(this.accumulatedMarkdown, { gfm: true, breaks: false });
+            }
+            this.isInsideCodeBlock = inUnclosedCodeBlock;
+        } catch (e) {
+            // หากเกิดข้อผิดพลาดในการ parse ให้แสดงเป็น text ธรรมดาไปก่อน
+            this.contentDiv.textContent = this.accumulatedMarkdown;
+        }
+        ChatUI.scrollToBottom();
+    };
+    
+    /**
+     * @returns {string} ข้อความทั้งหมดที่สะสมไว้
+     */
+    getFinalContent() {
+        clearTimeout(this.renderTimeout);
+        return this.accumulatedMarkdown;
     }
 }
 
@@ -311,72 +375,54 @@ async function sendSingleAgentMessage() {
 
     stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
 
+    // 1. สร้าง Placeholder Message และ Renderer
     const placeholderMessage = { role: 'assistant', content: '', speaker: agentName, isLoading: true };
     const assistantMsgIndex = session.history.length;
     session.history.push(placeholderMessage);
     const placeholderElement = ChatUI.addMessageToUI(placeholderMessage, assistantMsgIndex);
-    const contentDiv = placeholderElement?.querySelector('.message-content .streaming-content');
-
-    if (!contentDiv) {
+    
+    let renderer;
+    try {
+        renderer = new LiveMarkdownRenderer(placeholderElement);
+    } catch (error) {
+        console.error("UI Error:", error.message);
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
         stateManager.bus.publish('status:update', { message: 'UI Error', state: 'error' });
+        session.history.pop(); // เอา placeholder ที่สร้างไว้ออก
         return;
     }
 
-    let accumulatedMarkdown = '';
-    let lastUnclosedCodeBlock = false;
-    let renderTimeout;
-
-    const renderLivePreview = () => {
-        try {
-            const inUnclosedCodeBlock = (accumulatedMarkdown.match(/```/g) || []).length % 2 === 1;
-
-            // ถ้า "เพิ่งเริ่มเข้า code block" (ครั้งแรกเท่านั้น) ให้ render <pre> และ "fix" ไปจนจบ code block (ไม่ต้อง render markdown สลับไปมา)
-            if (inUnclosedCodeBlock || lastUnclosedCodeBlock) {
-                // Render <pre> ทุก chunk จนปิด code block
-                const escapedText = accumulatedMarkdown.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                contentDiv.innerHTML = `<pre class="streaming-code-preview">${escapedText}</pre>`;
-            } else {
-                // นอก code block = render markdown
-                contentDiv.innerHTML = marked.parse(accumulatedMarkdown, { gfm: true, breaks: false });
-            }
-            lastUnclosedCodeBlock = inUnclosedCodeBlock;
-        } catch (e) {
-            contentDiv.textContent = accumulatedMarkdown;
-        }
-        ChatUI.scrollToBottom();
-    };
-
-    const onChunk = (chunk) => {
-        accumulatedMarkdown += chunk;
-        // debounce render 40ms
-        clearTimeout(renderTimeout);
-        renderTimeout = setTimeout(renderLivePreview, 40);
-    };
-
     try {
+        // 2. เรียก LLM และส่ง chunk ไปให้ renderer จัดการ
         const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName, session);
-        const finalResponseText = await streamLLMResponse(agent, messagesForLLM, onChunk);
+        await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
 
+        // 3. เมื่อ stream จบ, อัปเดต message history ด้วยเนื้อหาฉบับสมบูรณ์
+        const finalResponseText = renderer.getFinalContent();
         session.history[assistantMsgIndex] = { 
             role: 'assistant', 
             content: finalResponseText,
             speaker: agentName, 
             isLoading: false 
         };
+        console.log("🟢 Assistant final content:", JSON.stringify(finalResponseText));
 
-        console.log("🟢 assistant content (final markdown):", JSON.stringify(finalResponseText));
     } catch (error) {
+        // 4. จัดการ Error (รวมถึง Abort)
         if (error.name !== 'AbortError') {
-            session.history[assistantMsgIndex].content = `Error: ${error.message}`;
+            const errorMessage = `Error: ${error.message}`;
+            session.history[assistantMsgIndex].content = errorMessage;
+            console.error("LLM Stream Error:", error);
             stateManager.bus.publish('status:update', { message: 'An error occurred.', state: 'error' });
         } else {
+            // ถ้าผู้ใช้กดยกเลิก ให้ลบ placeholder message ทิ้งไปเลย
             session.history.splice(assistantMsgIndex, 1);
+            console.log("Stream aborted by user.");
         }
     } finally {
+        // 5. Cleanup: ปิด loading, render UI ใหม่ทั้งหมด, และบันทึก session
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
-        // หลังจบ stream ให้ render ใหม่ คราวนี้ markdown ครบ 100% (bubble สวย)
-        ChatUI.renderMessages();
+        ChatUI.renderMessages(); // Render UI ใหม่ทั้งหมดเพื่อให้แสดงผลสมบูรณ์ 100%
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
 
         if (!stateManager.getState().abortController?.signal.aborted) {
@@ -530,7 +576,11 @@ export async function loadSummaryIntoContext(logId) {
     session.summaryState.activeSummaryId = log.id;
     session.summaryState.summarizedUntilIndex = session.history.length;
     
-    const systemMessage = { role: 'system', content: `[ System: Context loaded from summary: "${log.summary}" ]` };
+    const systemMessage = { 
+        role: 'system', 
+        content: `[ System: Context loaded from summary: "${log.summary}" ]\n\n---\n\n${log.content}`,
+        isSummary: true // <-- เพิ่ม Flag สำคัญตรงนี้
+    };
     session.history.push(systemMessage);
     
     await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
@@ -679,10 +729,16 @@ export async function editMessage({ index, event }) {
         saveButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (textarea.value.trim()) {
-                session.history.splice(index);
-                session.history.push({ role: 'user', content: textarea.value.trim(), speaker: 'You' });
+                // [FIX] แก้ไข Logic ตรงนี้
+                // 1. อัปเดตข้อความของผู้ใช้ ณ ตำแหน่งเดิม
+                session.history[index].content = [{ type: 'text', text: textarea.value.trim() }];
+                
+                // 2. ลบข้อความทั้งหมดที่อยู่ "หลังจาก" ข้อความที่แก้ไขทิ้งไป
+                session.history.splice(index + 1); 
+
+                // 3. Render หน้าจอใหม่ และสั่งให้ AI ตอบสนองต่อข้อความที่แก้ไข
                 stateManager.bus.publish('ui:renderMessages');
-                await sendSingleAgentMessage();
+                await sendSingleAgentMessage(); // ฟังก์ชันนี้จะทำงานกับ Agent ที่ Active อยู่
             }
         });
 
@@ -785,4 +841,57 @@ export function deleteMessage({ index }) {
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
     stateManager.bus.publish('ui:renderMessages');
+}
+
+/**
+ * [NEW] ทำงานในเบื้องหลังเพื่อตั้งชื่อ Session อัตโนมัติจากข้อความแรกของผู้ใช้
+ * @param {object} session - The session object to be renamed.
+ */
+async function triggerAutoNameGeneration(session) {
+    // หน่วงเวลาเล็กน้อยเพื่อให้แน่ใจว่า UI หลักทำงานไปก่อน
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    try {
+        const project = stateManager.getProject();
+        // ใช้ System Utility Agent เพื่อความเร็วและประหยัด
+        const utilityAgent = project.globalSettings.systemUtilityAgent;
+        if (!utilityAgent || !utilityAgent.model) {
+            console.warn("Auto-naming skipped: System Utility Agent not configured.");
+            return;
+        }
+
+        // ดึงข้อความแรกของผู้ใช้ออกมา
+        const firstUserMessage = session.history.find(m => m.role === 'user');
+        const userContent = Array.isArray(firstUserMessage.content)
+            ? firstUserMessage.content.find(p => p.type === 'text')?.text
+            : firstUserMessage.content;
+        
+        if (!userContent) return; // ถ้าไม่มีข้อความ ก็ไม่ต้องทำอะไร
+
+        // สร้าง Prompt ที่จะส่งไปให้ LLM
+        const titlePrompt = `Based on the user's initial query, create a concise title (3-5 words) and a single relevant emoji. Respond ONLY with a JSON object like {"title": "your title", "emoji": "👍"}.\n\nUser's Query: "${userContent}"`;
+
+        const responseText = await callLLM({ ...utilityAgent, temperature: 0.1 }, [{ role: 'user', content: titlePrompt }]);
+        
+        // Parse ผลลัพธ์ที่ได้
+        let newTitleData = {};
+        try {
+            const jsonMatch = responseText.match(/{.*}/s);
+            newTitleData = JSON.parse(jsonMatch[0]);
+        } catch (e) {
+            console.error("Failed to parse title JSON:", responseText);
+            newTitleData = { title: userContent.substring(0, 30), emoji: '💬' };
+        }
+        
+        const newName = `${newTitleData.emoji || '💬'} ${newTitleData.title || 'New Chat'}`;
+
+        // ส่ง Event ไปบอก UI ให้เปลี่ยนชื่อ Session
+        stateManager.bus.publish('session:autoRename', { 
+            sessionId: session.id, 
+            newName: newName 
+        });
+
+    } catch (e) {
+        console.error("Auto-rename process failed:", e);
+    }
 }

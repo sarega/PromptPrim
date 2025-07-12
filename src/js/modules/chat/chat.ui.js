@@ -9,15 +9,26 @@ import { debounce } from '../../core/core.utils.js';
 
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
-    messageElement.querySelectorAll('pre code').forEach(block => {
+    messageElement.querySelectorAll('pre > code').forEach(block => {
+        // [FIX 1] ถ้าเคย highlight ไปแล้ว (มี data-highlighted) ให้ข้ามไปเลย
+        if (block.dataset.highlighted === 'yes') {
+            return;
+        }
+
         const pre = block.parentNode;
-        if (pre.parentNode.classList.contains('code-block-wrapper')) return;
+        
+        if (pre.parentNode.classList.contains('code-block-wrapper')) {
+            return;
+        }
+
         if (pre.parentNode.tagName === 'P') {
             const p = pre.parentNode;
             p.parentNode.insertBefore(pre, p);
-            if (p.childNodes.length === 0) p.remove();
+            if (!p.textContent.trim()) {
+                p.remove();
+            }
         }
-        
+
         const wrapper = document.createElement('div');
         wrapper.className = 'code-block-wrapper';
         pre.parentNode.insertBefore(wrapper, pre);
@@ -31,20 +42,67 @@ function enhanceCodeBlocks(messageElement) {
         copyButton.addEventListener('click', () => {
             navigator.clipboard.writeText(block.textContent).then(() => {
                 copyButton.textContent = 'Copied!';
-                setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
+                setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
             });
-            // [DEFINITIVE FIX] สั่งให้ highlight.js ทำงานกับ Code Block นี้โดยเฉพาะ
-            if (window.hljs) {
+        });
+
+        if (window.hljs) {
+            // [FIX 2] ตรวจสอบว่ามี "ชื่อภาษาจริงๆ" หรือไม่ ก่อนสั่ง highlight
+            // โดยเช็คว่า class ต้องขึ้นต้นด้วย 'language-' แต่ต้องไม่ใช่ 'language-undefined'
+            const hasRealLanguage = Array.from(block.classList)
+                .some(cls => cls.startsWith('language-') && cls !== 'language-undefined');
+
+            if (hasRealLanguage) {
                 hljs.highlightElement(block);
             }
-        });
+        }
     });
 }
 
+/**
+ * [NEW] ฟังก์ชันกลางสำหรับวาดเนื้อหาแบบ Lazy-Rendering
+ * @param {string} textContent - เนื้อหาข้อความทั้งหมด
+ * @param {HTMLElement} targetDiv - contentDiv ที่จะให้ใส่เนื้อหา
+ */
+function lazyRenderContent(textContent, targetContainer) {
+    const chunks = textContent.split(/\n{2,}/); // แยกตามย่อหน้า
+    let chunkIndex = 0;
+    targetContainer.innerHTML = ''; // เคลียร์ของเก่า
+
+    function renderNextChunk() {
+        if (chunkIndex >= chunks.length) {
+            // เมื่อวาดเสร็จทั้งหมดแล้ว ให้เรียก enhanceCodeBlocks อีกครั้ง
+            // เพื่อใส่ปุ่ม Copy ให้กับโค้ดบล็อกที่เพิ่งวาดเสร็จ
+            enhanceCodeBlocks(targetContainer.closest('.message-content'));
+            scrollToBottom();
+            return;
+        }
+
+        // ใช้ div เป็น container เพราะ chunk อาจเป็น list, table หรืออื่นๆ
+        const chunkContainer = document.createElement('div');
+        
+        // [FIX] เปลี่ยนจาก .textContent เป็น .innerHTML + marked.parse()
+        // เพื่อให้แปลง Markdown เป็น HTML ก่อนแสดงผล
+        chunkContainer.innerHTML = marked.parse(chunks[chunkIndex] || '', { gfm: true, breaks: false });
+
+        targetContainer.appendChild(chunkContainer);
+
+        chunkIndex++;
+        
+        requestAnimationFrame(() => {
+            scrollToBottom();
+            renderNextChunk();
+        });
+    }
+
+    renderNextChunk();
+}
 function createMessageElement(message, index) {
-    const { role, content, speaker, isLoading, isError } = message;
+    const { role, content, speaker, isLoading, isError, isSummary } = message;
     const project = stateManager.getProject();
-    
+    const LONG_TEXT_THRESHOLD = 2000;
+
+    // --- 1. สร้าง Element หลัก ---
     const turnWrapper = document.createElement('div');
     turnWrapper.className = `message-turn-wrapper ${role}-turn`;
     turnWrapper.dataset.index = index;
@@ -52,8 +110,8 @@ function createMessageElement(message, index) {
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
     if (isError) msgDiv.classList.add('error');
+    if (isSummary) msgDiv.classList.add('system-summary-message');
 
-    // --- Speaker Label ---
     if (role === 'assistant' && speaker) {
         const speakerAgent = project.agentPresets?.[speaker];
         const speakerIcon = speakerAgent ? speakerAgent.icon : '🤖';
@@ -65,52 +123,81 @@ function createMessageElement(message, index) {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
+    msgDiv.appendChild(contentDiv);
 
-    // --- Content Rendering ---
+    // --- 2. Logic การวาดเนื้อหา ---
+
     if (isLoading) {
         contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
     } else {
         const streamingContentSpan = document.createElement('span');
         streamingContentSpan.className = 'streaming-content';
-        
-        try {
-            // Logic สำหรับ Assistant (content เป็น Markdown string)
-            if (typeof content === 'string') {
-                const options = { gfm: true, breaks: false };
-                streamingContentSpan.innerHTML = marked.parse(content, options, { gfm: true, breaks: false })
-            } 
-            // Logic สำหรับ User (content เป็น Array)
-            else if (Array.isArray(content)) {
-                content.forEach(part => {
-                    if (part.type === 'text' && part.text) {
-                        const p = document.createElement('p');
-                        p.textContent = part.text;
-                        streamingContentSpan.appendChild(p);
-                    } else if (part.type === 'image_url' && part.url) {
-                        const img = document.createElement('img');
-                        img.src = part.url;
-                        img.className = 'multimodal-image';
-                        streamingContentSpan.appendChild(img);
-                    }
-                });
-            }
-        } catch (e) {
-            console.error("Markdown parsing failed, rendering as plain text. Error:", e);
-            streamingContentSpan.textContent = typeof content === 'string' ? content : 'Error displaying content';
-        }
-        
         contentDiv.appendChild(streamingContentSpan);
-        enhanceCodeBlocks(contentDiv);
+
+        let fullTextContent = '';
+        let isLong = false;
+
+        // --- [ROBUSTNESS FIX] ตรวจสอบความยาวให้รองรับทั้ง String และ Array ---
+        if (isSummary) {
+            isLong = true;
+            fullTextContent = content;
+        } else if (role === 'user') {
+            if (Array.isArray(content)) { // รูปแบบใหม่
+                fullTextContent = content.filter(p => p.type === 'text').map(p => p.text).join('\n');
+            } else if (typeof content === 'string') { // รูปแบบเก่า (จาก Bug)
+                fullTextContent = content;
+            }
+            isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
+        } else if (role === 'assistant') { // Assistant เป็น String เสมอ
+            fullTextContent = content || '';
+            isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
+        }
+
+        // --- เลือกวิธีวาดหน้าจอ ---
+        if (isLong) {
+            // สำหรับข้อความยาว หรือ Summary
+            streamingContentSpan.innerHTML = `<div class="loading-text">Loading large message...</div>`;
+            setTimeout(() => lazyRenderContent(fullTextContent, streamingContentSpan), 0);
+        } else {
+            // สำหรับข้อความสั้น (ทำงานทันที)
+            try {
+                if (role === 'assistant') {
+                    streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
+                } else if (role === 'user') {
+                    // [ROBUSTNESS FIX] วาดให้ถูกตามประเภทของ content
+                    if (Array.isArray(content)) { // รูปแบบใหม่
+                        content.forEach(part => {
+                            if (part.type === 'text' && part.text) {
+                                const p = document.createElement('p');
+                                p.textContent = part.text;
+                                streamingContentSpan.appendChild(p);
+                            } else if (part.type === 'image_url' && part.url) {
+                                const img = document.createElement('img');
+                                img.src = part.url;
+                                img.className = 'multimodal-image';
+                                streamingContentSpan.appendChild(img);
+                            }
+                        });
+                    } else if (typeof content === 'string') { // รูปแบบเก่า
+                        const p = document.createElement('p');
+                        p.textContent = content;
+                        streamingContentSpan.appendChild(p);
+                    }
+                }
+            } catch (e) {
+                console.error("Content rendering failed:", e);
+                streamingContentSpan.textContent = 'Error displaying content';
+            }
+            enhanceCodeBlocks(contentDiv);
+        }
     }
     
-    msgDiv.appendChild(contentDiv);
-
-    // --- Action Menu ---
-    const actions = document.createElement('div');
-    actions.className = 'message-actions';
-    const iconStyle = 'style="font-size: 18px;"';
-
-    if (!isLoading && !isError) {
+    // --- 3. สร้าง Action Menu ---
+    if (!isLoading && !isError && !isSummary) {
+        const actions = document.createElement('div');
+        actions.className = 'message-actions';
+        const iconStyle = 'style="font-size: 18px;"';
+        
         const btnEdit = document.createElement('button');
         btnEdit.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>edit</span>`;
         btnEdit.title = 'Edit';
@@ -136,14 +223,15 @@ function createMessageElement(message, index) {
         btnDelete.title = 'Delete';
         btnDelete.onclick = (event) => stateManager.bus.publish('chat:deleteMessage', { index, event });
         actions.appendChild(btnDelete);
+
+        msgDiv.appendChild(actions);
     }
     
-    msgDiv.appendChild(actions);
-
-    // --- Final Assembly ---
+    // --- 4. ประกอบร่างสุดท้าย ---
     turnWrapper.appendChild(msgDiv);
     return turnWrapper;
 }
+
 function initMobileScrollBehavior() {
     const chatArea = document.querySelector('.main-chat-area');
     const messagesContainer = document.getElementById('chatMessages');
@@ -396,79 +484,6 @@ export function hideContextInspector() {
     document.getElementById('context-inspector-modal').style.display = 'none';
 }
 
-/**
- * Initializes the action menu (+) in the chat input area.
- */
-// function initChatActionMenu() {
-//     const container = document.getElementById('chat-actions-container');
-//     const button = document.getElementById('chat-actions-btn');
-//     const menu = document.getElementById('chat-actions-menu');
-
-//     if (!container || !button || !menu) return;
-
-//     // Listener สำหรับปุ่ม + เพื่อ "สร้างและเปิด" เมนู
-//     button.addEventListener('click', (e) => {
-//         e.stopPropagation();
-
-//         // [FIX] สร้างเนื้อหาเมนูขึ้นมาใหม่ทุกครั้งที่คลิก
-//         menu.innerHTML = ''; // เคลียร์เมนูเก่าทิ้ง
-
-//         // --- สร้างเมนูพื้นฐาน ---
-//         const composerAction = document.createElement('a');
-//         composerAction.href = '#';
-//         composerAction.dataset.action = 'open-composer';
-//         composerAction.innerHTML = `<span class="material-symbols-outlined">edit_square</span> Composer`;
-//         menu.appendChild(composerAction);
-
-//         const summarizeAction = document.createElement('a');
-//         summarizeAction.href = '#';
-//         summarizeAction.dataset.action = 'chat:summarize'; // ใช้ Event ที่ถูกต้อง
-//         summarizeAction.innerHTML = `<span class="material-symbols-outlined">psychology</span> Summarize`;
-//         menu.appendChild(summarizeAction);
-
-//         const uploadAction = document.createElement('a');
-//         uploadAction.href = '#';
-//         uploadAction.dataset.action = 'upload-file';
-//         uploadAction.innerHTML = `<span class="material-symbols-outlined">attach_file</span> Upload files`;
-//         menu.appendChild(uploadAction);
-
-//         // --- ตรวจสอบสถานะเพื่อสร้างเมนู "Clear Summary" ---
-//         const project = stateManager.getProject();
-//         const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-
-//         if (session && session.summaryState?.activeSummaryId) {
-//             const divider = document.createElement('div');
-//             divider.className = 'dropdown-divider';
-//             menu.appendChild(divider);
-
-//             const clearSummaryAction = document.createElement('a');
-//             clearSummaryAction.href = '#';
-//             clearSummaryAction.dataset.action = 'chat:clearSummary'; // Event ที่จะไปเรียก unloadSummaryFromActiveSession
-//             clearSummaryAction.innerHTML = `<span class="material-symbols-outlined">layers_clear</span> Clear Summary Context`;
-//             clearSummaryAction.classList.add('is-destructive');
-//             menu.appendChild(clearSummaryAction);
-//         }
-
-//         // เปิด/ปิดเมนู
-//         container.classList.toggle('open');
-//     });
-
-//     // Listener สำหรับปิดเมนูเมื่อคลิกที่ตัวเลือกข้างใน
-//     menu.addEventListener('click', (e) => {
-//         const actionTarget = e.target.closest('[data-action]');
-//         if (actionTarget) {
-//             container.classList.remove('open');
-//         }
-//     });
-
-//     // Listener สำหรับปิดเมนูเมื่อคลิกที่พื้นที่อื่น
-//     document.addEventListener('click', (e) => {
-//         if (container.classList.contains('open') && !container.contains(e.target)) {
-//             container.classList.remove('open');
-//         }
-//     });
-// }
-
 function initChatActionMenu() {
     const container = document.getElementById('chat-actions-container');
     const button = document.getElementById('chat-actions-btn');
@@ -700,4 +715,27 @@ export function initRightSidebarToggle() {
             document.body.style.overflow = '';
         }
     });
+}
+
+function renderSummaryBubble(summaryText, targetContainer) {
+    const chunks = summaryText.split(/\n{2,}/);
+    let chunkIndex = 0;
+    
+    targetContainer.innerHTML = '';
+
+    function renderNextChunk() {
+        if (chunkIndex >= chunks.length) {
+            scrollToBottom(); // <-- [FIX] แก้ไขการเรียกใช้ให้ถูกต้อง
+            return;
+        }
+
+        const p = document.createElement('div');
+        p.innerHTML = marked.parse(chunks[chunkIndex], { gfm: true, breaks: false });
+        targetContainer.appendChild(p);
+        scrollToBottom(); // <-- [FIX] แก้ไขการเรียกใช้ให้ถูกต้อง
+        chunkIndex++;
+        requestAnimationFrame(renderNextChunk);
+    }
+
+    renderNextChunk();
 }

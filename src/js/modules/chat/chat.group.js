@@ -114,6 +114,7 @@ async function runRoundRobin(project, session, group) {
 // }
 
 // [REVISED] แก้ไข runAutoModerator ให้รับรู้เรื่อง Timer
+
 async function runAutoModerator(project, session, group) {
     const timerDuration = (group.timerInSeconds || 0) * 1000; // แปลงเป็น ms
 
@@ -122,9 +123,8 @@ async function runAutoModerator(project, session, group) {
 
     // ถ้าตั้งเวลาไว้ และรอบแรกสำเร็จ ให้เริ่ม Loop
     if (timerDuration > 0 && keepGoing) {
+        // [FIX] เก็บ Timer ID ไว้ใน state ของ session
         session.groupChatState.timerId = setTimeout(() => {
-            // เรียกตัวเองซ้ำเพื่อทำงานรอบถัดไป
-            // (เป็นการวางโครงสร้างไว้ ยังต้องปรับปรุงเพิ่มเติมเพื่อให้สมบูรณ์)
             if (session.groupChatState.isRunning) {
                  runAutoModerator(project, session, group);
             }

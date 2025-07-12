@@ -90,15 +90,16 @@ export const stateManager = {
     isLoading: () => _appState.isLoading,
     // [NEW] เพิ่ม getter และ setter สำหรับ stagedEntity
     getStagedEntity: () => _appState.stagedEntity,
-    setStagedEntity: (entity) => {
-        // ไม่ต้องทำอะไรถ้า entity ที่เลือกมาเป็นตัวเดิมที่ staged อยู่แล้ว
+    setStagedEntity: (entity, publishEvent = true) => { // เพิ่มพารามิเตอร์ publishEvent
         if (JSON.stringify(_appState.stagedEntity) === JSON.stringify(entity)) return;
 
         console.log(`🟠 [STATE] Staged entity changing to:`, entity);
         _appState.stagedEntity = entity;
         
-        // [DEFINITIVE FIX] เพิ่มการ publish event นี้เข้าไป
-        eventBus.publish('entity:staged', entity);
+        // [FIX] จะส่ง Event ก็ต่อเมื่อ publishEvent เป็น true เท่านั้น
+        if (publishEvent) {
+            stateManager.bus.publish('entity:staged', entity);
+        }
     },
     // [MODIFIED] Read the user-facing dirty flag from the project object
     isUserDirty: () => _appState.currentProject?.isDirtyForUser || false,

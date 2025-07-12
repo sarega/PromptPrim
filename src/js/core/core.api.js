@@ -145,20 +145,41 @@ export async function callLLM(agent, messages) {
 
     const project = stateManager.getProject();
     const provider = modelData.provider;
-    const body = { model: agent.model, messages: messages, stream: false };
+    
+    // สร้าง Object ของ body และ params แยกกันเพื่อความชัดเจน
+    const body = { 
+        model: agent.model, 
+        messages: messages, 
+        stream: false 
+    };
+    
     const params = {
-        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
+        temperature: parseFloat(agent.temperature), 
+        top_p: parseFloat(agent.topP),
+        top_k: parseInt(agent.topK, 10), 
+        presence_penalty: parseFloat(agent.presence_penalty),
+        frequency_penalty: parseFloat(agent.frequency_penalty), 
+        max_tokens: parseInt(agent.max_tokens, 10),
         seed: parseInt(agent.seed, 10),
     };
-    if (agent.stop_sequences) params.stop = agent.stop_sequences.split(',').map(s => s.trim());
+
+    if (agent.stop_sequences) {
+        params.stop = agent.stop_sequences.split(',').map(s => s.trim());
+    }
 
     let url, headers;
+
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
+        
+        // [FIX] เพิ่มส่วนนี้เข้าไปเพื่อเปิดใช้งาน Web Search
+        body.tools = [
+            { "type": "Google Search" }
+        ];
+
         Object.assign(body, params);
+
     } else { // ollama
         url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
         headers = { 'Content-Type': 'application/json' };
@@ -177,130 +198,16 @@ export async function callLLM(agent, messages) {
     }
 
     const data = await response.json();
-    if (provider === 'openrouter' && data.choices && data.choices.length > 0) return data.choices[0].message.content;
-    if (provider === 'ollama' && data.message) return data.message.content;
+    if (provider === 'openrouter' && data.choices && data.choices.length > 0) {
+        return data.choices[0].message.content;
+    }
+    if (provider === 'ollama' && data.message) {
+        return data.message.content;
+    }
     
     throw new Error("Invalid API response structure.");
 }
 
-// export async function streamLLMResponse(contentDiv, agent, messages, speakerName = null) {
-//         // [FIX] ส่งสัญญาณ 'loading' ออกไปทันทีที่เริ่มทำงาน
-//     const modelData = stateManager.getState().allProviderModels.find(m => m.id === agent.model);
-//     const statusMessage = `Responding with ${modelData?.name || agent.model}...`;
-//     stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
-//     //=====
-//     const allModels = stateManager.getState().allProviderModels;
-//     // const modelData = allModels.find(m => m.id === agent.model);
-//     if (!modelData) throw new Error("Model data not found for active agent.");
-
-//     const project = stateManager.getProject();
-//     const provider = modelData.provider;
-//     const body = { model: agent.model, messages: messages, stream: true };
-//     const params = {
-//         temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
-//         top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
-//         frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
-//         seed: parseInt(agent.seed, 10),
-//     };
-//     if (agent.stop_sequences) params.stop = agent.stop_sequences.split(',').map(s => s.trim());
-
-//     let url, headers;
-//     if (provider === 'openrouter') {
-//         url = 'https://openrouter.ai/api/v1/chat/completions';
-//         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
-//         Object.assign(body, params);
-//     } else { // ollama
-//         url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
-//         headers = { 'Content-Type': 'application/json' };
-//         body.options = params;
-//     }
-
-//     const response = await fetchWithTimeout(url, {
-//         method: 'POST',
-//         headers: headers,
-//         body: JSON.stringify(body),
-//         signal: stateManager.getState().abortController?.signal // ยังคง signal เดิมไว้สำหรับปุ่ม Stop
-//     });
-
-//     if (!response.ok) {
-//         const errorText = await response.text();
-//         throw new Error(`API Error: ${errorText}`);
-//     }
-
-//     const reader = response.body.getReader();
-//     const decoder = new TextDecoder();
-//     let fullResponseText = '';
-//     let buffer = '';
-
-// const streamingContentSpan = contentDiv.querySelector('.streaming-content');
-//     if (!streamingContentSpan) {
-//         contentDiv.innerHTML += " Error: UI render target not found.";
-//         return;
-//     }
-//     streamingContentSpan.innerHTML = ''; // [FIX] Clear loading dots
-
-//     let streamDone = false; // [FIX] Flag to break the outer loop
-
-//     while (!streamDone) {
-//         if (stateManager.getState().abortController?.signal.aborted) {
-//             streamDone = true;
-//             break;
-//         }
-//         const { done, value } = await reader.read();
-//         if (done) {
-//             streamDone = true;
-//             break;
-//         }
-
-//         buffer += decoder.decode(value, { stream: true });
-//         const lines = buffer.split('\n');
-//         buffer = lines.pop(); // Keep the last, possibly incomplete, line
-
-//         for (const line of lines) {
-//             if (line.trim() === '') continue;
-//             let token = '';
-//             try {
-//                  if (provider === 'openrouter') {
-//                     if (line.startsWith('data: ')) {
-//                         const jsonStr = line.substring(6);
-//                         if (jsonStr.trim() === '[DONE]') {
-//                             streamDone = true; // [FIX] Set flag
-//                             break;
-//                         }
-//                         const data = JSON.parse(jsonStr);
-//                         token = data.choices[0]?.delta?.content || '';
-//                     }
-//                 } else { // ollama
-//                     const data = JSON.parse(line);
-//                     token = data.message?.content || '';
-//                     if(data.done) {
-//                         streamDone = true; // [FIX] Set flag
-//                         break;
-//                     }
-//                 }
-//             } catch (e) { console.warn("Error parsing stream chunk:", e); }
-
-//             if (token) {
-//                 fullResponseText += token;
-//                 if (agent.useMarkdown && window.marked) {
-//                     streamingContentSpan.innerHTML = marked.parse(fullResponseText);
-//                 } else {
-//                     streamingContentSpan.textContent = fullResponseText;
-//                 }
-//             }
-//         }
-//         // [FIX] If the inner loop broke because of a "done" message, break the outer loop too
-//         if (streamDone) break;
-//     }
-    
-//     stateManager.bus.publish('ui:enhanceCodeBlocks', contentDiv);
-//     return fullResponseText;
-// }
-/**
- * [REFACTORED & COMPLETE] Streams response from LLM API.
- * This function is now responsible ONLY for fetching data and streaming it back via a callback.
- * It no longer interacts with the DOM.
- *
 /**
  * [REWRITTEN] A more robust function to stream responses from LLM APIs.
  * It uses modern stream APIs to prevent data loss and parsing errors.
@@ -317,15 +224,30 @@ export async function streamLLMResponse(agent, messages, onChunk) {
     const provider = modelData.provider;
     let url, headers, body;
 
-    // Setup request details based on provider
+    // --- Setup request details based on provider ---
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
-        body = { model: agent.model, messages, stream: true, ...agent.parameters }; // Simplified params
+        body = { 
+            model: agent.model, 
+            messages, 
+            stream: true,
+            // [Feature] เปิดใช้งาน Web Search สำหรับ OpenRouter
+            tools: [
+                { "type": "Google Search" }
+            ],
+            ...agent.parameters
+        };
     } else { // ollama
-        url = `${project.globalsettings.ollamaBaseUrl}/api/chat`;
+        // [Fix] แก้ไขการอ้างอิงเป็น globalSettings (S ตัวใหญ่)
+        url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
         headers = { 'Content-Type': 'application/json' };
-        body = { model: agent.model, messages, stream: true, options: agent.parameters };
+        body = { 
+            model: agent.model, 
+            messages, 
+            stream: true, 
+            options: agent.parameters 
+        };
     }
 
     try {
@@ -340,7 +262,7 @@ export async function streamLLMResponse(agent, messages, onChunk) {
             throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
 
-        // Use modern stream processing for robustness
+        // [Robustness] ใช้ TextDecoderStream เพื่อจัดการ Stream ที่มีประสิทธิภาพและปลอดภัย
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
         let fullResponseText = '';
 
@@ -348,31 +270,41 @@ export async function streamLLMResponse(agent, messages, onChunk) {
             const { value, done } = await reader.read();
             if (done) break;
 
-            // The stream might send multiple "data:" chunks at once
-            const lines = value.split('\n').filter(line => line.startsWith('data:'));
+            const rawChunks = value.split('\n').filter(line => line.trim() !== '');
 
-            for (const line of lines) {
-                const jsonStr = line.replace(/^data: /, '').trim();
-                if (jsonStr === '[DONE]') break;
-
+            for (const chunk of rawChunks) {
+                let token = '';
                 try {
-                    const data = JSON.parse(jsonStr);
-                    const token = data.choices?.[0]?.delta?.content || '';
-                    if (token) {
-                        fullResponseText += token;
-                        onChunk(token);
+                    if (provider === 'openrouter') {
+                        if (!chunk.startsWith('data: ')) continue;
+                        const jsonStr = chunk.replace(/^data: /, '').trim();
+                        if (jsonStr === '[DONE]') break;
+                        
+                        const data = JSON.parse(jsonStr);
+                        token = data.choices?.[0]?.delta?.content || '';
+
+                    } else { // ollama
+                        const data = JSON.parse(chunk);
+                        token = data.message?.content || '';
                     }
                 } catch (e) {
-                    console.warn("Skipping malformed JSON chunk during stream:", jsonStr);
+                     console.warn("Skipping malformed JSON chunk during stream:", chunk);
+                }
+
+                if (token) {
+                    fullResponseText += token;
+                    onChunk(token); // เรียก callback เพื่อส่งข้อมูลไปให้ UI
                 }
             }
         }
-        return fullResponseText; // Return the complete text
+        return fullResponseText; // คืนค่าข้อความทั้งหมดเมื่อจบ
 
     } catch (error) {
-        console.error("Streaming failed:", error);
-        stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
-        // Re-throw the error so the calling function can handle it
+        if (error.name !== 'AbortError') {
+             console.error("Streaming failed:", error);
+             stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
+        }
+        // โยน error ต่อเพื่อให้ฟังก์ชันที่เรียกใช้ (เช่น sendSingleAgentMessage) จัดการต่อไป
         throw error;
     }
 }

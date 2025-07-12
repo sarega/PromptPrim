@@ -484,9 +484,7 @@ export function migrateProjectData(projectData) {
 
 
 export async function selectEntity(type, name) {
-
-    // [KEY FIX] เมื่อมีการเลือก Entity อย่างเป็นทางการ ให้ล้าง Staging ทิ้งเสมอ
-    stateManager.setStagedEntity(null);
+    stateManager.setStagedEntity(null, false);
 
     const project = stateManager.getProject();
     project.activeEntity = { type, name };
@@ -500,11 +498,11 @@ export async function selectEntity(type, name) {
 
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
+    
     stateManager.bus.publish('entity:selected', { type, name });
     
-    requestAnimationFrame(() => {
-        scrollToLinkedEntity(type, name);
-    });
+    // [FIX] เพิ่มการส่งสัญญาณให้ Session List วาดใหม่
+    stateManager.bus.publish('session:listChanged');
 }
 
 export function handleStudioItemClick({ type, name }) {
@@ -512,17 +510,22 @@ export function handleStudioItemClick({ type, name }) {
     const stagedEntity = stateManager.getStagedEntity();
     const activeEntity = stateManager.getProject().activeEntity;
 
-    // Case 1: ยืนยันตัวที่ Staging อยู่
-    if (stagedEntity && stagedEntity.name === clickedEntity.name && stagedEntity.type === clickedEntity.type) {
+    // --- CASE 1: คลิกที่ Item ที่ Staged อยู่แล้ว (สีเหลือง) ---
+    // นี่คือการ "ยืนยัน" การเลือก
+    if (stagedEntity && stagedEntity.name === name && stagedEntity.type === type) {
+        // ส่ง Event ไปบอกระบบให้เลือก Entity นี้อย่างเป็นทางการ
         stateManager.bus.publish('entity:select', clickedEntity);
-    } 
-    // Case 2: คลิกที่ตัวที่ Active อยู่แล้ว
-    else if (activeEntity && activeEntity.name === clickedEntity.name && activeEntity.type === clickedEntity.type) {
-        stateManager.setStagedEntity(null);
-    } 
-    // Case 3: เริ่ม Staging ตัวใหม่
-    else {
-        stateManager.setStagedEntity(clickedEntity);
+        return; // จบการทำงานทันที
     }
-}
 
+    // --- CASE 2: คลิกที่ Item ที่ Active อยู่แล้ว (สีเขียว) ---
+    // การทำแบบนี้ควรจะยกเลิกการ Staging ของ Item อื่น (ถ้ามี)
+    if (activeEntity && activeEntity.name === name && activeEntity.type === type) {
+        stateManager.setStagedEntity(null); // ล้างตัวที่ Staged (สีเหลือง) ทิ้งไป
+        return; // จบการทำงานทันที
+    }
+
+    // --- CASE 3: คลิกที่ Item อื่นๆ ที่ไม่ใช่ทั้งตัวที่ Staged หรือ Active ---
+    // นี่คือการ "เริ่มต้น" Staging ใหม่
+    stateManager.setStagedEntity(clickedEntity);
+}
