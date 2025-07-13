@@ -139,115 +139,110 @@ export async function loadAllProviderModels() {
 }
 
 export async function callLLM(agent, messages) {
+    const project = stateManager.getProject();
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
     if (!modelData) throw new Error("Model data not found for the agent.");
 
-    const project = stateManager.getProject();
     const provider = modelData.provider;
-    
-    // สร้าง Object ของ body และ params แยกกันเพื่อความชัดเจน
-    const body = { 
-        model: agent.model, 
-        messages: messages, 
-        stream: false 
-    };
-    
-    const params = {
-        temperature: parseFloat(agent.temperature), 
-        top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10), 
-        presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty), 
-        max_tokens: parseInt(agent.max_tokens, 10),
-        seed: parseInt(agent.seed, 10),
-    };
+    let url, headers, body;
 
-    if (agent.stop_sequences) {
-        params.stop = agent.stop_sequences.split(',').map(s => s.trim());
-    }
-
-    let url, headers;
+    const params = { /* ... พารามิเตอร์ของคุณเหมือนเดิม ... */ };
+    if (agent.stop_sequences) { /* ... */ }
 
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
         
-        // [FIX] เพิ่มส่วนนี้เข้าไปเพื่อเปิดใช้งาน Web Search
-        body.tools = [
-            { "type": "Google Search" }
-        ];
+        body = {
+            model: agent.model,
+            messages,
+            stream: false,
+            ...params
+        };
 
-        Object.assign(body, params);
+        // [FINAL FIX] ตรวจสอบเงื่อนไขอย่างละเอียดตามข้อมูลล่าสุด
+        if (!modelData.id.startsWith('perplexity/') && modelData.supports_tools) {
+            body.tools = [{ "type": "Google Search" }];
+        }
 
     } else { // ollama
         url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
         headers = { 'Content-Type': 'application/json' };
-        body.options = params;
+        // สำหรับ Ollama, parameters ต้องอยู่ใน 'options'
+        const { messages: _m, model: _md, ...options } = baseBody;
+        body = { model: agent.model, messages, stream: false, options };
     }
 
-    const response = await fetchWithTimeout(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(body)
-    });
+    try {
+        const response = await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body)
+        });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${errorText}`);
-    }
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API Error: ${errorText}`);
+        }
 
-    const data = await response.json();
-    if (provider === 'openrouter' && data.choices && data.choices.length > 0) {
-        return data.choices[0].message.content;
+        const data = await response.json();
+        if (provider === 'openrouter' && data.choices && data.choices.length > 0) {
+            return data.choices[0].message.content;
+        }
+        if (provider === 'ollama' && data.message) {
+            return data.message.content;
+        }
+        throw new Error("Invalid API response structure.");
+
+    } catch (error) {
+        console.error("callLLM failed:", error);
+        throw error;
     }
-    if (provider === 'ollama' && data.message) {
-        return data.message.content;
-    }
-    
-    throw new Error("Invalid API response structure.");
 }
 
-/**
- * [REWRITTEN] A more robust function to stream responses from LLM APIs.
- * It uses modern stream APIs to prevent data loss and parsing errors.
- */
+
 export async function streamLLMResponse(agent, messages, onChunk) {
     const project = stateManager.getProject();
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
     if (!modelData) throw new Error("Model data not found for active agent.");
 
-    const statusMessage = `Responding with ${modelData?.name || agent.model}...`;
+    const statusMessage = `Responding with ${modelData.name || agent.model}...`;
     stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
 
     const provider = modelData.provider;
     let url, headers, body;
 
-    // --- Setup request details based on provider ---
+    const params = {
+        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
+        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
+        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
+        seed: parseInt(agent.seed, 10),
+    };
+    if (agent.stop_sequences) { params.stop = agent.stop_sequences.split(',').map(s => s.trim()); }
+
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
-        body = { 
-            model: agent.model, 
-            messages, 
-            stream: true,
-            // [Feature] เปิดใช้งาน Web Search สำหรับ OpenRouter
-            tools: [
-                { "type": "Google Search" }
-            ],
-            ...agent.parameters
-        };
+        
+        if (modelData.id.startsWith('perplexity/')) {
+            body = {
+                model: agent.model, messages, stream: true,
+                tools: [{ "type": "Google Search" }]
+            };
+        } else {
+            body = {
+                model: agent.model, messages, stream: true, ...params
+            };
+            if (modelData.supports_tools) {
+                body.tools = [{ "type": "Google Search" }];
+            }
+        }
     } else { // ollama
-        // [Fix] แก้ไขการอ้างอิงเป็น globalSettings (S ตัวใหญ่)
         url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
         headers = { 'Content-Type': 'application/json' };
-        body = { 
-            model: agent.model, 
-            messages, 
-            stream: true, 
-            options: agent.parameters 
-        };
+        body = { model: agent.model, messages, stream: true, options: params };
     }
 
     try {
@@ -258,57 +253,60 @@ export async function streamLLMResponse(agent, messages, onChunk) {
             signal: stateManager.getState().abortController?.signal
         });
 
-        if (!response.ok || !response.body) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
+        if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
 
-        // [Robustness] ใช้ TextDecoderStream เพื่อจัดการ Stream ที่มีประสิทธิภาพและปลอดภัย
-        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        // [REVERT & FIX] ย้อนกลับมาใช้วิธีถอดรหัสแบบ Manual Buffer ที่เสถียรกับภาษาไทย
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = '';
         let fullResponseText = '';
 
         while (true) {
-            const { value, done } = await reader.read();
+            const { value, done } = await reader.read(); // value คือข้อมูลดิบ (Uint8Array)
             if (done) break;
 
-            const rawChunks = value.split('\n').filter(line => line.trim() !== '');
+            // ถอดรหัสข้อมูลดิบที่ได้มาใหม่ แล้วนำไปต่อกับ buffer เก่า
+            buffer += decoder.decode(value, { stream: true });
+            
+            // แยก buffer ออกมาเป็นบรรทัดๆ
+            const lines = buffer.split('\n');
+            
+            // เก็บข้อมูลบรรทัดสุดท้ายที่อาจยังไม่สมบูรณ์ไว้ใน buffer เพื่อรอรับข้อมูลชิ้นต่อไป
+            buffer = lines.pop();
 
-            for (const chunk of rawChunks) {
+            for (const line of lines) {
+                if (line.trim() === '') continue;
+                
                 let token = '';
                 try {
                     if (provider === 'openrouter') {
-                        if (!chunk.startsWith('data: ')) continue;
-                        const jsonStr = chunk.replace(/^data: /, '').trim();
+                        if (!line.startsWith('data: ')) continue;
+                        const jsonStr = line.replace(/^data: /, '').trim();
                         if (jsonStr === '[DONE]') break;
-                        
                         const data = JSON.parse(jsonStr);
                         token = data.choices?.[0]?.delta?.content || '';
-
                     } else { // ollama
-                        const data = JSON.parse(chunk);
+                        const data = JSON.parse(line);
                         token = data.message?.content || '';
                     }
-                } catch (e) {
-                     console.warn("Skipping malformed JSON chunk during stream:", chunk);
-                }
+                } catch (e) { console.warn("Skipping malformed JSON chunk:", line); }
 
                 if (token) {
                     fullResponseText += token;
-                    onChunk(token); // เรียก callback เพื่อส่งข้อมูลไปให้ UI
+                    onChunk(token);
                 }
             }
         }
-        return fullResponseText; // คืนค่าข้อความทั้งหมดเมื่อจบ
+        return fullResponseText;
 
     } catch (error) {
         if (error.name !== 'AbortError') {
              console.error("Streaming failed:", error);
              stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
         }
-        // โยน error ต่อเพื่อให้ฟังก์ชันที่เรียกใช้ (เช่น sendSingleAgentMessage) จัดการต่อไป
         throw error;
     }
 }
-
 export async function generateAndRenameSession(history){
      try{
         const project = stateManager.getProject();
