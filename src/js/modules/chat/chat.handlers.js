@@ -7,9 +7,10 @@ import { stateManager, SESSIONS_STORE_NAME, defaultSystemUtilityAgent } from '..
 import { dbRequest } from '../../core/core.db.js';
 import { callLLM, streamLLMResponse, generateAndRenameSession } from '../../core/core.api.js';
 import { showCustomAlert, showContextMenu } from '../../core/core.ui.js';
+import { LiveMarkdownRenderer } from '../../core/core.utils.js';
 import * as ChatUI from './chat.ui.js'; // <-- เพิ่มบรรทัดนี้
 import * as GroupChat from './chat.group.js';
-
+import * as handleGroupChatTurn from './chat.group.js';
 
 export let attachedFiles = [];
 
@@ -300,70 +301,6 @@ export async function sendMessage() {
     }
 }
 
-/**
- * คลาสสำหรับจัดการการแสดงผล Markdown แบบสดๆ จาก Stream
- * ช่วยแยก Logic การ render UI ออกจากฟังก์ชันหลัก
- */
-class LiveMarkdownRenderer {
-    constructor(placeholderElement) {
-        this.contentDiv = placeholderElement.querySelector('.message-content .streaming-content');
-        this.accumulatedMarkdown = '';
-        this.isInsideCodeBlock = false; // สถานะว่ากำลังอยู่ใน ```code block``` หรือไม่
-        this.renderTimeout = null;
-        this.debounceDelay = 40; // ms
-        
-        if (!this.contentDiv) {
-            throw new Error("Target content element for rendering not found.");
-        }
-    }
-
-    /**
-     * รับข้อมูล (chunk) ที่ stream มาและจัดคิวเพื่อ render
-     * @param {string} chunk - ส่วนของข้อความที่ได้รับมา
-     */
-    streamChunk = (chunk) => {
-        this.accumulatedMarkdown += chunk;
-        // ใช้ debounce เพื่อไม่ให้ render บ่อยเกินไป
-        clearTimeout(this.renderTimeout);
-        this.renderTimeout = setTimeout(this.render, this.debounceDelay);
-    };
-
-    /**
-     * ตรรกะการ render หลัก
-     * - ถ้าอยู่ใน code block จะแสดงเป็น text ธรรมดาใน <pre> เพื่อความเร็วและถูกต้อง
-     * - ถ้านอก code block จะใช้ marked.parse() เพื่อแสดงผล Markdown
-     */
-    render = () => {
-        try {
-            const inUnclosedCodeBlock = (this.accumulatedMarkdown.match(/```/g) || []).length % 2 === 1;
-
-            if (inUnclosedCodeBlock || this.isInsideCodeBlock) {
-                // เมื่อเข้าสู่ code block แล้ว จะแสดงเป็น <pre> ไปเรื่อยๆ จนกว่าจะปิด
-                const escapedText = this.accumulatedMarkdown
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;");
-                this.contentDiv.innerHTML = `<pre class="streaming-code-preview">${escapedText}</pre>`;
-            } else {
-                // นอก code block ให้ render เป็น Markdown ตามปกติ
-                this.contentDiv.innerHTML = marked.parse(this.accumulatedMarkdown, { gfm: true, breaks: false });
-            }
-            this.isInsideCodeBlock = inUnclosedCodeBlock;
-        } catch (e) {
-            // หากเกิดข้อผิดพลาดในการ parse ให้แสดงเป็น text ธรรมดาไปก่อน
-            this.contentDiv.textContent = this.accumulatedMarkdown;
-        }
-        ChatUI.scrollToBottom();
-    };
-    
-    /**
-     * @returns {string} ข้อความทั้งหมดที่สะสมไว้
-     */
-    getFinalContent() {
-        clearTimeout(this.renderTimeout);
-        return this.accumulatedMarkdown;
-    }
-}
 
 async function sendSingleAgentMessage() {
     const project = stateManager.getProject();
@@ -688,9 +625,7 @@ export async function editMessage({ index, event }) {
     const messageDiv = turnWrapper.querySelector('.message');
     const contentDiv = messageDiv.querySelector('.message-content');
 
-    // =======================================================
     // --- Logic สำหรับ User Bubble ---
-    // =======================================================
     if (message.role === 'user') {
         if (messageDiv.classList.contains('is-editing')) return;
         
@@ -728,17 +663,24 @@ export async function editMessage({ index, event }) {
 
         saveButton.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (textarea.value.trim()) {
-                // [FIX] แก้ไข Logic ตรงนี้
-                // 1. อัปเดตข้อความของผู้ใช้ ณ ตำแหน่งเดิม
-                session.history[index].content = [{ type: 'text', text: textarea.value.trim() }];
-                
-                // 2. ลบข้อความทั้งหมดที่อยู่ "หลังจาก" ข้อความที่แก้ไขทิ้งไป
-                session.history.splice(index + 1); 
+            if (!textarea.value.trim()) return;
 
-                // 3. Render หน้าจอใหม่ และสั่งให้ AI ตอบสนองต่อข้อความที่แก้ไข
-                stateManager.bus.publish('ui:renderMessages');
-                await sendSingleAgentMessage(); // ฟังก์ชันนี้จะทำงานกับ Agent ที่ Active อยู่
+            // 1. อัปเดต History
+            session.history[index].content = [{ type: 'text', text: textarea.value.trim() }];
+            session.history.splice(index + 1); // ลบข้อความหลังจากนั้นทิ้งเพื่อ Regenerate
+            
+            stateManager.updateAndPersistState();
+            stateManager.bus.publish('ui:renderMessages');
+            
+            // 2. [FIX] ตรวจสอบประเภทของ Entity ก่อนเรียกใช้ฟังก์ชันตอบกลับ
+            if (project.activeEntity.type === 'agent') {
+                console.log("Regenerating for a single agent...");
+                await sendSingleAgentMessage();
+            } else if (project.activeEntity.type === 'group') {
+                console.log("Regenerating for a group chat...");
+                const group = project.agentGroups[project.activeEntity.name];
+                // เรียกใช้ฟังก์ชันหลักของ Group Chat
+                await handleGroupChatTurn(project, session, group);
             }
         });
 

@@ -4,13 +4,13 @@
    =============================================== */
 
 /* --- Tablet and Mobile Layout --- */
-@media (max-width: 1024px) {
+/* @media (max-width: 1024px) {
     .sidebar {
         position: fixed;
         left: 0;
         top: 0;
-        width: 320px; /* [FIX] Reverted to original, wider value */
-        max-width: 85vw; /* [FIX] Reverted to original, wider value */
+        width: 320px;
+        max-width: 85vw;
         min-width: unset;
         transform: translateX(-100%);
         box-shadow: 4px 0 15px rgba(0,0,0,0.1);
@@ -30,7 +30,7 @@
     #hamburger-btn {
         display: block;
     }
-}
+} */
 
 /* --- Mobile Specific UX --- */
 @media (max-width: 768px) {

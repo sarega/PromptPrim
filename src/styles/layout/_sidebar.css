@@ -1,49 +1,26 @@
 /* ===============================================
-   FILE: src/styles/layout/_sidebar.css (Definitive Fix)
-   DESCRIPTION: Defines separate, non-conflicting styles
-                for desktop collapse and mobile slide-out.
+   FILE: src/styles/layout/_sidebar.css (Definitive Unified Version)
+   DESCRIPTION: A single, unified style for the left sidebar
+                that handles desktop, tablet, and mobile states correctly.
    =============================================== */
 
-/* --- Base Styles for the Panel --- */
+/* --- 1. Base Styles (Desktop First) --- */
 .sessions-panel {
     display: flex;
     flex-direction: column;
-    flex-basis: 360px;
+    flex-basis: 360px; /* Default desktop width */
     min-width: 300px;
     height: 100%;
     background-color: var(--bg-color-secondary);
     border-right: 1px solid var(--border-color);
     transition: all 0.3s ease-in-out;
     overflow: hidden;
+    position: relative; 
+    z-index: 100;
 }
 
-/* --- Desktop-Only Collapse State --- */
-.sessions-panel.is-collapsed {
-    flex-basis: 0;
-    min-width: 0;
-    border-right-width: 0;
-}
 
-/* --- Mobile-Only Slide-out State --- */
-@media (max-width: 768px) {
-    /* Default state on mobile is hidden off-screen */
-    .sessions-panel {
-        position: absolute;
-        width: 85vw;
-        max-width: 320px;
-        flex-basis: auto;
-        min-width: unset;
-        z-index: 1100; /* Must be higher than the overlay */
-        transform: translateX(-100%);
-    }
-
-    /* The "open" state for mobile */
-    .sessions-panel.is-open {
-        transform: translateX(0);
-    }
-}
-
-/* --- Header and Content Styles (Unchanged) --- */
+/* --- 2. Header Section --- */
 .sidebar-header {
     padding: 15px 20px;
     border-bottom: 1px solid var(--border-color);
@@ -76,8 +53,10 @@
     margin-left: 12px;
 }
 
-.menu-toggle-btn {
-    font-size: 24px;
+#hamburger-btn {
+    display: none; /* Hidden by default, shown in media query */
+    font-size: 28px;
+    margin-right: 15px;
     cursor: pointer;
     background: none;
     border: none;
@@ -86,12 +65,8 @@
     line-height: 1;
 }
 
-#hamburger-btn {
-    display: none; /* Controlled by other responsive styles */
-    font-size: 28px;
-    margin-right: 15px;
-}
 
+/* --- 3. Main Content Section --- */
 .sidebar-content {
     flex-grow: 1;
     display: flex;
@@ -108,13 +83,66 @@
     flex-direction: column;
 }
 
-/* --- Mobile-Only Button Visibility --- */
+
+/* --- 4. Mobile-Only Specific Elements --- */
 .mobile-only {
-    display: none;
+    display: none; /* Hidden by default, shown in media query if needed */
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .mobile-only {
         display: flex;
     }
 }
+
+
+/* --- 5. [UNIFIED] Tablet & Mobile Responsive Styles --- */
+/* This single media query now controls both iPad and iPhone */
+@media (max-width: 1024px) {
+
+    /* Make the hamburger button visible */
+    #hamburger-btn {
+        display: block;
+    }
+
+    /* Default state on mobile/tablet: hidden off-screen */
+    .sessions-panel {
+        position: fixed; /* Use fixed positioning to overlay content */
+        left: 0;
+        top: 0;
+        width: 320px;     /* Set a consistent width */
+        max-width: 85vw;  /* But don't let it be too wide on smaller screens */
+        flex-basis: auto; /* Override desktop flex-basis */
+        min-width: unset; /* Override desktop min-width */
+        z-index: 1100;    /* Must be higher than the overlay */
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        border-right-width: 1px; /* Ensure border is visible */
+    }
+
+    /* The "open" state for mobile/tablet, controlled by JS */
+    .sessions-panel.is-open {
+        transform: translateX(0);
+        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    }
+
+    /* Hide the desktop resizer on mobile/tablet */
+    .sidebar-resizer {
+        display: none;
+    }
+}
+
+
+
+
+
+.menu-toggle-btn {
+    font-size: 24px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-dark);
+    padding: 5px;
+    line-height: 1;
+}
+

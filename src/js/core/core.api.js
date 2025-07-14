@@ -194,33 +194,51 @@ export async function callLLM(agent, messages) {
 }
 
 export async function streamLLMResponse(agent, messages, onChunk) {
-    // ... โค้ดส่วนบนสุดเหมือนเดิม ...
+    const project = stateManager.getProject();
+    const allModels = stateManager.getState().allProviderModels;
+
+    // [CRITICAL FIX] บรรทัดนี้คือบรรทัดที่หายไป ทำให้เกิด ReferenceError
+    // มันทำหน้าที่ค้นหาข้อมูลของโมเดลที่กำลังใช้งานอยู่ (เช่น provider, supports_tools)
+    const modelData = allModels.find(m => m.id === agent.model);
+    if (!modelData) {
+        // เพิ่มการป้องกัน ถ้าหา modelData ไม่เจอ ให้โยน Error ที่ชัดเจน
+        throw new Error(`Model data for agent.model ID '${agent.model}' not found in allProviderModels state.`);
+    }
+
+    const statusMessage = `Responding with ${modelData.name || agent.model}...`;
+    stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
+
     const provider = modelData.provider;
     let url, headers, body;
 
-    const params = { /* ... สร้าง params เหมือนใน callLLM ... */ };
-    if (agent.stop_sequences) { /* ... */ }
+    const params = {
+        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
+        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
+        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
+        seed: parseInt(agent.seed, 10),
+    };
+    if (agent.stop_sequences) { params.stop = agent.stop_sequences.split(',').map(s => s.trim()); }
 
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 
             'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
-            'X-Title': 'PromptPrim' 
+            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/', // แก้เป็น URL ของคุณ
+            'X-Title': 'PromptPrim'
         };
         
         if (modelData.id.startsWith('perplexity/')) {
             body = {
                 model: agent.model, messages, stream: true,
-                tools: [{ "type": "Google Search" }] // <-- [SYNTAX FIX]
+                tools: [{ "type": "Google Search" }]
             };
         } else {
             body = {
                 model: agent.model, messages, stream: true, ...params
             };
             if (modelData.supports_tools) {
-                body.tools = [{ "type": "Google Search" }]; // <-- [SYNTAX FIX]
+                body.tools = [{ "type": "Google Search" }];
             }
         }
     } else { // ollama
@@ -230,37 +248,20 @@ export async function streamLLMResponse(agent, messages, onChunk) {
     }
 
     try {
-        const response = await fetchWithTimeout(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-            signal: stateManager.getState().abortController?.signal
-        });
-
+        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body), signal: stateManager.getState().abortController?.signal });
         if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
-
-        // [REVERT & FIX] ย้อนกลับมาใช้วิธีถอดรหัสแบบ Manual Buffer ที่เสถียรกับภาษาไทย
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = '';
         let fullResponseText = '';
-
         while (true) {
-            const { value, done } = await reader.read(); // value คือข้อมูลดิบ (Uint8Array)
+            const { value, done } = await reader.read();
             if (done) break;
-
-            // ถอดรหัสข้อมูลดิบที่ได้มาใหม่ แล้วนำไปต่อกับ buffer เก่า
             buffer += decoder.decode(value, { stream: true });
-            
-            // แยก buffer ออกมาเป็นบรรทัดๆ
             const lines = buffer.split('\n');
-            
-            // เก็บข้อมูลบรรทัดสุดท้ายที่อาจยังไม่สมบูรณ์ไว้ใน buffer เพื่อรอรับข้อมูลชิ้นต่อไป
             buffer = lines.pop();
-
             for (const line of lines) {
                 if (line.trim() === '') continue;
-                
                 let token = '';
                 try {
                     if (provider === 'openrouter') {
@@ -269,12 +270,11 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                         if (jsonStr === '[DONE]') break;
                         const data = JSON.parse(jsonStr);
                         token = data.choices?.[0]?.delta?.content || '';
-                    } else { // ollama
+                    } else {
                         const data = JSON.parse(line);
                         token = data.message?.content || '';
                     }
                 } catch (e) { console.warn("Skipping malformed JSON chunk:", line); }
-
                 if (token) {
                     fullResponseText += token;
                     onChunk(token);
@@ -282,7 +282,6 @@ export async function streamLLMResponse(agent, messages, onChunk) {
             }
         }
         return fullResponseText;
-
     } catch (error) {
         if (error.name !== 'AbortError') {
              console.error("Streaming failed:", error);

@@ -8,7 +8,7 @@ import { dbRequest } from '../../core/core.db.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 import * as ChatUI from './chat.ui.js';
 import * as ChatHandlers from './chat.handlers.js';
-
+import { LiveMarkdownRenderer } from '../../core/core.utils.js';
 
 /**
  * ฟังก์ชันหลักที่ควบคุมการทำงานของ Group Chat แต่ละรอบ
@@ -116,37 +116,62 @@ async function runRoundRobin(project, session, group) {
 // [REVISED] แก้ไข runAutoModerator ให้รับรู้เรื่อง Timer
 
 async function runAutoModerator(project, session, group) {
-    const timerDuration = (group.timerInSeconds || 0) * 1000; // แปลงเป็น ms
+    const maxTurns = group.maxTurns || 1;
 
-    // ทำงานรอบแรกทันที
-    const keepGoing = await executeModeratorTurn(project, session, group);
-
-    // ถ้าตั้งเวลาไว้ และรอบแรกสำเร็จ ให้เริ่ม Loop
-    if (timerDuration > 0 && keepGoing) {
-        // [FIX] เก็บ Timer ID ไว้ใน state ของ session
-        session.groupChatState.timerId = setTimeout(() => {
-            if (session.groupChatState.isRunning) {
-                 runAutoModerator(project, session, group);
-            }
-        }, timerDuration);
+    for (let turn = 0; turn < maxTurns; turn++) {
+        // [FIX] ใช้ await เพื่อรอให้การทำงานของ Moderator แต่ละรอบเสร็จสิ้น
+        const keepGoing = await executeModeratorTurn(project, session, group);
+        
+        // ถ้า Moderator ทำงานไม่สำเร็จ (เช่น หา agent ไม่เจอ) ให้หยุด loop
+        if (!keepGoing || stateManager.getState().abortController?.signal.aborted) {
+            console.log("Auto-moderator turn ended or was aborted.");
+            break; 
+        }
     }
 }
 
 
-
-// [NEW] แยก Logic การทำงานของ Moderator ออกมาเป็นฟังก์ชันย่อย
 async function executeModeratorTurn(project, session, group) {
     const moderator = project.agentPresets[group.moderatorAgent];
-    if (!moderator) throw new Error("Moderator agent not found");
+    if (!moderator) {
+        throw new Error(`Moderator agent '${group.moderatorAgent}' not found.`);
+    }
 
-    // ... โค้ดการเรียก LLM ของ Moderator ทั้งหมด ...
-    // ... ตั้งแต่ stateManager.bus.publish... จนถึง ... if (!nextAgentName) ...
-    // ...
+    stateManager.bus.publish('status:update', { 
+        message: `Moderator '${group.moderatorAgent}' is deciding...`, 
+        state: 'loading' 
+    });
 
+    // 1. สร้าง Prompt สำหรับให้ Moderator ตัดสินใจ
+    const conversationForModerator = session.history.map(m => `${m.speaker || m.role}: ${m.content}`).join('\n');
+    const availableAgents = group.agents.filter(agentName => agentName !== group.moderatorAgent).join(', ');
+    const moderatorPrompt = `Based on the following conversation, choose the single most appropriate agent to speak next from this list: [${availableAgents}]. Respond with ONLY the agent's name.\n\nConversation:\n${conversationForModerator}`;
+    
+    // 2. เรียก LLM ของ Moderator เพื่อหา nextAgentName
+    let nextAgentName; // ประกาศตัวแปรไว้ก่อน
+    try {
+        const response = await callLLM(moderator, [{ role: 'user', content: moderatorPrompt }]);
+        // หาชื่อ agent ที่ตรงที่สุดจากคำตอบของ moderator
+        nextAgentName = group.agents.find(agent => response.includes(agent));
+
+        if (!nextAgentName) {
+            throw new Error("Moderator did not return a valid agent name from the list.");
+        }
+    } catch(err) {
+        showCustomAlert(`Moderator failed: ${err.message}. Stopping this turn.`, "Error");
+        return false; // คืนค่า false เพื่อบอกให้ loop หยุดทำงาน
+    }
+
+    // 3. ประกาศผลการตัดสินใจของ Moderator
+    const moderatorDecisionMessage = { role: 'system', content: `[Moderator selected ${nextAgentName} to speak.]` };
+    session.history.push(moderatorDecisionMessage);
+    ChatUI.addMessageToUI(moderatorDecisionMessage, session.history.length - 1);
+
+    // 4. สั่งให้ Agent ที่ถูกเลือกทำงาน
     await executeAgentTurn(project, session, nextAgentName);
-    return true; // คืนค่าว่าทำงานสำเร็จ
+    
+    return true; // คืนค่า true เพื่อบอกว่าทำงานสำเร็จ
 }
-
 
 
 /**
@@ -155,9 +180,19 @@ async function executeModeratorTurn(project, session, group) {
  */
 async function executeAgentTurn(project, session, agentName) {
     const agent = project.agentPresets[agentName];
+
+    // [CRITICAL FIX] เพิ่ม Safety Check ตรงนี้
+    // เพื่อตรวจสอบว่า Agent มีตัวตนและมี Model กำหนดไว้แล้วหรือยัง
     if (!agent || !agent.model) {
         console.warn(`Skipping turn for agent '${agentName}' because they have no model configured.`);
-        return;
+        // เพิ่ม System Message เพื่อแจ้งให้ผู้ใช้ทราบในหน้าแชท
+        const skipMessage = { 
+            role: 'system', 
+            content: `[Skipping turn for ${agentName}: No model configured in Agent Studio.]` 
+        };
+        session.history.push(skipMessage);
+        ChatUI.addMessageToUI(skipMessage, session.history.length - 1);
+        return; // หยุดการทำงานของ Agent คนนี้ทันที
     }
 
     // 1. สร้าง Placeholder ใน State และ UI
@@ -165,7 +200,7 @@ async function executeAgentTurn(project, session, agentName) {
     session.history.push(placeholderMessage);
     const assistantMsgIndex = session.history.length - 1;
     const placeholderElement = ChatUI.addMessageToUI(placeholderMessage, assistantMsgIndex);
-    const contentDiv = placeholderElement?.querySelector('.message-content');
+    const contentDiv = placeholderElement?.querySelector('.message-content .streaming-content'); // <-- แก้ไข selector ให้ถูกต้อง
     
     if (!contentDiv) {
         console.error(`Could not create UI placeholder for agent ${agentName}.`);
@@ -174,12 +209,24 @@ async function executeAgentTurn(project, session, agentName) {
     }
 
     // 2. คุยกับ LLM และ Stream ผลลัพธ์
-    const messagesForLLM = ChatHandlers.buildPayloadMessages(session.history.slice(0, -1), agentName, session);
-    const finalResponseText = await streamLLMResponse(contentDiv, agent, messagesForLLM);
-    
-    // 3. อัปเดต History ด้วยคำตอบที่สมบูรณ์
-    session.history[assistantMsgIndex] = { role: 'assistant', content: finalResponseText, speaker: agentName, isLoading: false };
-    
-    // 4. วาด UI ใหม่อีกครั้งเพื่อแสดงผลลัพธ์สุดท้ายที่สวยงาม (ลบ loading, จัด format code)
-    ChatUI.renderMessages();
+    try {
+        const messagesForLLM = ChatHandlers.buildPayloadMessages(session.history.slice(0, -1), agentName, session);
+        const renderer = new LiveMarkdownRenderer(placeholderElement); // <-- ใช้ LiveMarkdownRenderer ที่เราเคยสร้าง
+        await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
+        
+        const finalResponseText = renderer.getFinalContent();
+        // 3. อัปเดต History ด้วยคำตอบที่สมบูรณ์
+        session.history[assistantMsgIndex] = { role: 'assistant', content: finalResponseText, speaker: agentName, isLoading: false };
+
+    } catch(error) {
+        // จัดการ Error ที่อาจเกิดขึ้นระหว่าง Stream
+        if (error.name !== 'AbortError') {
+            session.history[assistantMsgIndex] = { ...placeholderMessage, content: `Error: ${error.message}`, isLoading: false, isError: true };
+        } else {
+            session.history.splice(assistantMsgIndex, 1); // ลบ Placeholder ถ้ากดยกเลิก
+        }
+    } finally {
+        // 4. วาด UI ใหม่อีกครั้งเพื่อแสดงผลลัพธ์สุดท้ายที่สวยงาม
+        ChatUI.renderMessages();
+    }
 }
