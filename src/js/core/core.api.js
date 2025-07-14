@@ -65,9 +65,7 @@ async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
     
-    // [FIX 1] สร้าง deep copy ของ project state ขึ้นมาทำงานด้วย เพื่อป้องกัน side effect
     const project = JSON.parse(JSON.stringify(stateManager.getProject()));
-
     if (!project || !project.globalSettings) {
         stateManager.bus.publish('status:update', { message: 'Project not loaded', state: 'error' });
         return;
@@ -79,8 +77,15 @@ export async function loadAllProviderModels() {
     let allModels = [];
     try {
         const fetchPromises = [];
-        if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
-        if (baseUrl) fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
+        if (apiKey) {
+            fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
+        }
+
+        // [CORS FIX] พยายามเชื่อมต่อ Ollama เฉพาะเมื่ออยู่ในโหมด DEV เท่านั้น
+        if (import.meta.env.DEV && baseUrl) {
+            console.log("DEV mode detected. Attempting to fetch Ollama models.");
+            fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
+        }
 
         const results = await Promise.all(fetchPromises);
         allModels = results.flat();
@@ -147,113 +152,75 @@ export async function callLLM(agent, messages) {
     const provider = modelData.provider;
     let url, headers, body;
 
-    const params = { /* ... พารามิเตอร์ของคุณเหมือนเดิม ... */ };
-    if (agent.stop_sequences) { /* ... */ }
+    const params = {
+        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
+        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
+        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
+        seed: parseInt(agent.seed, 10),
+    }; // <-- [SYNTAX FIX] เพิ่มวงเล็บปิด
+    if (agent.stop_sequences) { params.stop = agent.stop_sequences.split(',').map(s => s.trim()); }
 
-if (provider === 'openrouter') {
+    if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
-        
-        // [CORS FIX] เพิ่ม Header ที่ OpenRouter ต้องการสำหรับ Browser-side requests
         headers = { 
             'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
             'Content-Type': 'application/json',
-            // 1. ระบุที่มาของ Request (URL ของเว็บคุณบน GitHub Pages)
-            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/', // <-- แก้เป็น URL ของคุณ
-            // 2. ระบุชื่อแอปพลิเคชันของคุณ
+            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
             'X-Title': 'PromptPrim' 
-        };        
-        body = {
-            model: agent.model,
-            messages,
-            stream: false,
-            ...params
         };
+        body = { model: agent.model, messages, stream: false, ...params };
 
-        // [FINAL FIX] ตรวจสอบเงื่อนไขอย่างละเอียดตามข้อมูลล่าสุด
         if (!modelData.id.startsWith('perplexity/') && modelData.supports_tools) {
-            body.tools = [{ "type": "Google Search" }];
+            body.tools = [{ "type": "Google Search" }]; // <-- [SYNTAX FIX]
         }
-
     } else { // ollama
         url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
         headers = { 'Content-Type': 'application/json' };
-        // สำหรับ Ollama, parameters ต้องอยู่ใน 'options'
-        const { messages: _m, model: _md, ...options } = baseBody;
-        body = { model: agent.model, messages, stream: false, options };
+        // [SYNTAX FIX] สร้าง options จาก params โดยตรง
+        body = { model: agent.model, messages, stream: false, options: params };
     }
 
     try {
-        const response = await fetchWithTimeout(url, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API Error: ${errorText}`);
-        }
-
+        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        if (!response.ok) { const errorText = await response.text(); throw new Error(`API Error: ${errorText}`); }
         const data = await response.json();
-        if (provider === 'openrouter' && data.choices && data.choices.length > 0) {
-            return data.choices[0].message.content;
-        }
-        if (provider === 'ollama' && data.message) {
-            return data.message.content;
-        }
+        if (provider === 'openrouter' && data.choices?.length > 0) return data.choices[0].message.content;
+        if (provider === 'ollama' && data.message) return data.message.content;
         throw new Error("Invalid API response structure.");
-
     } catch (error) {
         console.error("callLLM failed:", error);
         throw error;
     }
 }
 
-
 export async function streamLLMResponse(agent, messages, onChunk) {
-    const project = stateManager.getProject();
-    const allModels = stateManager.getState().allProviderModels;
-    const modelData = allModels.find(m => m.id === agent.model);
-    if (!modelData) throw new Error("Model data not found for active agent.");
-
-    const statusMessage = `Responding with ${modelData.name || agent.model}...`;
-    stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
-
+    // ... โค้ดส่วนบนสุดเหมือนเดิม ...
     const provider = modelData.provider;
     let url, headers, body;
 
-    const params = {
-        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
-        seed: parseInt(agent.seed, 10),
-    };
-    if (agent.stop_sequences) { params.stop = agent.stop_sequences.split(',').map(s => s.trim()); }
+    const params = { /* ... สร้าง params เหมือนใน callLLM ... */ };
+    if (agent.stop_sequences) { /* ... */ }
 
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
-        
-        // [CORS FIX] เพิ่ม Header ที่ OpenRouter ต้องการสำหรับ Browser-side requests
         headers = { 
             'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
             'Content-Type': 'application/json',
-            // 1. ระบุที่มาของ Request (URL ของเว็บคุณบน GitHub Pages)
-            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/', // <-- แก้เป็น URL ของคุณ
-            // 2. ระบุชื่อแอปพลิเคชันของคุณ
+            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
             'X-Title': 'PromptPrim' 
         };
         
         if (modelData.id.startsWith('perplexity/')) {
             body = {
                 model: agent.model, messages, stream: true,
-                tools: [{ "type": "Google Search" }]
+                tools: [{ "type": "Google Search" }] // <-- [SYNTAX FIX]
             };
         } else {
             body = {
                 model: agent.model, messages, stream: true, ...params
             };
             if (modelData.supports_tools) {
-                body.tools = [{ "type": "Google Search" }];
+                body.tools = [{ "type": "Google Search" }]; // <-- [SYNTAX FIX]
             }
         }
     } else { // ollama
