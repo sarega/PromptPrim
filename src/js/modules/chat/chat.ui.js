@@ -659,7 +659,7 @@ export function initChatUI() {
     }
     // --- 3. Initialize Sub-modules ---
     initChatActionMenu();
-    initMobileScrollBehavior();
+    // initMobileScrollBehavior();
 
     // --- 4. Subscribe to Global Events ---
     stateManager.bus.subscribe('session:loaded', () => updateContextInspector());

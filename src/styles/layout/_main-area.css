@@ -158,30 +158,7 @@
     40% { transform: scale(1); }
 }
 
-/* [MODIFIED] New mobile scroll behavior styles.
-  The .header-visible class is controlled by chat.ui.js
-*/
-@media (max-width: 768px) {
-    /* When header is NOT visible (scrolling down) */
-    .main-chat-area:not(.header-visible) .chat-header {
-        transform: translateY(-100%);
-        max-height: 0px;
-        padding-top: 0;
-        padding-bottom: 0;
-        border-bottom-width: 0;
-        overflow: hidden;
-    }
 
-    /* When header is NOT visible (scrolling down) */
-    .main-chat-area:not(.header-visible) #status-panel {
-        transform: translateY(100%);
-        max-height: 0px;
-        padding-top: 0;
-        padding-bottom: 0;
-        border-top-width: 0;
-        overflow: hidden;
-    }
-}
 /* เมื่อ Main Chat Panel มีคลาส .focus-mode */
 .main-chat-area.focus-mode .chat-messages,
 .main-chat-area.focus-mode #resizer-row { /* <-- เพิ่มการซ่อน resizer เข้าไปด้วย */
