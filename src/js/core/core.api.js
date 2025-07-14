@@ -150,10 +150,18 @@ export async function callLLM(agent, messages) {
     const params = { /* ... พารามิเตอร์ของคุณเหมือนเดิม ... */ };
     if (agent.stop_sequences) { /* ... */ }
 
-    if (provider === 'openrouter') {
+if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
-        headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
         
+        // [CORS FIX] เพิ่ม Header ที่ OpenRouter ต้องการสำหรับ Browser-side requests
+        headers = { 
+            'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
+            'Content-Type': 'application/json',
+            // 1. ระบุที่มาของ Request (URL ของเว็บคุณบน GitHub Pages)
+            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/', // <-- แก้เป็น URL ของคุณ
+            // 2. ระบุชื่อแอปพลิเคชันของคุณ
+            'X-Title': 'PromptPrim' 
+        };        
         body = {
             model: agent.model,
             messages,
@@ -224,7 +232,16 @@ export async function streamLLMResponse(agent, messages, onChunk) {
 
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
-        headers = { 'Authorization': `Bearer ${project.globalSettings.apiKey}`, 'Content-Type': 'application/json' };
+        
+        // [CORS FIX] เพิ่ม Header ที่ OpenRouter ต้องการสำหรับ Browser-side requests
+        headers = { 
+            'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
+            'Content-Type': 'application/json',
+            // 1. ระบุที่มาของ Request (URL ของเว็บคุณบน GitHub Pages)
+            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/', // <-- แก้เป็น URL ของคุณ
+            // 2. ระบุชื่อแอปพลิเคชันของคุณ
+            'X-Title': 'PromptPrim' 
+        };
         
         if (modelData.id.startsWith('perplexity/')) {
             body = {
