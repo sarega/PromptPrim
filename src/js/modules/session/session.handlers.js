@@ -185,8 +185,7 @@ export function loadChatSession(sessionId) {
  * @param {Event} [event] - The click event, to stop propagation.
  * @param {string} [newNameFromPrompt=null] - An optional new name passed directly.
  */
-export function renameChatSession(sessionId, event) {
-    event?.stopPropagation();
+export function renameChatSession({ sessionId }) {
     const project = stateManager.getProject();
     const session = project?.chatSessions.find(s => s.id === sessionId);
     if (!session) return;
@@ -198,7 +197,6 @@ export function renameChatSession(sessionId, event) {
         session.updatedAt = Date.now();
         stateManager.updateAndPersistState();
         
-        // ส่งสัญญาณบอก UI ให้วาดใหม่
         stateManager.bus.publish('session:listChanged');
         if (sessionId === project.activeSessionId) {
             stateManager.bus.publish('ui:updateChatTitle', { title: session.name });
@@ -211,37 +209,30 @@ export function renameChatSession(sessionId, event) {
  * @param {string} sessionId - The ID of the session to delete.
  * @param {Event} [event] - The click event, to stop propagation.
  */
-export function deleteChatSession(sessionId, event) {
-    event?.stopPropagation();
-    if (!confirm("Are you sure you want to delete this chat session?")) return;
+export async function deleteChatSession({ sessionId }) {
+    if (!confirm("Are you sure you want to delete this chat session? This cannot be undone.")) return;
 
-    const project = getActiveProject();
-    if (!project) return;
-
+    const project = stateManager.getProject();
     const sessionIndex = project.chatSessions.findIndex(s => s.id === sessionId);
     if (sessionIndex === -1) return;
 
-    // 1. Modify state by removing the session
+    // 1. ลบออกจาก State ใน Memory
     project.chatSessions.splice(sessionIndex, 1);
 
-    // 2. Determine the next active session if the current one was deleted
+    // 2. [CRITICAL FIX] สั่งลบออกจาก IndexedDB โดยตรง
+    await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'delete', sessionId);
+
+    // 3. จัดการ Session ที่กำลัง Active อยู่ (ถ้าถูกลบ)
     if (project.activeSessionId === sessionId) {
-        const nextSession = [...project.chatSessions]
-            .filter(s => !s.archived)
-            .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        
+        const nextSession = [...project.chatSessions].filter(s => !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
         project.activeSessionId = nextSession ? nextSession.id : null;
-        
-        // 3. Persist state changes
-        stateManager.updateAndPersistState(project);
-        
-        // 4. Update UI by loading the new active session (or clearing the view)
+        // โหลด session ใหม่ (ซึ่งจะไปเรียก renderUI เอง)
         loadChatSession(project.activeSessionId);
     } else {
-        // If a non-active session was deleted, just persist and re-render the list
-        stateManager.updateAndPersistState(project);
-        SessionUI.renderSessionList();
+        // ถ้าลบอันอื่น ก็แค่สั่งวาด UI ใหม่
+        stateManager.bus.publish('session:listChanged');
     }
+    stateManager.updateAndPersistState(); // บันทึกการเปลี่ยนแปลงของ project metadata
 }
 
 /**

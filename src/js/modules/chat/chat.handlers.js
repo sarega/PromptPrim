@@ -5,12 +5,11 @@
 
 import { stateManager, SESSIONS_STORE_NAME, defaultSystemUtilityAgent } from '../../core/core.state.js';
 import { dbRequest } from '../../core/core.db.js';
-import { callLLM, streamLLMResponse, generateAndRenameSession } from '../../core/core.api.js';
+import { callLLM, streamLLMResponse, buildPayloadMessages, getFullSystemPrompt, generateAndRenameSession } from '../../core/core.api.js';
 import { showCustomAlert, showContextMenu } from '../../core/core.ui.js';
 import { LiveMarkdownRenderer } from '../../core/core.utils.js';
-import * as ChatUI from './chat.ui.js'; // <-- เพิ่มบรรทัดนี้
-import * as GroupChat from './chat.group.js';
-import * as handleGroupChatTurn from './chat.group.js';
+import * as ChatUI from './chat.ui.js';
+import * as GroupChat from './chat.group.js'; // <-- import แบบ Namespace
 
 export let attachedFiles = [];
 
@@ -114,56 +113,6 @@ export function estimateTokens(text) {
     if (typeof text !== 'string' || !text) return 0; // [FIX] Guard clause
     return Math.round(text.length / 4);
 }
-export function getFullSystemPrompt(agentName) {
-    const project = stateManager.getProject();
-    if (!project) return "";
-
-    // [FIX 1] แก้ไข Logic การหา Agent ให้ถูกต้องตาม context ที่ส่งมา หรือจาก activeEntity
-    let entityAgent;
-    const activeEntity = project.activeEntity;
-    const targetName = agentName || activeEntity?.name;
-    const targetType = agentName ? 'agent' : activeEntity?.type;
-
-    if (!targetName) return "";
-
-    if (targetType === 'agent') {
-        entityAgent = project.agentPresets?.[targetName];
-    } else if (targetType === 'group') {
-        const group = project.agentGroups?.[targetName];
-        entityAgent = project.agentPresets?.[group?.moderatorAgent];
-    }
-    
-    if (!entityAgent) return "";
-
-    let basePrompt = entityAgent.systemPrompt || "";
-
-    // [FIX 2] แก้ไข Logic การดึง Active Memories ให้ถูกต้อง
-    // โดยการอ่านจาก array `activeMemories` ของ Agent ที่ถูกเลือก
-    const activeMemoryNames = entityAgent.activeMemories || [];
-    
-    if (activeMemoryNames.length === 0) {
-        return basePrompt.trim(); // ไม่มี Memory ให้ใช้, ส่งคืน Prompt หลักอย่างเดียว
-    }
-
-    // [FIX 3] สร้างเนื้อหาของ Memory จากชื่อที่ Active อยู่
-    const memoryContent = activeMemoryNames
-        .map(name => {
-            // หา object memory เต็มๆ จาก project.memories โดยใช้ชื่อ
-            const memory = project.memories.find(m => m.name === name);
-            return memory ? memory.content : ''; // ถ้าหาเจอให้ใช้ content, ถ้าไม่เจอก็เป็นค่าว่าง
-        })
-        .filter(content => content) // กรองอันที่หาไม่เจอหรือค่าว่างทิ้ง
-        .join('\n\n'); // นำเนื้อหามาต่อกัน
-
-    if (!memoryContent) {
-        return basePrompt.trim();
-    }
-
-    // [FIX 4] จัดรูปแบบการแสดงผลให้เหมือนในรูปภาพ
-    const finalPrompt = `${basePrompt.trim()}\n\n--- Active Memories ---\n${memoryContent}`;
-
-    return finalPrompt;
-}
 
 
 export function getContextData() {
@@ -192,40 +141,6 @@ export function getContextData() {
     };
 }
 
-export function buildPayloadMessages(history, targetAgentName, session) {
-    const project = stateManager.getProject();
-    const agent = project.agentPresets[targetAgentName];
-    if (!agent) return [];
-    
-    const messages = [];
-    const finalSystemPrompt = getFullSystemPrompt(targetAgentName);
-    if (finalSystemPrompt) {
-        messages.push({ role: 'system', content: finalSystemPrompt });
-    }
-
-    history.forEach(msg => {
-        if (msg.isLoading || !msg.content) return;
-
-        // [FIX] สร้าง Message สำหรับส่งไป API โดยจัดการ content ที่เป็น Array
-        let apiMessage = { role: msg.role };
-
-        if (typeof msg.content === 'string') {
-            apiMessage.content = msg.content;
-        } else if (Array.isArray(msg.content)) {
-            // สำหรับ API ที่รองรับ Multi-part content (เช่น OpenAI)
-            apiMessage.content = msg.content.map(part => {
-                if (part.type === 'image_url') {
-                    return { type: 'image_url', image_url: { url: part.url } };
-                }
-                return part; // คืนค่า text part ตามเดิม
-            });
-        }
-        
-        messages.push(apiMessage);
-    });
-
-    return messages;
-}
 // --- Core Chat Logic ---
 
 export async function sendMessage() {
@@ -342,7 +257,7 @@ async function sendSingleAgentMessage() {
             speaker: agentName, 
             isLoading: false 
         };
-        console.log("🟢 Assistant final content:", JSON.stringify(finalResponseText));
+        // console.log("🟢 Assistant final content:", JSON.stringify(finalResponseText));
 
     } catch (error) {
         // 4. จัดการ Error (รวมถึง Abort)
@@ -638,7 +553,11 @@ export async function editMessage({ index, event }) {
         
         const textarea = document.createElement('textarea');
         textarea.className = 'inline-edit-textarea';
-        textarea.value = typeof message.content === 'string' ? message.content : (message.content.find(p => p.type === 'text')?.text || '');
+        
+        const currentText = Array.isArray(message.content) 
+            ? message.content.find(p => p.type === 'text')?.text || '' 
+            : message.content;
+        textarea.value = currentText;
 
         textarea.addEventListener('input', () => {
             textarea.style.height = 'auto';
@@ -661,26 +580,42 @@ export async function editMessage({ index, event }) {
             turnWrapper.classList.remove('is-editing-child');
         };
 
+        // [DEFINITIVE & ROBUST FIX] แก้ไข Logic การบันทึกให้รองรับทุกไฟล์
         saveButton.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!textarea.value.trim()) return;
+            const newText = textarea.value.trim();
 
-            // 1. อัปเดต History
-            session.history[index].content = [{ type: 'text', text: textarea.value.trim() }];
-            session.history.splice(index + 1); // ลบข้อความหลังจากนั้นทิ้งเพื่อ Regenerate
+            // 1. ค้นหาส่วนที่ไม่ใช่ข้อความทั้งหมด (รูปภาพ, ไฟล์ text, etc.) เก็บไว้
+            const originalFileParts = Array.isArray(message.content) 
+                ? message.content.filter(part => part.type !== 'text') 
+                : [];
+
+            // 2. สร้าง content array ใหม่
+            const newContent = [];
+            if (newText) {
+                newContent.push({ type: 'text', text: newText });
+            }
+            // 3. นำไฟล์เดิมทั้งหมดกลับมาต่อท้าย
+            newContent.push(...originalFileParts);
+
+            if (newContent.length === 0) {
+                showCustomAlert("Cannot save an empty message.", "Warning");
+                return;
+            }
+
+            // 4. อัปเดต History และ UI
+            session.history[index].content = newContent;
+            session.history.splice(index + 1);
             
             stateManager.updateAndPersistState();
             stateManager.bus.publish('ui:renderMessages');
             
-            // 2. [FIX] ตรวจสอบประเภทของ Entity ก่อนเรียกใช้ฟังก์ชันตอบกลับ
+            // 5. เรียก AI ให้ทำงานต่อ
             if (project.activeEntity.type === 'agent') {
-                console.log("Regenerating for a single agent...");
                 await sendSingleAgentMessage();
             } else if (project.activeEntity.type === 'group') {
-                console.log("Regenerating for a group chat...");
                 const group = project.agentGroups[project.activeEntity.name];
-                // เรียกใช้ฟังก์ชันหลักของ Group Chat
-                await handleGroupChatTurn(project, session, group);
+                await GroupChat.handleGroupChatTurn(project, session, group);
             }
         });
 
@@ -695,7 +630,8 @@ export async function editMessage({ index, event }) {
         
         textarea.focus();
         textarea.dispatchEvent(new Event('input'));
-    } 
+
+    }
     // =================================================================
     // --- Logic สำหรับ Assistant Bubble (ที่ทำงานถูกต้อง) ---
     // =================================================================

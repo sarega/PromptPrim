@@ -4,8 +4,10 @@
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
-import { getFullSystemPrompt, estimateTokens, getContextData }  from '../../modules/chat/chat.handlers.js'; // <--- แก้ไขบรรทัดนี้
+import { estimateTokens, getContextData }  from '../../modules/chat/chat.handlers.js'; // <--- แก้ไขบรรทัดนี้
 import { debounce } from '../../core/core.utils.js'; 
+import { getFullSystemPrompt } from '../../core/core.api.js';
+
 
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
@@ -102,7 +104,6 @@ function createMessageElement(message, index) {
     const project = stateManager.getProject();
     const LONG_TEXT_THRESHOLD = 2000;
 
-    // --- 1. สร้าง Element หลัก ---
     const turnWrapper = document.createElement('div');
     turnWrapper.className = `message-turn-wrapper ${role}-turn`;
     turnWrapper.dataset.index = index;
@@ -125,8 +126,6 @@ function createMessageElement(message, index) {
     contentDiv.className = 'message-content';
     msgDiv.appendChild(contentDiv);
 
-    // --- 2. Logic การวาดเนื้อหา ---
-
     if (isLoading) {
         contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
     } else {
@@ -136,36 +135,27 @@ function createMessageElement(message, index) {
 
         let fullTextContent = '';
         let isLong = false;
-
-        // --- [ROBUSTNESS FIX] ตรวจสอบความยาวให้รองรับทั้ง String และ Array ---
+        
         if (isSummary) {
             isLong = true;
             fullTextContent = content;
         } else if (role === 'user') {
-            if (Array.isArray(content)) { // รูปแบบใหม่
-                fullTextContent = content.filter(p => p.type === 'text').map(p => p.text).join('\n');
-            } else if (typeof content === 'string') { // รูปแบบเก่า (จาก Bug)
-                fullTextContent = content;
-            }
+            fullTextContent = Array.isArray(content) ? content.filter(p => p.type === 'text').map(p => p.text).join('\n') : (content || '');
             isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
-        } else if (role === 'assistant') { // Assistant เป็น String เสมอ
+        } else if (role === 'assistant' || role === 'system') { // <-- รวม system เข้ามา
             fullTextContent = content || '';
             isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
         }
 
-        // --- เลือกวิธีวาดหน้าจอ ---
         if (isLong) {
-            // สำหรับข้อความยาว หรือ Summary
             streamingContentSpan.innerHTML = `<div class="loading-text">Loading large message...</div>`;
             setTimeout(() => lazyRenderContent(fullTextContent, streamingContentSpan), 0);
         } else {
-            // สำหรับข้อความสั้น (ทำงานทันที)
             try {
                 if (role === 'assistant') {
                     streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
                 } else if (role === 'user') {
-                    // [ROBUSTNESS FIX] วาดให้ถูกตามประเภทของ content
-                    if (Array.isArray(content)) { // รูปแบบใหม่
+                    if (Array.isArray(content)) {
                         content.forEach(part => {
                             if (part.type === 'text' && part.text) {
                                 const p = document.createElement('p');
@@ -178,11 +168,15 @@ function createMessageElement(message, index) {
                                 streamingContentSpan.appendChild(img);
                             }
                         });
-                    } else if (typeof content === 'string') { // รูปแบบเก่า
+                    } else if (typeof content === 'string') {
                         const p = document.createElement('p');
                         p.textContent = content;
                         streamingContentSpan.appendChild(p);
                     }
+                } 
+                // [FIX] ย้ายเงื่อนไขของ system ออกมาอยู่นอก user
+                else if (role === 'system' && typeof content === 'string') {
+                    streamingContentSpan.textContent = content;
                 }
             } catch (e) {
                 console.error("Content rendering failed:", e);
@@ -227,6 +221,7 @@ function createMessageElement(message, index) {
         msgDiv.appendChild(actions);
     }
     
+
     // --- 4. ประกอบร่างสุดท้าย ---
     turnWrapper.appendChild(msgDiv);
     return turnWrapper;
@@ -339,7 +334,7 @@ export function renderMessages() {
     }
     
     // [CRITICAL DEBUG] แสดงข้อมูลทั้งหมดที่จะนำมาวาด
-    console.log("📜 [UI] History to be rendered:", JSON.parse(JSON.stringify(session.history)));
+    // console.log("📜 [UI] History to be rendered:", JSON.parse(JSON.stringify(session.history)));
 
     container.innerHTML = '';
 

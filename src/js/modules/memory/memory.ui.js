@@ -26,7 +26,12 @@ function createMemoryElement(memory, isActive, originalIndex) {
     const toggle = document.createElement('div');
     toggle.className = `memory-toggle ${isActive ? 'active' : ''}`;
     toggle.title = `Click to ${isActive ? 'deactivate' : 'activate'}`;
-    toggle.dataset.action = 'memory:toggle';
+    
+    // [FIX] เพิ่ม onclick listener โดยตรงที่นี่
+    toggle.onclick = (e) => {
+        e.stopPropagation();
+        stateManager.bus.publish('memory:toggle', { name: memory.name });
+    };
 
     const itemName = document.createElement('span');
     itemName.className = 'item-name';
@@ -41,7 +46,6 @@ function createMemoryElement(memory, isActive, originalIndex) {
     itemDiv.appendChild(itemHeader);
     return itemDiv;
 }
-
 // --- Main UI Functions ---
 
 /**
@@ -52,12 +56,11 @@ export function loadAndRenderMemories(assetsContainer) {
     const project = stateManager.getProject();
     if (!project) return;
     
-    // สร้าง Section ของ Memory ทั้งหมด
+    // 1. สร้างโครงสร้างหลักของ Memory Section
     const memorySection = document.createElement('details');
     memorySection.className = 'collapsible-section memory-section';
     memorySection.open = true;
 
-    // สร้าง Header พร้อม Dropdown
     const summary = document.createElement('summary');
     summary.className = 'section-header';
     summary.innerHTML = '<h3>🧠 Command Memories</h3>';
@@ -73,7 +76,7 @@ export function loadAndRenderMemories(assetsContainer) {
     container.className = 'section-box';
     memorySection.appendChild(container);
     
-    // ตรรกะการแสดงผล
+    // 2. ตรรกะการแสดงผล
     const activeAgentPreset = project.agentPresets?.[project.activeEntity?.name];
     if (!activeAgentPreset) {
         container.innerHTML = `<p class="no-items-message">Select an Agent to see memories.</p>`;
@@ -94,7 +97,7 @@ export function loadAndRenderMemories(assetsContainer) {
             listToUse.appendChild(createMemoryElement(memory, isActive, index));
         });
 
-        // จัดการ Sortable.js
+        // 3. จัดการ Sortable.js (ยังคงเดิม)
         if (memorySortable) memorySortable.destroy();
         memorySortable = new Sortable(activeList, {
             animation: 150,
@@ -104,7 +107,7 @@ export function loadAndRenderMemories(assetsContainer) {
                 const movedMemoryName = evt.item.dataset.name;
                 agent.activeMemories.splice(evt.oldDraggableIndex, 1);
                 agent.activeMemories.splice(evt.newDraggableIndex, 0, movedMemoryName);
-                stateManager.bus.publish('studio:contentShouldRender');
+                stateManager.bus.publish('studio:contentShouldRender'); // สั่งวาดใหม่
             }
         });
     }

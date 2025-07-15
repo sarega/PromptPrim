@@ -105,14 +105,25 @@ export function openProject() {
 export function initializeFirstProject() {
     const projectId = `proj_${Date.now()}`;
     const defaultAgentName = "Default Agent";
+    
+    // ดึงชื่อของ default memories มาสร้างเป็น array
+    const defaultMemoryNames = defaultMemories.map(mem => mem.name);
+
     return {
         id: projectId,
         name: "Untitled Project",
-        isDirtyForUser: false, // [FIX] Initialize the dirty flag within the project object
+        isDirtyForUser: false,
         activeEntity: { type: 'agent', name: defaultAgentName },
-        agentPresets: { [defaultAgentName]: { ...defaultAgentSettings, model: '', activeMemories: [] } },
+        agentPresets: { 
+            [defaultAgentName]: { 
+                ...defaultAgentSettings, 
+                model: '', 
+                // กำหนดให้ Default Agent มีความจำเหล่านี้เป็น Active โดยอัตโนมัติ
+                activeMemories: defaultMemoryNames 
+            } 
+        },
         agentGroups: {},
-        memories: JSON.parse(JSON.stringify(defaultMemories)),
+        memories: JSON.parse(JSON.stringify(defaultMemories)), // คลัง Memory กลาง
         chatSessions: [],
         activeSessionId: null,
         summaryLogs: [],
@@ -125,6 +136,7 @@ export function initializeFirstProject() {
         }
     };
 }
+
 
 export async function proceedWithCreatingNewProject() {
     console.log("Proceeding with creating a new project...");

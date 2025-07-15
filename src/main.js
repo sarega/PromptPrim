@@ -132,10 +132,11 @@ function setupEventSubscriptions() {
         SessionUI.renderSessionList();
     });
     bus.subscribe('session:autoRename', SessionHandlers.handleAutoRename);
+    bus.subscribe('session:rename', (payload) => SessionHandlers.renameChatSession(payload));
     bus.subscribe('session:clone', ({ sessionId, event }) => SessionHandlers.cloneSession(sessionId, event));
     bus.subscribe('session:archive', ({ sessionId, event }) => SessionHandlers.archiveSession(sessionId, event));
     bus.subscribe('session:pin', ({ sessionId, event }) => SessionHandlers.togglePinSession(sessionId, event));
-    bus.subscribe('session:delete', ({ sessionId, event }) => SessionHandlers.deleteChatSession(sessionId, event));
+    bus.subscribe('session:delete', (payload) => SessionHandlers.deleteChatSession(payload));
     bus.subscribe('session:download', ({ sessionId }) => SessionHandlers.downloadChatSession({ sessionId }));
 
 
@@ -154,7 +155,13 @@ function setupEventSubscriptions() {
     bus.subscribe('memory:save', MemoryHandlers.saveMemory);
     bus.subscribe('memory:edit', ({ index }) => MemoryUI.showMemoryEditor(index));
     bus.subscribe('memory:delete', ({ index }) => MemoryHandlers.deleteMemory({ index }));
-    bus.subscribe('memory:toggle', ({ name }) => MemoryHandlers.toggleMemory({ name }));
+    bus.subscribe('memory:toggle', (payload) => {
+        MemoryHandlers.toggleMemory(payload);
+    });
+    
+    bus.subscribe('memory:exportPackage', MemoryHandlers.saveMemoryPackage);
+    bus.subscribe('memory:importPackage', () => { document.getElementById('load-memory-package-input').click(); });
+
     bus.subscribe('studio:itemClicked', ProjectHandlers.handleStudioItemClick); 
     bus.subscribe('summary:view', ({ logId }) => SummaryUI.showSummaryModal(logId));
     bus.subscribe('summary:load', ({ logId }) => ChatHandlers.loadSummaryIntoContext(logId));
@@ -162,10 +169,12 @@ function setupEventSubscriptions() {
     bus.subscribe('entity:select', ({ type, name }) => ProjectHandlers.selectEntity(type, name));
 
     // Chat Actions
+    bus.subscribe('chat:deleteMessage', (payload) => ChatHandlers.deleteMessage(payload));
+
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
     bus.subscribe('chat:stopGeneration', ChatHandlers.stopGeneration);
     bus.subscribe('chat:editMessage', ({ index }) => ChatHandlers.editMessage({ index }));
-    bus.subscribe('chat:deleteMessage', ({ index }) => ChatHandlers.deleteMessage({ index }));
+    // bus.subscribe('chat:deleteMessage', ({ index }) => ChatHandlers.deleteMessage({ index }));
     bus.subscribe('chat:copyMessage', ({ index, event }) => ChatHandlers.copyMessageToClipboard({ index, event }));
     bus.subscribe('chat:regenerateMessage', ({ index }) => ChatHandlers.regenerateMessage({ index }));
 
@@ -271,6 +280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initializeUI();
         setupEventSubscriptions();
         ProjectHandlers.setupAutoSaveChanges();
+        document.getElementById('load-memory-package-input').addEventListener('change', MemoryHandlers.loadMemoryPackage);
 
         // --- [DEFINITIVE FIX] เพิ่ม try...catch เพื่อจัดการ Error ตอนโหลดโปรเจกต์ ---
         const lastProjectId = localStorage.getItem('lastActiveProjectId');

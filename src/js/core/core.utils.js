@@ -45,14 +45,14 @@ export function formatTimestamp(timestamp) {
 
 
 /**
- * คลาสสำหรับจัดการการแสดงผล Markdown แบบสดๆ จาก Stream
- * ช่วยแยก Logic การ render UI ออกจากฟังก์ชันหลัก
+ * [FINAL VERSION] คลาสสำหรับจัดการการแสดงผล Markdown แบบสดๆ จาก Stream
+ * เวอร์ชันนี้จะไม่มีการเรียกใช้ ChatUI หรือโมดูลภายนอกอื่นใดๆ
  */
 export class LiveMarkdownRenderer {
     constructor(placeholderElement) {
         this.contentDiv = placeholderElement.querySelector('.message-content .streaming-content');
         this.accumulatedMarkdown = '';
-        this.isInsideCodeBlock = false; // สถานะว่ากำลังอยู่ใน ```code block``` หรือไม่
+        this.isInsideCodeBlock = false;
         this.renderTimeout = null;
         this.debounceDelay = 40; // ms
         
@@ -67,37 +67,30 @@ export class LiveMarkdownRenderer {
      */
     streamChunk = (chunk) => {
         this.accumulatedMarkdown += chunk;
-        // ใช้ debounce เพื่อไม่ให้ render บ่อยเกินไป
         clearTimeout(this.renderTimeout);
         this.renderTimeout = setTimeout(this.render, this.debounceDelay);
     };
 
     /**
-     * ตรรกะการ render หลัก
-     * - ถ้าอยู่ใน code block จะแสดงเป็น text ธรรมดาใน <pre> เพื่อความเร็วและถูกต้อง
-     * - ถ้านอก code block จะใช้ marked.parse() เพื่อแสดงผล Markdown
+     * ตรรกะการ render หลัก (ไม่มีการเรียก scrollToBottom)
      */
     render = () => {
         try {
             const inUnclosedCodeBlock = (this.accumulatedMarkdown.match(/```/g) || []).length % 2 === 1;
 
             if (inUnclosedCodeBlock || this.isInsideCodeBlock) {
-                // เมื่อเข้าสู่ code block แล้ว จะแสดงเป็น <pre> ไปเรื่อยๆ จนกว่าจะปิด
                 const escapedText = this.accumulatedMarkdown
                     .replace(/&/g, "&amp;")
                     .replace(/</g, "&lt;")
                     .replace(/>/g, "&gt;");
                 this.contentDiv.innerHTML = `<pre class="streaming-code-preview">${escapedText}</pre>`;
             } else {
-                // นอก code block ให้ render เป็น Markdown ตามปกติ
                 this.contentDiv.innerHTML = marked.parse(this.accumulatedMarkdown, { gfm: true, breaks: false });
             }
             this.isInsideCodeBlock = inUnclosedCodeBlock;
         } catch (e) {
-            // หากเกิดข้อผิดพลาดในการ parse ให้แสดงเป็น text ธรรมดาไปก่อน
             this.contentDiv.textContent = this.accumulatedMarkdown;
         }
-        ChatUI.scrollToBottom();
     };
     
     /**

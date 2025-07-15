@@ -21,9 +21,15 @@ export function saveAgentGroup() {
         showCustomAlert("Group name cannot be empty.", "Error");
         return;
     }
-
     if (newName !== editingGroupName && project.agentGroups[newName]) {
         showCustomAlert(`A group named "${newName}" already exists.`, "Error");
+        return;
+    }
+
+    // [FIX] เพิ่มการตรวจสอบ Moderator
+    const moderatorAgent = document.getElementById('group-moderator-select').value;
+    if (!moderatorAgent) {
+        showCustomAlert("Please select a Moderator for the group.", "Error");
         return;
     }
 
@@ -35,36 +41,34 @@ export function saveAgentGroup() {
 
     const finalAgentList = allSortedAgentNames.filter(name => selectedAgentNames.includes(name));
 
+    if (finalAgentList.length === 0) {
+        showCustomAlert("A group must have at least one member.", "Error");
+        return;
+    }
+
     const groupData = {
         agents: finalAgentList,
-        moderatorAgent: document.getElementById('group-moderator-select').value,
+        moderatorAgent: moderatorAgent, // <-- ใช้ค่าที่ตรวจสอบแล้ว
         flowType: document.getElementById('group-flow-select').value,
         maxTurns: parseInt(document.getElementById('group-max-turns-input').value, 10),
-        timerInSeconds: parseInt(document.getElementById('group-timer-input').value, 10), // เพิ่ม field ใหม่
+        timerInSeconds: parseInt(document.getElementById('group-timer-input').value, 10),
         summarizationTokenThreshold: parseInt(document.getElementById('group-summarization-threshold-input').value, 10)
     };
 
     if (editingGroupName && editingGroupName !== newName) {
         delete project.agentGroups[editingGroupName];
         project.chatSessions.forEach(session => {
-            if (session.linkedEntity?.type === 'group' && session.linkedEntity?.name === editingGroupName) {
+            if (session.linkedEntity?.type === 'group' && session.linkedEntity.name === editingGroupName) {
                 session.linkedEntity.name = newName;
             }
         });
     }
 
     project.agentGroups[newName] = groupData;
-
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-
-    // [FIX] แก้ไขการปิด Modal ให้ถูกต้อง
-    // แทนที่จะเรียกฟังก์ชัน UI โดยตรง ให้ส่ง Event ไปบอก UI ให้ปิดตัวเอง
     stateManager.bus.publish('group:editorShouldClose');
-    
     showCustomAlert(`Group "${newName}" saved successfully.`, "Success");
-    
-    // สั่งให้ Studio วาด UI ใหม่ทั้งหมดเพียงครั้งเดียวหลังจากทุกอย่างเสร็จสิ้น
     stateManager.bus.publish('studio:contentShouldRender');
 }
 

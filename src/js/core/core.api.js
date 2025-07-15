@@ -5,88 +5,91 @@
 
 import { stateManager } from './core.state.js';
 
+const modelCapabilities = {
+    // Perplexity ไม่ต้องการ params ส่วนใหญ่และไม่รู้จัก tools parameter
+    'perplexity/sonar-small-online': { penalties: false, seed: false, top_k: false, tools: false },
+    'perplexity/sonar-medium-online': { penalties: false, seed: false, top_k: false, tools: false },
+    // Grok (xAI) ไม่รองรับ Penalties และ Seed
+    'xai/grok-1.5': { penalties: false, seed: false },
+};
+
+/**
+ * ฟังก์ชันตรวจสอบความสามารถของโมเดลแบบยืดหยุ่น
+ * @param {string} modelId - ID ของโมเดล
+ * @param {string} capability - ชื่อความสามารถที่ต้องการตรวจสอบ (e.g., 'penalties', 'seed', 'tools')
+ * @returns {boolean} - คืนค่า true ถ้าโมเดลรองรับ, false ถ้าไม่รองรับ
+ */
+function getCapability(modelData, capability) {
+    if (!modelData || !modelData.id) return false; // เพิ่มการป้องกัน
+
+    const modelId = modelData.id;
+    const specificCaps = modelCapabilities[modelId];
+    if (specificCaps && specificCaps[capability] !== undefined) {
+        return specificCaps[capability];
+    }
+
+    switch (capability) {
+        case 'penalties':
+        case 'seed':
+            return !modelId.startsWith('xai/') && !modelId.startsWith('perplexity/');
+        case 'tools':
+            // [FIX] แก้ไข Logic นี้ให้ใช้ modelData ที่รับเข้ามา
+            return !modelId.startsWith('perplexity/') && modelData.supports_tools;
+        default:
+            return true;
+    }
+}
+
 // --- Helper sub-functions (not exported, private to this module) ---
 async function fetchOpenRouterModels(apiKey) {
     const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { 'Authorization': `Bearer ${apiKey}` } });
     if (!response.ok) throw new Error('Could not fetch models from OpenRouter');
     const data = await response.json();
-    return data.data.map(m => ({ id: m.id, name: m.name || m.id, provider: 'openrouter' }));
+    return data.data.map(m => ({ 
+        id: m.id, 
+        name: m.name || m.id, 
+        provider: 'openrouter',
+        supports_tools: m.architecture?.tool_use === true 
+    }));
 }
 
 async function fetchOllamaModels(baseUrl) {
     try {
         const response = await fetch(`${baseUrl}/api/tags`);
-        if (!response.ok) throw new Error(`Could not connect to Ollama (HTTP ${response.status})`);
+        if (!response.ok) throw new Error(`Ollama connection failed (HTTP ${response.status})`);
         const data = await response.json();
-        return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama'}));
+        return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama', supports_tools: false }));
     } catch (error) {
-        if (error instanceof TypeError) throw new Error('Could not connect to Ollama. Check URL, server status, and CORS settings.');
-        throw error;
+        throw new Error('Could not connect to Ollama. Check URL and CORS settings.');
     }
 }
 
-/**
- * [REWRITTEN] A robust fetch helper that supports both an external AbortSignal
- * (for the stop button) and an internal timeout.
- * @param {string} resource - The URL to fetch.
- * @param {object} options - The options for the fetch request, may include a signal.
- * @param {number} [timeout=120000] - The timeout in milliseconds.
- * @returns {Promise<Response>}
- */
 async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
-    // 1. สร้าง AbortController สำหรับ Timeout โดยเฉพาะ
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), timeout);
-
-    // 2. [สำคัญที่สุด] รวม signal จากภายนอก (ปุ่ม Stop) กับ signal ของ Timeout
-    // โดยใช้ AbortSignal.any() ซึ่งจะทำงานเมื่อ signal ใด signal หนึ่งถูกเรียก
-    // ทำให้ไม่ว่าจะเป็นการกดปุ่ม Stop หรือ Timeout ก็สามารถหยุด fetch ได้
-    const abortSignal = AbortSignal.any([
-        options.signal,
-        timeoutController.signal
-    ].filter(Boolean)); // .filter(Boolean) เพื่อกรอง signal ที่อาจเป็น null ออกไป
-
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const signal = AbortSignal.any([options.signal, controller.signal].filter(Boolean));
     try {
-        // 3. ส่ง AbortSignal ที่รวมแล้วเข้าไปใน fetch request
-        const response = await fetch(resource, {
-            ...options,
-            signal: abortSignal,
-        });
-        return response;
+        return await fetch(resource, { ...options, signal });
     } finally {
-        // 4. ไม่ว่า fetch จะสำเร็จหรือล้มเหลว ให้เคลียร์ Timeout เสมอ
-        clearTimeout(timeoutId);
+        clearTimeout(id);
     }
 }
-
 
 // --- Main Exported Functions ---
 
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-    
     const project = JSON.parse(JSON.stringify(stateManager.getProject()));
-    if (!project || !project.globalSettings) {
-        stateManager.bus.publish('status:update', { message: 'Project not loaded', state: 'error' });
-        return;
-    }
-
+    if (!project || !project.globalSettings) return;
     const apiKey = project.globalSettings.apiKey?.trim() || '';
     const baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
-    
     let allModels = [];
     try {
         const fetchPromises = [];
-        if (apiKey) {
-            fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
-        }
-
-        // [CORS FIX] พยายามเชื่อมต่อ Ollama เฉพาะเมื่ออยู่ในโหมด DEV เท่านั้น
+        if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
         if (import.meta.env.DEV && baseUrl) {
-            console.log("DEV mode detected. Attempting to fetch Ollama models.");
             fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
         }
-
         const results = await Promise.all(fetchPromises);
         allModels = results.flat();
     } catch (error) {
@@ -94,202 +97,139 @@ export async function loadAllProviderModels() {
         return;
     }
 
-    // --- [FIX 2] ปรับปรุง Logic การตั้งค่า Default Model ---
+    // --- [DEFINITIVE LOGIC FIX] แก้ไขตรรกะการตั้งค่า Default Model ---
     let projectWasChanged = false;
     if (allModels.length > 0) {
-        // สร้างรายการ Model เริ่มต้นที่ต้องการ โดยเรียงตามลำดับความสำคัญ
-        const preferredDefaults = [
-            'google/gemma-3-27b-it',
-            'google/gemma-2-9b-it',
-            'openai/gpt-4o-mini',
-            'mistralai/mistral-7b-instruct'
-        ];
-        
-        // หา Model แรกที่เจอในรายการ `preferredDefaults` ที่ผู้ใช้มี
-        const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
+        const systemAgent = project.globalSettings.systemUtilityAgent;
+        const defaultAgent = project.agentPresets['Default Agent'];
 
-        if (availableDefaultModel) {
-            // 1. อัปเดต System Utility Agent
-            const systemAgent = project.globalSettings.systemUtilityAgent;
-            if (!systemAgent.model) { // ตั้งค่าให้เฉพาะเมื่อยังไม่มี model เท่านั้น
+        // 1. ตรวจสอบและตั้งค่า System Utility Agent ก่อน
+        if (!systemAgent.model || !allModels.some(m => m.id === systemAgent.model)) {
+            const preferredDefaults = [
+                'google/gemma-3-27b-it',
+                'google/gemma-2-9b-it',
+                'openai/gpt-4o-mini',
+                'mistralai/mistral-7b-instruct'
+            ];
+            const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
+            if (availableDefaultModel) {
                 systemAgent.model = availableDefaultModel;
                 projectWasChanged = true;
-                console.log(`System Utility Agent model set to: ${availableDefaultModel}`);
+                console.log(`System Utility Agent model set to default: ${availableDefaultModel}`);
             }
-
-            // 2. อัปเดต Default Agent
-            const defaultAgent = project.agentPresets['Default Agent'];
-            if (defaultAgent && !defaultAgent.model) {
-                defaultAgent.model = availableDefaultModel;
-                projectWasChanged = true;
-                console.log(`'Default Agent' model set to: ${availableDefaultModel}`);
-            }
+        }
+        
+        // 2. [KEY FIX] ตั้งค่า Default Agent ให้ใช้ Model เดียวกันกับ System Utility Agent เสมอ (ถ้ายังไม่มี)
+        if (defaultAgent && (!defaultAgent.model || !allModels.some(m => m.id === defaultAgent.model))) {
+            // ใช้โมเดลจาก System Utility Agent ที่เพิ่งอัปเดตไป
+            defaultAgent.model = systemAgent.model;
+            projectWasChanged = true;
+            console.log(`'Default Agent' model set to match System Utility Agent: ${defaultAgent.model}`);
         }
     }
     
-    // --- [FIX 3] จัดการ State Update และ UI Re-render อย่างเป็นขั้นตอน ---
-    
-    // 1. อัปเดตรายชื่อ Model ทั้งหมดใน State (จะ trigger ให้ dropdown แสดงผล)
+    // --- จัดการ State Update และ UI Re-render อย่างเป็นขั้นตอน ---
     stateManager.setAllModels(allModels);
     
-    // 2. ถ้ามีการเปลี่ยนแปลงค่า Default Model ให้ทำการอัปเดต project state ทั้งก้อน
     if (projectWasChanged) {
-        stateManager.setProject(project); // อัปเดต state ใน memory
-        await stateManager.updateAndPersistState(); // สั่งให้เซฟลง DB และตั้งค่า isDirty
+        stateManager.setProject(project);
+        await stateManager.updateAndPersistState();
     }
     
-    // 3. แจ้งสถานะสุดท้าย
     const statusMessage = allModels.length > 0 ? `Loaded ${allModels.length} models.` : 'No models found. Check API Settings.';
     stateManager.bus.publish('status:update', { message: statusMessage, state: 'connected' });
+
 }
 
-export async function callLLM(agent, messages) {
+export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
+    if (!project) return "";
+    let entityAgent;
+    const activeEntity = project.activeEntity;
+    const targetName = agentName || activeEntity?.name;
+    const targetType = agentName ? 'agent' : activeEntity?.type;
+    if (!targetName) return "";
+    if (targetType === 'agent') {
+        entityAgent = project.agentPresets?.[targetName];
+    } else if (targetType === 'group') {
+        const group = project.agentGroups?.[targetName];
+        entityAgent = project.agentPresets?.[group?.moderatorAgent];
+    }
+    if (!entityAgent) return "";
+    let basePrompt = entityAgent.systemPrompt || "";
+    const activeMemoryNames = entityAgent.activeMemories || [];
+    if (activeMemoryNames.length === 0) {
+        return basePrompt.trim();
+    }
+    const memoryContent = activeMemoryNames
+        .map(name => {
+            const memory = project.memories.find(m => m.name === name);
+            return memory ? memory.content : '';
+        })
+        .filter(content => content)
+        .join('\n\n');
+    if (!memoryContent) {
+        return basePrompt.trim();
+    }
+    const finalPrompt = `${basePrompt.trim()}\n\n--- Active Memories ---\n${memoryContent}`;
+    return finalPrompt;
+}
+
+export function buildPayloadMessages(history, targetAgentName) {
+    const project = stateManager.getProject();
+    const agent = project.agentPresets[targetAgentName];
+    if (!agent) return [];
+    
+    // [FIX] ดึงข้อมูล modelData มาเพื่อตรวจสอบความสามารถ
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
-    if (!modelData) throw new Error("Model data not found for the agent.");
+    
+    const messages = [];
+    const finalSystemPrompt = getFullSystemPrompt(targetAgentName);
+    if (finalSystemPrompt) {
+        messages.push({ role: 'system', content: finalSystemPrompt });
+    }
 
-    const provider = modelData.provider;
-    let url, headers, body;
+    history.forEach(msg => {
+        if (msg.isLoading || !msg.content) return;
 
-    const params = {
-        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
-        seed: parseInt(agent.seed, 10),
-    }; // <-- [SYNTAX FIX] เพิ่มวงเล็บปิด
-    if (agent.stop_sequences) { params.stop = agent.stop_sequences.split(',').map(s => s.trim()); }
+        let apiMessageContent = msg.content;
 
-    if (provider === 'openrouter') {
-        url = 'https://openrouter.ai/api/v1/chat/completions';
-        headers = { 
-            'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
-            'X-Title': 'PromptPrim' 
-        };
-        body = { model: agent.model, messages, stream: false, ...params };
+        // --- Logic การแปลง Content ---
+        // ถ้าเป็น Array (มีโอกาสเป็น multimodal)
+        if (Array.isArray(apiMessageContent)) {
+            // ตรวจสอบว่า Model นี้รองรับ Array content หรือไม่
+            // (สมมติว่าเฉพาะ OpenRouter ที่รองรับ และ Ollama ไม่รองรับ)
+            const supportsMultimodalArray = modelData?.provider === 'openrouter';
 
-        if (!modelData.id.startsWith('perplexity/') && modelData.supports_tools) {
-            body.tools = [{ "type": "Google Search" }]; // <-- [SYNTAX FIX]
+            if (supportsMultimodalArray) {
+                // สำหรับ OpenRouter: แปลง image_url format ให้ถูกต้อง
+                apiMessageContent = apiMessageContent.map(part => {
+                    if (part.type === 'image_url') {
+                        return { type: 'image_url', image_url: { url: part.url } };
+                    }
+                    return part;
+                });
+            } else {
+                // สำหรับ Ollama: แปลง Array ให้เป็น String ล้วนๆ
+                apiMessageContent = apiMessageContent
+                    .filter(part => part.type === 'text' && part.text)
+                    .map(part => part.text)
+                    .join('\n');
+            }
         }
-    } else { // ollama
-        url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
-        headers = { 'Content-Type': 'application/json' };
-        // [SYNTAX FIX] สร้าง options จาก params โดยตรง
-        body = { model: agent.model, messages, stream: false, options: params };
-    }
-
-    try {
-        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
-        if (!response.ok) { const errorText = await response.text(); throw new Error(`API Error: ${errorText}`); }
-        const data = await response.json();
-        if (provider === 'openrouter' && data.choices?.length > 0) return data.choices[0].message.content;
-        if (provider === 'ollama' && data.message) return data.message.content;
-        throw new Error("Invalid API response structure.");
-    } catch (error) {
-        console.error("callLLM failed:", error);
-        throw error;
-    }
-}
-
-export async function streamLLMResponse(agent, messages, onChunk) {
-    const project = stateManager.getProject();
-    const allModels = stateManager.getState().allProviderModels;
-
-    // [CRITICAL FIX] บรรทัดนี้คือบรรทัดที่หายไป ทำให้เกิด ReferenceError
-    // มันทำหน้าที่ค้นหาข้อมูลของโมเดลที่กำลังใช้งานอยู่ (เช่น provider, supports_tools)
-    const modelData = allModels.find(m => m.id === agent.model);
-    if (!modelData) {
-        // เพิ่มการป้องกัน ถ้าหา modelData ไม่เจอ ให้โยน Error ที่ชัดเจน
-        throw new Error(`Model data for agent.model ID '${agent.model}' not found in allProviderModels state.`);
-    }
-
-    const statusMessage = `Responding with ${modelData.name || agent.model}...`;
-    stateManager.bus.publish('status:update', { message: statusMessage, state: 'loading' });
-
-    const provider = modelData.provider;
-    let url, headers, body;
-
-    const params = {
-        temperature: parseFloat(agent.temperature), top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10), presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty), max_tokens: parseInt(agent.max_tokens, 10),
-        seed: parseInt(agent.seed, 10),
-    };
-    if (agent.stop_sequences) { params.stop = agent.stop_sequences.split(',').map(s => s.trim()); }
-
-    if (provider === 'openrouter') {
-        url = 'https://openrouter.ai/api/v1/chat/completions';
-        headers = { 
-            'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/', // แก้เป็น URL ของคุณ
-            'X-Title': 'PromptPrim'
+        
+        const apiMessage = {
+            role: msg.role,
+            content: apiMessageContent
         };
         
-        if (modelData.id.startsWith('perplexity/')) {
-            body = {
-                model: agent.model, messages, stream: true,
-                tools: [{ "type": "Google Search" }]
-            };
-        } else {
-            body = {
-                model: agent.model, messages, stream: true, ...params
-            };
-            if (modelData.supports_tools) {
-                body.tools = [{ "type": "Google Search" }];
-            }
-        }
-    } else { // ollama
-        url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
-        headers = { 'Content-Type': 'application/json' };
-        body = { model: agent.model, messages, stream: true, options: params };
-    }
+        messages.push(apiMessage);
+    });
 
-    try {
-        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body), signal: stateManager.getState().abortController?.signal });
-        if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = '';
-        let fullResponseText = '';
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-            for (const line of lines) {
-                if (line.trim() === '') continue;
-                let token = '';
-                try {
-                    if (provider === 'openrouter') {
-                        if (!line.startsWith('data: ')) continue;
-                        const jsonStr = line.replace(/^data: /, '').trim();
-                        if (jsonStr === '[DONE]') break;
-                        const data = JSON.parse(jsonStr);
-                        token = data.choices?.[0]?.delta?.content || '';
-                    } else {
-                        const data = JSON.parse(line);
-                        token = data.message?.content || '';
-                    }
-                } catch (e) { console.warn("Skipping malformed JSON chunk:", line); }
-                if (token) {
-                    fullResponseText += token;
-                    onChunk(token);
-                }
-            }
-        }
-        return fullResponseText;
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-             console.error("Streaming failed:", error);
-             stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
-        }
-        throw error;
-    }
+    return messages;
 }
+
 export async function generateAndRenameSession(history){
      try{
         const project = stateManager.getProject();
@@ -322,5 +262,153 @@ export async function generateAndRenameSession(history){
         }
     } catch(e) {
         console.error("Auto-rename failed:", e);
+    }
+}
+
+function constructApiCall(agent, messages, stream = false) {
+    const project = stateManager.getProject();
+    const allModels = stateManager.getState().allProviderModels;
+    const modelData = allModels.find(m => m.id === agent.model);
+    if (!modelData) throw new Error(`Model data for agent.model ID '${agent.model}' not found.`);
+
+    const provider = modelData.provider;
+    let url, headers, body;
+
+    const commonParams = {
+        temperature: parseFloat(agent.temperature),
+        top_p: parseFloat(agent.topP),
+        top_k: parseInt(agent.topK, 10),
+        presence_penalty: parseFloat(agent.presence_penalty),
+        frequency_penalty: parseFloat(agent.frequency_penalty),
+        max_tokens: parseInt(agent.max_tokens, 10),
+        seed: parseInt(agent.seed, 10),
+        stop: agent.stop_sequences ? agent.stop_sequences.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+    };
+
+    if (provider === 'openrouter') {
+        url = 'https://openrouter.ai/api/v1/chat/completions';
+        headers = { 
+            'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
+            'X-Title': 'PromptPrim' 
+        };
+
+        const safeParams = {
+            temperature: commonParams.temperature,
+            top_p: commonParams.top_p,
+            max_tokens: commonParams.max_tokens,
+        };
+
+        // [FIX] ส่ง modelData เข้าไปใน getCapability
+        if (getCapability(modelData, 'top_k') && commonParams.top_k > 0) {
+            safeParams.top_k = commonParams.top_k;
+        }
+        if (getCapability(modelData, 'penalties')) {
+            safeParams.presence_penalty = commonParams.presence_penalty;
+            safeParams.frequency_penalty = commonParams.frequency_penalty;
+        }
+        if (getCapability(modelData, 'seed') && commonParams.seed !== -1) {
+            safeParams.seed = commonParams.seed;
+        }
+        if (commonParams.stop) {
+            safeParams.stop = commonParams.stop;
+        }
+
+        body = { model: agent.model, messages, stream, ...safeParams };
+        
+        // [FIX] ส่ง modelData เข้าไปใน getCapability
+        if (getCapability(modelData, 'tools')) {
+            body.tools = [{ "type": "Google Search" }];
+        }
+
+    } else { // ollama
+        url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
+        headers = { 'Content-Type': 'application/json' };
+        
+        const ollamaOptions = {
+            temperature: commonParams.temperature,
+            top_p: commonParams.top_p,
+            top_k: commonParams.top_k,
+            num_predict: commonParams.max_tokens,
+            seed: commonParams.seed,
+            stop: commonParams.stop,
+        };
+        Object.keys(ollamaOptions).forEach(key => (ollamaOptions[key] == null || Number.isNaN(ollamaOptions[key])) && delete ollamaOptions[key]);
+        body = { model: agent.model, messages, stream, options: ollamaOptions };
+    }
+
+    return { url, headers, body, provider };
+}
+
+
+// =========================================================================
+// == MAIN EXPORTED API FUNCTIONS (Unchanged, they use the new constructor)
+// =========================================================================
+
+export async function streamLLMResponse(agent, messages, onChunk) {
+    const { url, headers, body, provider } = constructApiCall(agent, messages, true);
+    try {
+        stateManager.bus.publish('status:update', { message: `Responding with ${agent.model}...`, state: 'loading' });
+        console.log('[OLLAMA CALL]', { url, headers, body });
+        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body), signal: stateManager.getState().abortController?.signal });
+        if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = '';
+        let fullResponseText = '';
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (line.trim() === '' || line.startsWith(':')) continue;
+                let token = '';
+                try {
+                    if (provider === 'openrouter') {
+                        if (line.startsWith('data: ')) {
+                            const jsonStr = line.replace(/^data: /, '').trim();
+                            if (jsonStr === '[DONE]') break;
+                            const data = JSON.parse(jsonStr);
+                            token = data.choices?.[0]?.delta?.content || '';
+                        }
+                    } else { // ollama
+                        const data = JSON.parse(line);
+                        token = data.message?.content || '';
+                    }
+                } catch (e) { console.warn("Skipping malformed JSON chunk:", line); }
+                if (token) {
+                    fullResponseText += token;
+                    onChunk(token);
+                }
+            }
+        }
+        return fullResponseText;
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+             console.error("Streaming failed:", error);
+             stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
+        }
+        throw error;
+    }
+}
+
+export async function callLLM(agent, messages) {
+    const { url, headers, body, provider } = constructApiCall(agent, messages, false);
+    try {
+        console.log('[OLLAMA CALL]', { url, headers, body });
+        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        if (!response.ok) { const errorText = await response.text(); throw new Error(`API Error: ${response.status} ${errorText}`); }
+        const data = await response.json();
+        if (provider === 'openrouter' && data.choices?.length > 0) return data.choices[0].message.content;
+        if (provider === 'ollama' && data.message) return data.message.content;
+        throw new Error("Invalid API response structure.");
+    } catch (error) {
+        console.error("callLLM failed:", error);
+        throw error;
     }
 }

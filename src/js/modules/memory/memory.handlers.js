@@ -7,16 +7,19 @@ import { showCustomAlert } from '../../core/core.ui.js';
 
 export function toggleMemory({ name }) {
     const project = stateManager.getProject();
-    if (project.activeEntity?.type !== 'agent') return;
     const agent = project.agentPresets[project.activeEntity.name];
-    if (!agent) return;
-    
-    agent.activeMemories = agent.activeMemories || [];
-    const index = agent.activeMemories.indexOf(name);
-    if (index > -1) {
-        agent.activeMemories.splice(index, 1);
+    if (!agent) {
+        return;
+    }
+
+    const currentActiveMemories = agent.activeMemories || [];
+    const isActive = currentActiveMemories.includes(name);
+
+    // ใช้ Immutable update เพื่อสร้าง Array ใหม่เสมอ
+    if (isActive) {
+        agent.activeMemories = currentActiveMemories.filter(memName => memName !== name);
     } else {
-        agent.activeMemories.push(name);
+        agent.activeMemories = [...currentActiveMemories, name];
     }
     
     stateManager.updateAndPersistState();
@@ -65,12 +68,18 @@ export function saveMemory() {
 }
 
 export function deleteMemory({ index }) {
+    // [CRITICAL FIX] เพิ่มการถามยืนยันกลับเข้ามา
+    if (!confirm("Are you sure you want to permanently delete this memory? This cannot be undone.")) {
+        return; // ถ้าผู้ใช้กด Cancel ให้ออกจากฟังก์ชันทันที
+    }
+
     const project = stateManager.getProject();
     if (!project.memories[index]) return;
 
     const nameToDelete = project.memories[index].name;
     project.memories.splice(index, 1);
     
+    // ลบ Memory ที่ถูกลบออกจาก Agent ทั้งหมดที่เคยใช้งาน
     Object.values(project.agentPresets).forEach(agent => {
         if (agent.activeMemories) {
             const memIndex = agent.activeMemories.indexOf(nameToDelete);
@@ -79,9 +88,10 @@ export function deleteMemory({ index }) {
     });
     
     stateManager.updateAndPersistState();
+    
+    // ส่งสัญญาณบอกให้ Studio วาด UI ใหม่ทั้งหมด
     stateManager.bus.publish('studio:contentShouldRender');
 }
-
 
 export function saveMemoryPackage() {
     try {
