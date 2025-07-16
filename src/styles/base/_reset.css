@@ -33,3 +33,30 @@ html, body {
     width: 100%;
     height: 100%;
 }
+
+/*
+  Disable text selection on interactive UI elements to improve UX
+  and prevent accidental highlighting on long-press/drag.
+*/
+button,
+label,
+.btn,
+.btn-icon,
+.item-icon,
+.material-symbols-outlined,
+.custom-select-trigger,
+.app-main-title,
+.project-title,
+.item-name,
+.speaker-label,
+.section-header h3,
+.collapsible-section > summary,
+.item,
+.item-header,
+.no-items-message /* << เพิ่ม selector ของข้อความ placeholder นี้เข้ามา */
+{
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
