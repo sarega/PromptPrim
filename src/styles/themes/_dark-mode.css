@@ -63,6 +63,19 @@ body.dark-mode .item-list > .item:hover {
     border-color: #5a6b82;
 }
 
+/* [FIX] กำหนดสไตล์สำหรับลิงก์ใน Assistant Bubble ของ Dark Mode โดยเฉพาะ */
+body.dark-mode .message.assistant .message-content a {
+    color: #90caf9; /* สีฟ้าสว่างที่อ่านง่ายบนพื้นหลังสีเข้ม */
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+body.dark-mode .message.assistant .message-content a:hover {
+    color: #bbdefb; /* สีจะสว่างขึ้นเมื่อนำเมาส์ไปวาง */
+}
+/* [FIX]
+
 /* [ADD THIS] เพิ่มกฎสำหรับ Item ที่ active และถูก hover พร้อมกัน */
 body.dark-mode .item-list > .item.active:hover {
     background-color: #2c4736;          /* <--- ใช้สีเดียวกับ .active */
@@ -223,4 +236,40 @@ body.dark-mode *::-webkit-scrollbar-thumb:hover {
 body.dark-mode .item-list > .item.active:hover {
     background-color: #2c4736; /* ใช้สีเดียวกับ .active */
     border-color: var(--success-color);
+}
+
+/*
+  Fix for Chat Action Buttons on Dark Theme
+*/
+body.dark-mode .message-actions button {
+  color: var(--text-dark); /* <-- ตัวแปรนี้จะเป็นสีขาวนวลใน Dark Mode */
+}
+
+body.dark-mode .message-actions button:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* <-- ทำให้มีพื้นหลังจางๆ ตอน hover */
+}
+
+body.dark-mode .message.user .message-actions button {
+  color: var(--text-dark); /* บังคับให้ปุ่มของ User เป็นสีขาวในโหมดมืด */
+}
+
+/* --- Timestamp color for Dark Theme (Definitive) --- */
+body.dark-mode .message-timestamp {
+  color: #64748b; /* สีจางๆ ที่สวยงามสำหรับ Dark theme */
+}
+
+body.dark-mode .speaker-info-wrapper .speaker-label {
+    color: var(--primary-color);
+}
+
+/*
+  Fix for hyperlink color in Composer on Dark Theme
+*/
+body.dark-mode #composer-editor .composer-content-area a {
+  color: #90caf9; /* << ใช้สีฟ้าสว่างสีเดียวกันกับใน Bubble */
+  text-decoration: underline;
+}
+
+body.dark-mode #composer-editor .composer-content-area a:hover {
+  color: #bbdefb; /* << สีตอน hover ก็ใช้สีเดียวกัน */
 }

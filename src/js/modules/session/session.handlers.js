@@ -40,20 +40,15 @@ const getActiveProject = () => stateManager.getProject(stateManager.activeProjec
  * persists the state, and loads it into the UI.
  */
 export function createNewChatSession() {
-    const project = getActiveProject();
-    // [FIX] The active entity is a property of the project object, not a method on stateManager.
+    const project = stateManager.getProject();
     const activeEntity = project?.activeEntity;
-
-    if (!project || !activeEntity) {
-        showCustomAlert("Please create or select an agent/group first.", "Error");
-        return;
-    }
+    if (!project || !activeEntity) return;
 
     const newSession = {
-        id: generateUniqueId(),
+        id: `sid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: 'New Chat',
-        history: [], // <--- แก้ไขตรงนี้
-        composerContent: "", // [FIX] เพิ่ม property นี้เข้าไปใน session ที่สร้างใหม่
+        history: [],
+        composerContent: "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
         pinned: false,
@@ -62,82 +57,15 @@ export function createNewChatSession() {
         summaryState: { activeSummaryId: null, summarizedUntilIndex: -1 }
     };
 
-    // 1. Modify state in memory
     project.chatSessions.unshift(newSession);
     project.activeSessionId = newSession.id;
 
-    // 2. Persist the entire project state
-    stateManager.updateAndPersistState(project);
-
-    // 3. Update the UI by loading the new session
+    // [FIX] เปลี่ยนจากการสั่ง save มาเป็นการ set state ใน memory เท่านั้น
+    stateManager.setProject(project);
+    
+    // โหลด session ใหม่เข้า UI (ฟังก์ชันนี้ปลอดภัย)
     loadChatSession(newSession.id);
 }
-
-// export function loadChatSession(sessionId) {
-//     const project = stateManager.getProject();
-//     if (!project) return;
-
-//     // ส่วนจัดการกรณีไม่มี sessionId (เคลียร์หน้าจอ)
-//     if (!sessionId) {
-//         project.activeSessionId = null;
-//         stateManager.updateAndPersistState(project);
-//         // ใช้ setTimeout กับส่วนนี้ด้วยเพื่อความปลอดภัย
-//         setTimeout(() => {
-//             ChatUI.clearChat();
-//             ComposerUI.setContent('');
-//             SessionUI.renderSessionList();
-//         }, 0);
-//         return;
-//     }
-    
-//     const session = project.chatSessions.find(s => s.id === sessionId);
-
-//     // ส่วนจัดการกรณีหา session ไม่เจอ
-//     if (!session) {
-//         console.warn(`Session with ID ${sessionId} not found. Loading most recent session as fallback.`);
-//         const fallbackSession = [...project.chatSessions]
-//             .filter(s => !s.archived)
-//             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        
-//         loadChatSession(fallbackSession ? fallbackSession.id : null);
-//         return;
-//     }
-
-//     // 1. ตั้งค่า active session ใน state
-//     if (project.activeSessionId !== sessionId) {
-//         project.activeSessionId = sessionId;
-//         stateManager.updateAndPersistState(project);
-//     }
-    
-//     // [CRITICAL FIX] หน่วงเวลาการเรียก UI ทั้งหมด
-//     // เพื่อให้แน่ใจว่าทุกโมดูล (ChatUI, ComposerUI, SessionUI) ถูกโหลดพร้อมใช้งานแล้ว
-//     setTimeout(() => {
-//         const composerPanel = document.getElementById('composer-panel');
-//         if (composerPanel) {
-//             // ถ้า session นี้เคยมีการบันทึกความสูงไว้ ให้นำมาใช้
-//             if (session.composerHeight) {
-//                 composerPanel.style.flexBasis = session.composerHeight;
-//             } else {
-//                 // ถ้าไม่เคย ให้ใช้ค่าเริ่มต้น
-//                 composerPanel.style.flexBasis = '35vh';
-//             }
-//         }
-//         // 2. อัปเดต UI ทั้งหมดที่เกี่ยวข้องกับ session
-//         ChatUI.renderMessages(session.history || []);
-//         ComposerUI.setContent(session.composerContent || '');
-//         ChatUI.updateChatTitle(session.name);
-//         SessionUI.renderSessionList(); // วาด Session List ใหม่เพื่อไฮไลท์อันที่เลือก
-//         ChatUI.scrollToBottom();
-
-//         // 3. ตรวจสอบและเลือก agent/group ที่ผูกกับ session นี้
-//         const entity = session.linkedEntity || project.activeEntity;
-//         if (entity) {
-//             project.activeEntity = entity;
-//             stateManager.bus.publish('entity:selected', entity);
-//         }
-//     }, 0); // การใส่ 0 คือการสั่งให้ทำงานทันทีที่ Call Stack ปัจจุบันว่างลง
-
-// }
 
 export function loadChatSession(sessionId) {
     const project = stateManager.getProject();

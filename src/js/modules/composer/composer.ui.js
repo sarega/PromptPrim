@@ -76,10 +76,13 @@ export function setContent(htmlContent) {
  * ฟังก์ชันหลักสำหรับเริ่มต้นการทำงานของ Composer UI ทั้งหมด
  */
 export function initComposerUI() {
-    // 1. Get DOM Elements
+    // 1. Get DOM Elements (ดึง Element ทั้งหมดมาก่อน)
     const composerPanel = document.getElementById('composer-panel');
+    const contentArea = document.querySelector('#composer-editor .composer-content-area');
+    const mobileToggleBtn = document.getElementById('mobile-composer-toggle'); // <-- ประกาศตัวแปรที่นี่
+
+    // --- ส่วนอื่นๆ ของฟังก์ชันยังคงเหมือนเดิม ---
     const composerEditorWrapper = document.getElementById('composer-editor');
-    const contentArea = composerEditorWrapper?.querySelector('.composer-content-area');
     const composerToolsArea = document.querySelector('.composer-tools-area');
     const collapseBtn = document.getElementById('composer-collapse-btn');
     const expandBtn = document.getElementById('composer-expand-btn');
@@ -90,12 +93,41 @@ export function initComposerUI() {
         return;
     }
 
+    // 2. [สำคัญ] สร้างฟังก์ชัน "toggle" ไว้ "ข้างใน" initComposerUI
+    // เพื่อให้มันเข้าถึง composerPanel และ mobileToggleBtn ได้
     const toggleComposerVisibility = () => {
+        const isCurrentlyCollapsed = composerPanel.classList.contains('collapsed');
         composerPanel.classList.toggle('collapsed');
-        document.getElementById('resizer-row')?.classList.toggle('collapsed');
+
+        // ตรวจสอบสถานะใหม่หลังจาก toggle แล้ว
+        const isNowCollapsed = composerPanel.classList.contains('collapsed');
+
+        // สั่งให้ปุ่มหมุนตามสถานะของ composer
+        if (mobileToggleBtn) {
+            mobileToggleBtn.classList.toggle('is-open', !isNowCollapsed);
+        }
+
+        // ประกาศ Event บอกส่วนอื่นๆ ของแอป
         stateManager.bus.publish('composer:visibilityChanged');
     };
 
+    // 3. ผูก Event Listener
+    if (mobileToggleBtn) {
+        mobileToggleBtn.addEventListener('click', toggleComposerVisibility);
+    }
+    // --- [MODIFIED] แก้ไข Resizer ให้ไม่ทำงานบน Mobile ---
+    const resizer = document.getElementById('resizer-row');
+    if (resizer) {
+        resizer.addEventListener('mousedown', (e) => {
+            // ถ้าหน้าจอเป็นขนาดมือถือ ไม่ต้องทำอะไร
+            if (window.innerWidth <= 768) {
+                e.preventDefault();
+                return;
+            }
+            // ถ้าไม่ใช่ ให้ทำงานตาม Logic เดิม (เรียก initHorizontalResizer)
+            // Logic ของ initHorizontalResizer ของคุณถูกต้องแล้ว ไม่ต้องแก้ไข
+        });
+    }
     // 2. Setup Event Subscriptions
     stateManager.bus.subscribe('project:loaded', loadComposerContent);
     stateManager.bus.subscribe('session:loaded', loadComposerContent);
@@ -118,7 +150,7 @@ export function initComposerUI() {
     });
 
 // `selectionchange` เป็น event ที่ดีที่สุดสำหรับการลากเมาส์เลือกข้อความ
-document.addEventListener('selectionchange', () => {
+    document.addEventListener('selectionchange', () => {
     if (document.activeElement === contentArea) {
         updateToolbarState();
     }

@@ -2,26 +2,24 @@
 // FILE: src/js/modules/memory/memory.handlers.js (Refactored)
 // ===============================================
 
-import { stateManager } from '../../core/core.state.js';
+import { stateManager, defaultSummarizationPresets } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 
 export function toggleMemory({ name }) {
     const project = stateManager.getProject();
     const agent = project.agentPresets[project.activeEntity.name];
-    if (!agent) {
-        return;
-    }
+    if (!agent) return;
 
     const currentActiveMemories = agent.activeMemories || [];
     const isActive = currentActiveMemories.includes(name);
 
-    // ใช้ Immutable update เพื่อสร้าง Array ใหม่เสมอ
     if (isActive) {
         agent.activeMemories = currentActiveMemories.filter(memName => memName !== name);
     } else {
         agent.activeMemories = [...currentActiveMemories, name];
     }
     
+    stateManager.setProject(project); // <-- แจ้ง State ว่ามีการเปลี่ยนแปลง
     stateManager.updateAndPersistState();
     stateManager.bus.publish('studio:contentShouldRender');
 }
@@ -38,18 +36,13 @@ export function saveMemory() {
     }
 
     if (editingIndex !== '') {
-        // Editing existing memory
         const originalName = project.memories[editingIndex].name;
         project.memories[editingIndex] = { name, content };
-        // Update any agent that was using the old name
         Object.values(project.agentPresets).forEach(agent => {
             const memoryIndex = agent.activeMemories.indexOf(originalName);
-            if (memoryIndex > -1) {
-                agent.activeMemories[memoryIndex] = name;
-            }
+            if (memoryIndex > -1) agent.activeMemories[memoryIndex] = name;
         });
     } else {
-        // Creating new memory
         if (project.memories.some(mem => mem.name === name)) {
             showCustomAlert(`A memory named "${name}" already exists.`, 'Error');
             return;
@@ -59,27 +52,19 @@ export function saveMemory() {
 
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-
-    // [FIX] สั่งให้ Modal ปิด และสั่งให้วาดหน้าจอใหม่แค่ครั้งเดียว
     stateManager.bus.publish('memory:editorShouldClose');
     stateManager.bus.publish('studio:contentShouldRender');
-    
     showCustomAlert(`Memory "${name}" saved successfully.`, 'Success');
 }
 
 export function deleteMemory({ index }) {
-    // [CRITICAL FIX] เพิ่มการถามยืนยันกลับเข้ามา
-    if (!confirm("Are you sure you want to permanently delete this memory? This cannot be undone.")) {
-        return; // ถ้าผู้ใช้กด Cancel ให้ออกจากฟังก์ชันทันที
-    }
-
+    if (!confirm("Are you sure you want to permanently delete this memory? This cannot be undone.")) return;
     const project = stateManager.getProject();
     if (!project.memories[index]) return;
 
     const nameToDelete = project.memories[index].name;
     project.memories.splice(index, 1);
     
-    // ลบ Memory ที่ถูกลบออกจาก Agent ทั้งหมดที่เคยใช้งาน
     Object.values(project.agentPresets).forEach(agent => {
         if (agent.activeMemories) {
             const memIndex = agent.activeMemories.indexOf(nameToDelete);
@@ -87,9 +72,8 @@ export function deleteMemory({ index }) {
         }
     });
     
+    stateManager.setProject(project);
     stateManager.updateAndPersistState();
-    
-    // ส่งสัญญาณบอกให้ Studio วาด UI ใหม่ทั้งหมด
     stateManager.bus.publish('studio:contentShouldRender');
 }
 
@@ -160,44 +144,106 @@ export function handleSummarizationPresetChange() {
     const selectedName = selector.value;
     
     if (selectedName === 'custom') {
+        // ถ้าผู้ใช้เลือก "Custom" ไม่ต้องทำอะไร ปล่อยให้ textarea เป็นค่าที่แก้ไขอยู่
         return;
     }
 
     const project = stateManager.getProject();
-    const presets = project.globalSettings.summarizationPromptPresets;
-    if (presets && presets[selectedName]) {
-        const presetContent = presets[selectedName];
-        document.getElementById('system-utility-summary-prompt').value = presetContent;
-        // Announce change to save settings
-        stateManager.bus.publish('settings:systemAgentChanged');
+    // รวม preset จากโรงงานและของผู้ใช้เข้าด้วยกัน
+    const presets = { ...defaultSummarizationPresets, ...project.globalSettings.summarizationPromptPresets };
+    
+    if (presets[selectedName]) {
+        // เมื่อเลือก preset, ให้เปลี่ยนเนื้อหาใน textarea
+        document.getElementById('system-utility-summary-prompt').value = presets[selectedName];
+        
+        // [FIX] เปลี่ยนจากการเรียก UI โดยตรง มาเป็นการส่งสัญญาณแทน
+        // สั่งให้ UI วาด dropdown ใหม่ (เพื่อลบสถานะ "Custom")
+        stateManager.bus.publish('ui:renderSummarizationSelector');
+        // และสั่งให้ UI อัปเดตเมนู Actions ไปพร้อมกัน
+        stateManager.bus.publish('ui:updateSummaryActionButtons');
     }
 }
-
-export function handleSaveSummarizationPreset() {
+export async function handleSaveSummarizationPreset({ saveAs }) {
+    const selector = document.getElementById('system-utility-summary-preset-select');
     const currentText = document.getElementById('system-utility-summary-prompt').value.trim();
-    if (!currentText) {
-        showCustomAlert('Prompt template cannot be empty.', 'Error');
-        return;
-    }
+    if (!currentText) return;
 
-    const newName = prompt('Enter a name for this new preset:', '');
-    if (!newName || !newName.trim()) {
-        return;
+    let presetName = selector.value;
+    // [FIX] ประกาศ isFactory ที่นี่เพื่อให้ใช้งานได้ถูกต้อง
+    const isFactory = defaultSummarizationPresets.hasOwnProperty(presetName);
+
+    if (saveAs || isFactory || presetName === 'custom') {
+        presetName = prompt('Enter a name for this preset:', isFactory ? `${presetName} (Copy)` : 'My Custom Prompt');
+        if (!presetName || !presetName.trim()) return;
     }
 
     const project = stateManager.getProject();
-    const trimmedName = newName.trim();
-    if (project.globalSettings.summarizationPromptPresets[trimmedName]) {
-        if (!confirm(`A preset named '${trimmedName}' already exists. Do you want to overwrite it?`)) {
-            return;
-        }
+    const trimmedName = presetName.trim();
+
+    if (project.globalSettings.summarizationPromptPresets[trimmedName] && trimmedName !== selector.value) {
+        if (!confirm(`A preset named '${trimmedName}' already exists. Overwrite?`)) return;
     }
 
     project.globalSettings.summarizationPromptPresets[trimmedName] = currentText;
     stateManager.setProject(project);
-    stateManager.updateAndPersistState().then(() => {
+
+    await stateManager.updateAndPersistState(); // [FIX] ใช้ await แทน .then()
+    
+    stateManager.bus.publish('ui:renderSummarizationSelector');
+    setTimeout(() => {
+        const newSelector = document.getElementById('system-utility-summary-preset-select');
+        if (newSelector) newSelector.value = trimmedName;
+        stateManager.bus.publish('ui:updateSummaryActionButtons');
+    }, 50);
+    showCustomAlert(`Preset '${trimmedName}' saved!`, 'Success');
+}
+
+// [REWRITTEN] ฟังก์ชัน Delete ที่สมบูรณ์
+export async function deleteSummarizationPreset() {
+    const selector = document.getElementById('system-utility-summary-preset-select');
+    const presetNameToDelete = selector.value;
+    
+    if (defaultSummarizationPresets.hasOwnProperty(presetNameToDelete)) return;
+
+    if (confirm(`Delete user preset "${presetNameToDelete}"?`)) {
+        const project = stateManager.getProject();
+        delete project.globalSettings.summarizationPromptPresets[presetNameToDelete];
+        
+        document.getElementById('system-utility-summary-prompt').value = defaultSummarizationPresets['Standard'];
+        stateManager.setProject(project);
+        await stateManager.updateAndPersistState();
+        
         stateManager.bus.publish('ui:renderSummarizationSelector');
-        document.getElementById('system-utility-summary-preset-select').value = trimmedName;
-        showCustomAlert(`Preset '${trimmedName}' saved successfully!`, 'Success');
-    });
+        showCustomAlert(`Preset '${presetNameToDelete}' deleted.`, 'Success');
+    }
+}
+
+// [REWRITTEN] ฟังก์ชัน Rename ที่สมบูรณ์
+export async function renameSummarizationPreset() {
+    const selector = document.getElementById('system-utility-summary-preset-select');
+    const oldName = selector.value;
+    if (defaultSummarizationPresets.hasOwnProperty(oldName) || oldName === 'custom') return;
+
+    const newName = prompt(`Enter new name for "${oldName}":`, oldName);
+    if (!newName || !newName.trim() || newName.trim() === oldName) return;
+
+    const project = stateManager.getProject();
+    const trimmedNewName = newName.trim();
+    if (project.globalSettings.summarizationPromptPresets[trimmedNewName]) {
+        showCustomAlert(`A preset named '${trimmedNewName}' already exists.`, "Error");
+        return;
+    }
+    
+    project.globalSettings.summarizationPromptPresets[trimmedNewName] = project.globalSettings.summarizationPromptPresets[oldName];
+    delete project.globalSettings.summarizationPromptPresets[oldName];
+    
+    stateManager.setProject(project);
+    await stateManager.updateAndPersistState();
+    
+    stateManager.bus.publish('ui:renderSummarizationSelector');
+    setTimeout(() => {
+        document.getElementById('system-utility-summary-preset-select').value = trimmedNewName;
+        stateManager.bus.publish('ui:updateSummaryActionButtons');
+    }, 50);
+    showCustomAlert(`Preset renamed to '${trimmedNewName}'!`, 'Success');
 }

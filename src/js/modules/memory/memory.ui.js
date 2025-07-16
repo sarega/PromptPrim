@@ -27,7 +27,7 @@ function createMemoryElement(memory, isActive, originalIndex) {
     toggle.className = `memory-toggle ${isActive ? 'active' : ''}`;
     toggle.title = `Click to ${isActive ? 'deactivate' : 'activate'}`;
     
-    // [FIX] เพิ่ม onclick listener โดยตรงที่นี่
+    // [DEFINITIVE FIX] ผูก Event onclick โดยตรงที่นี่
     toggle.onclick = (e) => {
         e.stopPropagation();
         stateManager.bus.publish('memory:toggle', { name: memory.name });
@@ -42,10 +42,10 @@ function createMemoryElement(memory, isActive, originalIndex) {
     itemHeader.appendChild(toggle);
     itemHeader.appendChild(itemName);
     itemHeader.appendChild(itemDropdown);
-
     itemDiv.appendChild(itemHeader);
     return itemDiv;
 }
+
 // --- Main UI Functions ---
 
 /**
@@ -56,7 +56,6 @@ export function loadAndRenderMemories(assetsContainer) {
     const project = stateManager.getProject();
     if (!project) return;
     
-    // 1. สร้างโครงสร้างหลักของ Memory Section
     const memorySection = document.createElement('details');
     memorySection.className = 'collapsible-section memory-section';
     memorySection.open = true;
@@ -76,7 +75,6 @@ export function loadAndRenderMemories(assetsContainer) {
     container.className = 'section-box';
     memorySection.appendChild(container);
     
-    // 2. ตรรกะการแสดงผล
     const activeAgentPreset = project.agentPresets?.[project.activeEntity?.name];
     if (!activeAgentPreset) {
         container.innerHTML = `<p class="no-items-message">Select an Agent to see memories.</p>`;
@@ -87,7 +85,6 @@ export function loadAndRenderMemories(assetsContainer) {
         `;
         const activeList = container.querySelector('#activeMemoriesList');
         const inactiveList = container.querySelector('#inactiveMemoriesList');
-        
         const activeMemoryNames = activeAgentPreset.activeMemories || [];
         const allMemories = project.memories || [];
         
@@ -97,7 +94,6 @@ export function loadAndRenderMemories(assetsContainer) {
             listToUse.appendChild(createMemoryElement(memory, isActive, index));
         });
 
-        // 3. จัดการ Sortable.js (ยังคงเดิม)
         if (memorySortable) memorySortable.destroy();
         memorySortable = new Sortable(activeList, {
             animation: 150,
@@ -107,14 +103,13 @@ export function loadAndRenderMemories(assetsContainer) {
                 const movedMemoryName = evt.item.dataset.name;
                 agent.activeMemories.splice(evt.oldDraggableIndex, 1);
                 agent.activeMemories.splice(evt.newDraggableIndex, 0, movedMemoryName);
-                stateManager.bus.publish('studio:contentShouldRender'); // สั่งวาดใหม่
+                stateManager.bus.publish('studio:contentShouldRender');
             }
         });
     }
     
     assetsContainer.appendChild(memorySection);
 }
-
 // export function initMemoryUI() {
 //     // รอรับคำสั่งให้ปิด Modal (หลังจากบันทึกสำเร็จ)
 //     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);

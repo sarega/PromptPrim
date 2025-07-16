@@ -55,3 +55,10 @@ body.dark-mode .settings-header .close-settings-btn {
     */
     color: var(--text-dark);
 }
+
+#summary-preset-controls .btn.hidden {
+    display: none;
+}
+#summary-preset-controls .btn {
+    flex-shrink: 0; /* ป้องกันปุ่มหดตัวเมื่อชื่อ dropdown ยาว */
+}

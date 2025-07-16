@@ -3,35 +3,6 @@
    DESCRIPTION: คืนค่าความกว้างของ Sidebar บน Mobile ให้เป็นค่าดั้งเดิม
    =============================================== */
 
-/* --- Tablet and Mobile Layout --- */
-/* @media (max-width: 1024px) {
-    .sidebar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: 320px;
-        max-width: 85vw;
-        min-width: unset;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
-    }
-    .sidebar.open {
-        transform: translateX(0);
-    }
-    .sidebar-resizer, .sidebar-horizontal-resizer {
-        display: none;
-    }
-    .sidebar-content {
-        flex-direction: column;
-    }
-    #collapse-sidebar-btn {
-        display: none;
-    }
-    #hamburger-btn {
-        display: block;
-    }
-} */
-
 /* --- Mobile Specific UX --- */
 @media (max-width: 768px) {
     .custom-select-wrapper {
@@ -72,4 +43,87 @@
     .agent-enhancer-column {
         flex: 1;
     }
+}
+
+/* --- Mobile Specific Header Layout --- */
+@media (max-width: 768px) {
+    
+    /* [FIX] ซ่อน Title ของ Chat Session */
+    .chat-header .chat-title {
+        display: none;
+    }
+
+    /* [FIX] ทำให้ Entity Selector ขยายเต็มพื้นที่ที่เหลือ */
+    .chat-header #custom-entity-selector-wrapper {
+        flex-grow: 1;
+        margin-left: 0; /* ลบระยะห่างซ้าย */
+        margin-right: 10px; /* เพิ่มระยะห่างขวาเล็กน้อย */
+    }
+}
+
+/* --- Mobile Composer Toggle Button (New Version) --- */
+#mobile-composer-toggle {
+  /* การกำหนดตำแหน่ง */
+  position: absolute;
+  top: -120px; /* <--- แก้ไขเป็นค่าติดลบเพื่อดึงให้สูงขึ้น */
+  right: 25px;
+  transform: translateY(-50%); /* ดึงขึ้นไปครึ่งหนึ่งของความสูงตัวเอง */
+  z-index: 40; /* ทำให้ลอยอยู่เหนือทุกอย่าง */
+
+  /* สไตล์รูปลักษณ์ */
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: white;
+  border: 2px solid var(--bg-color-secondary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  
+  display: none; /* ซ่อนไว้ก่อนเป็นค่าเริ่มต้น */
+}
+
+#mobile-composer-toggle .material-symbols-outlined {
+  transition: transform 0.3s ease-in-out;
+  font-size: 22px; /* ปรับขนาดไอคอนให้พอดี */
+  color: white !important; /* บังคับให้ไอคอนเป็นสีขาว */
+}
+
+/* เมื่อปุ่มมีคลาส is-open (Composer เปิดอยู่) ให้หมุนไอคอน */
+#mobile-composer-toggle.is-open .material-symbols-outlined {
+  transform: rotate(180deg);
+}
+
+/* ทำให้ปุ่มแสดงผลเฉพาะบนมือถือ */
+@media (max-width: 768px) {
+  #mobile-composer-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+/*
+  Responsive fix for Composer Toolbar on mobile
+*/
+@media (max-width: 768px) {
+  /* 1. สั่งให้ Header ทั้งหมดสามารถขึ้นบรรทัดใหม่ได้ */
+  .composer-header {
+    flex-wrap: wrap;
+    row-gap: 10px; /* เพิ่มระยะห่างแนวตั้งระหว่าง Title กับ Toolbar */
+  }
+
+  /* 2. สั่งให้ Toolbar มีความกว้าง 100% และไปอยู่บรรทัดถัดไป */
+  .composer-tools-area {
+    flex-basis: 100%; /* << ทำให้กว้างเต็ม 100% ของ Header */
+    order: 1; /* << สั่งให้ไปอยู่ลำดับสุดท้าย (ลงมาอยู่ข้างล่าง) */
+    flex-wrap: wrap; 
+    justify-content: flex-start; 
+  }
+
+  /* 3. จัด Title และปุ่ม Actions ให้อยู่บรรทัดเดียวกันข้างบน */
+  .composer-title-area {
+    order: 0;
+  }
+  .composer-actions {
+    order: 0;
+  }
 }

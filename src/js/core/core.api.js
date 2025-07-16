@@ -80,13 +80,16 @@ async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
     const project = JSON.parse(JSON.stringify(stateManager.getProject()));
-    if (!project || !project.globalSettings) return;
+    if (!project?.globalSettings) return;
+
     const apiKey = project.globalSettings.apiKey?.trim() || '';
     const baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
     let allModels = [];
     try {
         const fetchPromises = [];
-        if (apiKey) fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
+        if (apiKey) {
+            fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
+        }
         if (import.meta.env.DEV && baseUrl) {
             fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
         }
@@ -97,50 +100,32 @@ export async function loadAllProviderModels() {
         return;
     }
 
-    // --- [DEFINITIVE LOGIC FIX] แก้ไขตรรกะการตั้งค่า Default Model ---
     let projectWasChanged = false;
     if (allModels.length > 0) {
         const systemAgent = project.globalSettings.systemUtilityAgent;
         const defaultAgent = project.agentPresets['Default Agent'];
-
-        // 1. ตรวจสอบและตั้งค่า System Utility Agent ก่อน
-        if (!systemAgent.model || !allModels.some(m => m.id === systemAgent.model)) {
-            const preferredDefaults = [
-                'google/gemma-3-27b-it',
-                'google/gemma-2-9b-it',
-                'openai/gpt-4o-mini',
-                'mistralai/mistral-7b-instruct'
-            ];
+        if (systemAgent && (!systemAgent.model || !allModels.some(m => m.id === systemAgent.model))) {
+            const preferredDefaults = ['google/gemma-2-9b-it', 'openai/gpt-4o-mini'];
             const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
             if (availableDefaultModel) {
                 systemAgent.model = availableDefaultModel;
+                if (defaultAgent) defaultAgent.model = availableDefaultModel;
                 projectWasChanged = true;
-                console.log(`System Utility Agent model set to default: ${availableDefaultModel}`);
             }
         }
-        
-        // 2. [KEY FIX] ตั้งค่า Default Agent ให้ใช้ Model เดียวกันกับ System Utility Agent เสมอ (ถ้ายังไม่มี)
-        if (defaultAgent && (!defaultAgent.model || !allModels.some(m => m.id === defaultAgent.model))) {
-            // ใช้โมเดลจาก System Utility Agent ที่เพิ่งอัปเดตไป
-            defaultAgent.model = systemAgent.model;
-            projectWasChanged = true;
-            console.log(`'Default Agent' model set to match System Utility Agent: ${defaultAgent.model}`);
-        }
     }
     
-    // --- จัดการ State Update และ UI Re-render อย่างเป็นขั้นตอน ---
     stateManager.setAllModels(allModels);
     
+    // [FIX] ถ้ามีการเปลี่ยนแปลง ให้แค่ setProject แต่ไม่สั่ง save
+    // การ save จะถูกจัดการโดยฟังก์ชันที่เรียกใช้ (loadProjectData)
     if (projectWasChanged) {
         stateManager.setProject(project);
-        await stateManager.updateAndPersistState();
     }
     
-    const statusMessage = allModels.length > 0 ? `Loaded ${allModels.length} models.` : 'No models found. Check API Settings.';
+    const statusMessage = allModels.length > 0 ? `Loaded ${allModels.length} models.` : 'No models found.';
     stateManager.bus.publish('status:update', { message: statusMessage, state: 'connected' });
-
 }
-
 export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
     if (!project) return "";

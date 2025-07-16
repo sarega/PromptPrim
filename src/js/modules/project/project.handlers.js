@@ -14,7 +14,7 @@ import {
     METADATA_STORE_NAME
 } from '../../core/core.state.js';
 
-import { openDb, dbRequest, clearObjectStores } from '../../core/core.db.js';
+import { openDb, dbRequest, clearObjectStores, deleteDb } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
 import { scrollToLinkedEntity } from './project.ui.js';
@@ -102,60 +102,59 @@ export function openProject() {
     }
 }
 
-export function initializeFirstProject() {
-    const projectId = `proj_${Date.now()}`;
-    const defaultAgentName = "Default Agent";
-    
-    // ดึงชื่อของ default memories มาสร้างเป็น array
-    const defaultMemoryNames = defaultMemories.map(mem => mem.name);
+async function initializeFirstProject() {
+    try {
+        // [DEFINITIVE FIX] ใช้ import.meta.env.BASE_URL เพื่อสร้าง Path ที่ถูกต้อง
+        // บน localhost: จะเป็น '/default-project.prim'
+        // บน GitHub: จะเป็น '/PromptPrimAi/default-project.prim'
+        const response = await fetch(`${import.meta.env.BASE_URL}default-project.prim`);
 
-    return {
-        id: projectId,
-        name: "Untitled Project",
-        isDirtyForUser: false,
-        activeEntity: { type: 'agent', name: defaultAgentName },
-        agentPresets: { 
-            [defaultAgentName]: { 
-                ...defaultAgentSettings, 
-                model: '', 
-                // กำหนดให้ Default Agent มีความจำเหล่านี้เป็น Active โดยอัตโนมัติ
-                activeMemories: defaultMemoryNames 
-            } 
-        },
-        agentGroups: {},
-        memories: JSON.parse(JSON.stringify(defaultMemories)), // คลัง Memory กลาง
-        chatSessions: [],
-        activeSessionId: null,
-        summaryLogs: [],
-        globalSettings: {
-            fontFamilySelect: "'Sarabun', sans-serif",
-            apiKey: "",
-            ollamaBaseUrl: "http://localhost:11434",
-            systemUtilityAgent: { ...defaultSystemUtilityAgent },
-            summarizationPromptPresets: JSON.parse(JSON.stringify(defaultSummarizationPresets))
+        if (!response.ok) {
+            throw new Error(`Could not fetch default project file. Status: ${response.status}`);
         }
-    };
-}
+        
+        const defaultProjectData = await response.json();
+        
+        // กำหนด ID ใหม่ที่เป็น Unique ให้กับโปรเจกต์
+        defaultProjectData.id = `proj_${Date.now()}`;
 
+        return defaultProjectData;
+
+    } catch (error) {
+        console.error("Fatal error: Could not initialize default project.", error);
+        showCustomAlert("Critical Error: Could not load the default project template. The app cannot start.", "Error");
+        return null;
+    }
+}
 
 export async function proceedWithCreatingNewProject() {
     console.log("Proceeding with creating a new project...");
     try {
-        // 1. สร้าง Object ของโปรเจกต์ใหม่
-        const newProject = initializeFirstProject();
+        // 1. ลบโปรเจกต์เก่าที่ค้างอยู่ออกจาก DB (ถ้ามี)
+        const lastProjectId = localStorage.getItem('lastActiveProjectId');
+        if (lastProjectId) {
+            await deleteDb(lastProjectId);
+            localStorage.removeItem('lastActiveProjectId');
+        }
 
-        // 2. เปิด/สร้าง DB ใหม่
-        await openDb(newProject.id);
-
-        // 3. ล้างข้อมูลเก่าใน DB
-        await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
-
-        // 4. [FIX] ใช้ Logic การโหลดข้อมูลที่สมบูรณ์เพื่อให้แน่ใจว่า UI ทั้งหมดถูกรีเซ็ต
-        await loadProjectData(newProject, true); // true = โหลดจากไฟล์/สถานะใหม่
+        // 2. [KEY FIX] Fetch ไฟล์แม่แบบโปรเจกต์
+        const response = await fetch(`${import.meta.env.BASE_URL}default-project.prim`);
+        if (!response.ok) {
+            throw new Error(`Could not fetch default project file. Status: ${response.status}`);
+        }
+        
+        const projectTemplate = await response.json();
+        
+        // 3. กำหนด ID ใหม่ที่ไม่ซ้ำใครให้กับโปรเจกต์
+        projectTemplate.id = `proj_${Date.now()}`;
+        
+        // 4. เปิด DB ใหม่ และโหลดข้อมูลจากแม่แบบเข้าไป
+        await openDb(projectTemplate.id);
+        await loadProjectData(projectTemplate, true); // true = โหลดจากไฟล์/สถานะใหม่
 
     } catch (error) {
         console.error("Failed to proceed with creating a new project:", error);
-        showCustomAlert("Could not create a new project.", "Error");
+        showCustomAlert("Could not create a new project. Please check the browser console for more details.", "Error");
     }
 }
 
@@ -238,43 +237,43 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
     project.name = newName;
     stateManager.bus.publish('project:nameChanged', newName);
     
-    // We will set the dirty flag to false *before* saving the file,
-    // so the file itself contains `isDirtyForUser: false`.
     stateManager.setUserDirty(false);
     
-    let projectToSave = JSON.parse(JSON.stringify(stateManager.getProject()));
-    projectToSave = migrateProjectData(projectToSave);
+    // [SECURITY FIX] สร้าง Deep Copy และลบข้อมูลที่ไม่ควรบันทึก
+    const projectToSave = JSON.parse(JSON.stringify(stateManager.getProject()));
+    if (projectToSave.globalSettings) {
+        delete projectToSave.globalSettings.apiKey;
+        delete projectToSave.globalSettings.ollamaBaseUrl;
+    }
+    
+    const migratedProjectToSave = migrateProjectData(projectToSave);
+    
     try {
-        const dataStr = JSON.stringify(projectToSave, null, 2);
+        const dataStr = JSON.stringify(migratedProjectToSave, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
+        
+        // [CUSTOM EXTENSION] เปลี่ยนนามสกุลเป็น .prim
+        a.download = `${newName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.prim`;
+        
         a.href = url;
-        a.download = `${newName.replace(/\s+/g, '_')}.json`;
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        stateManager.bus.publish('ui:hideSaveAsModal'); // This event might not be needed if save always closes it, but good for consistency.
-        
-        // Now that the project is successfully saved to a file,
-        // the auto-save state can also be considered clean.
+        stateManager.bus.publish('ui:hideSaveAsModal');
         stateManager.setAutoSaveDirty(false);
-
-        // [FIX] Persist the now-clean project state back to the database
         await persistCurrentProject();
 
-        // [FIX] Check for and perform any pending action (like 'new' or 'open')
         if (stateManager.getState().pendingActionAfterSave) {
             await performPendingAction();
         }
-
         return true;
     } catch (error) {
         console.error("Failed to save project:", error);
         showCustomAlert('Failed to save project file.', 'Error');
-        // If saving fails, revert the dirty flag back to true
         stateManager.setUserDirty(true);
         return false;
     }
@@ -350,40 +349,51 @@ export async function loadLastProject(lastProjectId) {
 }
 
 export async function loadProjectData(projectData, isFromFile = false) {
-    const migratedProject = migrateProjectData(projectData);
-    await openDb(migratedProject.id);
+    let projectToLoad = migrateProjectData(projectData);
+    await openDb(projectToLoad.id);
 
-    // If loading from a file, it's a clean save point.
+    // ถ้าโหลดจากไฟล์, ให้ถือว่าเป็นสถานะ clean เสมอ
     if (isFromFile) {
-        migratedProject.isDirtyForUser = false;
-        await rewriteDatabaseWithProjectData(migratedProject);
+        projectToLoad.isDirtyForUser = false;
     }
 
-    stateManager.setProject(migratedProject);
+    // --- [REWRITTEN LOGIC] ---
+    // 1. ตั้งค่า State เริ่มต้นใน Memory
+    stateManager.setProject(projectToLoad);
+
+    // 2. โหลด Settings ต่างๆ เข้า UI
     await loadGlobalSettings();
-    
-    // [FIX] Publish the dirty status that was just loaded from the project object
-    stateManager.bus.publish('userDirty:changed', stateManager.isUserDirty());
-    // Auto-save state is clean because the DB and app state are now synced.
-    stateManager.setAutoSaveDirty(false); 
-    
-    if (migratedProject.globalSettings.apiKey || migratedProject.globalSettings.ollamaBaseUrl) {
+
+    // 3. โหลดรายชื่อ Model (ซึ่งอาจจะไปแก้ไข project state ใน memory)
+    if (projectToLoad.globalSettings.apiKey || (import.meta.env.DEV && projectToLoad.globalSettings.ollamaBaseUrl)) {
         await loadAllProviderModels();
     }
 
-    const existingSessions = (migratedProject.chatSessions || []).filter(s => !s.archived);
+    // 4. สร้าง Chat Session แรก (ถ้ายังไม่มี)
+    projectToLoad = stateManager.getProject(); // ดึง state ล่าสุดที่อาจถูกแก้ไขโดย loadAllProviderModels
+    const existingSessions = (projectToLoad.chatSessions || []).filter(s => !s.archived);
     if (existingSessions.length === 0) {
-        await createNewChatSession();
-    } else {
-        const lastActiveSessionId = migratedProject.activeSessionId;
-        const sessionToLoad = existingSessions.find(s => s.id === lastActiveSessionId) || existingSessions.sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        await loadChatSession(sessionToLoad.id);
+        createNewChatSession(); // ฟังก์ชันนี้จะไม่อัปเดต dirty flag แล้ว
     }
 
-    stateManager.bus.publish('project:loaded', { projectData: migratedProject });
-    localStorage.setItem('lastActiveProjectId', migratedProject.id);
-}
+    // 5. [CRITICAL FIX] บันทึกทุกอย่างลง DB และตั้งค่าสถานะให้ "สะอาด"
+    const finalInitializedProject = stateManager.getProject();
+    finalInitializedProject.isDirtyForUser = false; // บังคับให้เป็นสถานะสะอาด
+    await rewriteDatabaseWithProjectData(finalInitializedProject);
 
+    // 6. โหลด Session ที่ถูกต้องเข้า UI
+    const sessionToLoad = finalInitializedProject.chatSessions.find(s => s.id === finalInitializedProject.activeSessionId) ||
+                          [...finalInitializedProject.chatSessions].filter(s => !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (sessionToLoad) {
+        loadChatSession(sessionToLoad.id);
+    }
+
+    // 7. ประกาศว่าโหลดโปรเจกต์เสร็จสมบูรณ์แล้ว
+    stateManager.bus.publish('project:loaded', { projectData: finalInitializedProject });
+    stateManager.bus.publish('userDirty:changed', false); // ส่งสัญญาณบอก UI ว่าไม่ dirty
+    stateManager.setAutoSaveDirty(false); // รีเซ็ตสถานะ auto-save
+    localStorage.setItem('lastActiveProjectId', finalInitializedProject.id);
+}
 export async function rewriteDatabaseWithProjectData(projectData) {
     await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
     await persistProjectMetadata(projectData);

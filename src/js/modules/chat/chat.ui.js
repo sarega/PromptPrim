@@ -99,6 +99,37 @@ function lazyRenderContent(textContent, targetContainer) {
 
     renderNextChunk();
 }
+
+// เพิ่มฟังก์ชันเล็กๆ นี้เข้าไปในไฟล์เพื่อช่วยแปลงเวลา
+function formatRelativeTimestamp(timestamp) {
+    if (!timestamp) return '';
+
+    const now = new Date();
+    const messageDate = new Date(timestamp);
+
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+
+    if (messageDate >= startOfToday) {
+        // ถ้าเป็นวันนี้: แสดงแค่เวลา
+        return messageDate.toLocaleTimeString('th-TH', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+    } else if (messageDate >= startOfYesterday) {
+        // ถ้าเป็นเมื่อวาน: แสดงคำว่า "Yesterday"
+        return 'Yesterday';
+    } else {
+        // ถ้าเก่ากว่านั้น: แสดงวันที่แบบสั้น
+        return messageDate.toLocaleDateString('th-TH', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    }
+}
+
 function createMessageElement(message, index) {
     const { role, content, speaker, isLoading, isError, isSummary } = message;
     const project = stateManager.getProject();
@@ -113,19 +144,50 @@ function createMessageElement(message, index) {
     if (isError) msgDiv.classList.add('error');
     if (isSummary) msgDiv.classList.add('system-summary-message');
 
+    // --- ตรรกะการแสดงผลชื่อและเวลา (ฉบับแก้ไขใหม่ ปลอดภัย) ---
     if (role === 'assistant' && speaker) {
         const speakerAgent = project.agentPresets?.[speaker];
         const speakerIcon = speakerAgent ? speakerAgent.icon : '🤖';
         const speakerLabelWrapper = document.createElement('div');
         speakerLabelWrapper.className = 'speaker-label-wrapper';
-        speakerLabelWrapper.innerHTML = `<span class="speaker-label">${speakerIcon} ${speaker}</span>`;
+
+        const speakerLabel = document.createElement('span');
+        speakerLabel.className = 'speaker-label';
+
+        // 1. ใส่แค่ "ไอคอน" กับ "ชื่อ" ลงไปใน Label หลักก่อน
+        speakerLabel.innerHTML = `${speakerIcon} ${speaker}`;
+
+        // 2. ตรวจสอบว่ามี timestamp หรือไม่ ถ้ามี ให้สร้าง element ของเวลาขึ้นมา
+        if (message.timestamp) {
+            console.log(`[DEBUG 3] Timestamp found: ${message.timestamp}`); // << Log ที่ 2: ยืนยันว่าเจอ timestamp
+            const formattedTime = formatRelativeTimestamp(message.timestamp);
+            const timeEl = document.createElement('span');
+            timeEl.className = 'message-timestamp';
+            // 3. ใส่ "ตัวคั่น" และ "เวลา" เข้าไปใน element ใหม่นี้
+            timeEl.innerHTML = `&nbsp;• ${formattedTime}`;
+            
+            // 4. นำ element เวลา ไปต่อท้าย Label หลัก
+            speakerLabel.appendChild(timeEl);
+        }
+
+        speakerLabelWrapper.appendChild(speakerLabel);
         turnWrapper.appendChild(speakerLabelWrapper);
+
+    } else if (role === 'user' && message.timestamp) {
+        // (ส่วนของ User ยังคงเหมือนเดิม)
+        const formattedTime = formatRelativeTimestamp(message.timestamp);
+        const timeEl = document.createElement('span');
+        timeEl.className = 'message-timestamp';
+        timeEl.textContent = formattedTime;
+        turnWrapper.appendChild(timeEl);
     }
+    // ----------------------------------
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     msgDiv.appendChild(contentDiv);
 
+    // --- ส่วนที่เหลือของฟังก์ชันทั้งหมดเหมือนเดิมทุกประการ ---
     if (isLoading) {
         contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
     } else {
@@ -142,7 +204,7 @@ function createMessageElement(message, index) {
         } else if (role === 'user') {
             fullTextContent = Array.isArray(content) ? content.filter(p => p.type === 'text').map(p => p.text).join('\n') : (content || '');
             isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
-        } else if (role === 'assistant' || role === 'system') { // <-- รวม system เข้ามา
+        } else if (role === 'assistant' || role === 'system') {
             fullTextContent = content || '';
             isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
         }
@@ -174,7 +236,6 @@ function createMessageElement(message, index) {
                         streamingContentSpan.appendChild(p);
                     }
                 } 
-                // [FIX] ย้ายเงื่อนไขของ system ออกมาอยู่นอก user
                 else if (role === 'system' && typeof content === 'string') {
                     streamingContentSpan.textContent = content;
                 }
@@ -186,7 +247,6 @@ function createMessageElement(message, index) {
         }
     }
     
-    // --- 3. สร้าง Action Menu ---
     if (!isLoading && !isError && !isSummary) {
         const actions = document.createElement('div');
         actions.className = 'message-actions';
@@ -221,12 +281,9 @@ function createMessageElement(message, index) {
         msgDiv.appendChild(actions);
     }
     
-
-    // --- 4. ประกอบร่างสุดท้าย ---
     turnWrapper.appendChild(msgDiv);
     return turnWrapper;
 }
-
 function initMobileScrollBehavior() {
     const chatArea = document.querySelector('.main-chat-area');
     const messagesContainer = document.getElementById('chatMessages');
@@ -734,3 +791,4 @@ function renderSummaryBubble(summaryText, targetContainer) {
 
     renderNextChunk();
 }
+

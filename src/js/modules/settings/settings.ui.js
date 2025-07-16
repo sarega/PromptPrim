@@ -50,8 +50,9 @@ export function initSettingsUI() {
         if(el) el.addEventListener('change', () => bus.publish('settings:systemAgentChanged'));
     });
 
-    listen('system-utility-summary-preset-select', 'change', 'settings:summaryPresetChanged');
-    listen('save-summary-preset-btn', 'click', 'settings:saveSummaryPreset', () => {});
+    listen('save-summary-btn', 'click', 'settings:saveSummaryPreset', () => ({ saveAs: false }));
+    listen('save-as-summary-preset-btn', 'click', 'settings:saveSummaryPreset', () => ({ saveAs: true }));
+    listen('delete-summary-preset-btn', 'click', 'settings:deleteSummaryPreset', () => {});
 
     console.log("✅ Settings UI and all its listeners are correctly initialized.");
 }

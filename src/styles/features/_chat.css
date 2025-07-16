@@ -17,6 +17,8 @@
 
 .message-turn-wrapper.user-turn {
     align-items: flex-end;      /*<-- [FIX] ใช้คุณสมบัตินี้เหมือนเดิม */
+    position: relative; /* สำคัญมากสำหรับการจัดตำแหน่งลูก */
+    padding-top: 1.5em; 
 }
 
 .message-turn-wrapper.assistant-turn {
@@ -49,16 +51,17 @@
 /* --- 3. Specific Bubble Styles --- */
 
 .message.user {
-    background-color: #eaf5fe;
+     background-color: #eaf5fe;
     color: var(--user-bubble-edit-text-color);
+    display: table; /* ยังคงใช้ display: table เพื่อ Performance */
     
-    /* [DEFINITIVE FIX] ใช้เทคนิค display: table เพื่อให้เกิด "shrink-to-fit" 
-       โดยไม่ทำให้เกิด Layout Calculation ที่หนักหน่วงเหมือน fit-content */
-    display: table;
-    
-    /* ส่วน max-width: 90% และอื่นๆ ยังคงเหมือนเดิม */
+    /* [FIX] เพิ่ม 2 บรรทัดนี้เพื่อบังคับการตัดคำใน User Bubble */
+    table-layout: fixed; 
+    /* width: 100%; */
+
+    /* ส่วน max-width: 90% ที่มีอยู่แล้วจะทำงานร่วมกันได้ดี */
     max-width: 90%; 
-    border-radius: 18px; /* ตรวจสอบว่ามีอยู่ */
+    border-radius: 18px;
 }
 
 .message.assistant {
@@ -102,20 +105,17 @@
 
 .message-actions {
     position: absolute;
-    bottom: -25px;
-    display: none;
+    bottom: -32px; /* << ปรับค่า bottom เล็กน้อยให้ห่างออกมาอีกนิด */
+    display: flex;  /* << เปลี่ยนจาก none เป็น flex */
     gap: 5px;
-    background: rgba(237, 242, 247, 0.8);
-    backdrop-filter: blur(2px);
-    border-radius: 20px;
+    background: transparent; /* << ทำให้พื้นหลังโปร่งใสไปเลย */
+    backdrop-filter: none;   /* << เอาเอฟเฟกต์เบลอออก */
     padding: 4px;
-    border: 1px solid rgba(0,0,0,0.05);
-    opacity: 0.7;
+    border: none;            /* << เอาเส้นขอบออก */
+    opacity: 1;              /* << ทำให้เห็นชัดเจน */
     z-index: 10;
 }
-.message:hover .message-actions, .message.is-editing .message-actions {
-    display: flex;
-}
+
 .message.user .message-actions { left: auto; right: 4px; }
 .message.assistant .message-actions { left: 4px; }
 .message-actions button {
@@ -252,12 +252,13 @@ body.dark-mode .inline-edit-textarea:focus {
 /* --- [REFACTORED] Chat Input Area --- */
 .chat-input-wrapper {
     background: transparent;
-    padding: 0 20px 15px; /* ระยะห่างรอบๆ */
+    /* [FIX] เปลี่ยนจาก padding เดิม มาเป็น padding บน-ล่าง เท่านั้น */
+    padding: 10px 20px; /* เพิ่ม padding บน 10px และล่าง 10px */
     flex-shrink: 0;
     position: relative;
     z-index: 30;
-    display: flex; /* [FIX] ทำให้เป็น Flexbox */
-    flex-direction: column; /* [FIX] จัดเรียงในแนวตั้ง */
+    display: flex;
+    flex-direction: column;
 }
 
 #file-preview-container + .chat-input-wrapper {
@@ -308,14 +309,52 @@ body.dark-mode .inline-edit-textarea:focus {
 #chatInput::-webkit-scrollbar { display: none; }
 #chatInput:focus { outline: none; box-shadow: none; }
 
-.input-adornment {
+/* .input-adornment {
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
 .input-adornment.left { margin-right: 5px; }
-.input-adornment.right { margin-left: 5px; }
+.input-adornment.right { margin-left: 5px; } */
+
+/* --- New Gemini-style Input Layout --- */
+
+/* ตัวครอบหลัก: เปลี่ยนเป็นแนวตั้ง */
+.input-container-seamless {
+  flex-direction: column;
+  align-items: stretch; /* ทำให้ textarea กว้างเต็ม */
+  padding: 12px 12px 8px 12px; /* ปรับ padding ให้สวยงาม */
+}
+
+/* Textarea: ทำให้ไม่มีขอบและพื้นหลัง */
+#chatInput {
+  background: transparent;
+  border: none;
+  padding: 0 4px; /* เพิ่ม padding ด้านข้างเล็กน้อย */
+  margin-bottom: 8px; /* เพิ่มระยะห่างจากแถวปุ่ม */
+  min-height: 24px; /* ความสูงเริ่มต้น */
+}
+
+/* แถวของปุ่ม: จัดแบบแนวนอน ให้ปุ่มซ้าย-ขวาแยกกัน */
+.input-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* กลุ่มปุ่มซ้ายและขวา */
+.input-actions-left, .input-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* ระยะห่างระหว่างปุ่ม */
+}
+
+/* ลดขนาดปุ่ม send/stop ให้เท่ากับปุ่มบวก */
+.input-actions-right .btn {
+    width: 36px;
+    height: 36px;
+}
 
 #chat-actions-btn {
     width: 36px;
@@ -581,4 +620,46 @@ body.dark-mode .message.system-summary-message {
     background: #232d3e;
     color: #a0aec0;
     border-color: #4a5568;
+}
+
+/* --- Timestamp Styling (Definitive Version) --- */
+.message-timestamp {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  font-size: 0.75rem;
+  color: #a0aec0; /* สีจางๆ สำหรับ Light theme */
+  pointer-events: none;
+  font-weight: normal;
+}
+
+.message-turn-wrapper:hover .message-timestamp {
+  opacity: 1;
+}
+
+/* --- Positioning --- */
+
+/* For Assistant */
+.speaker-info-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 8px; /* ระยะห่างระหว่างชื่อกับเวลา */
+  margin-bottom: 5px;
+  padding: 0 10px;
+}
+.speaker-info-wrapper .speaker-label {
+  font-weight: bold;
+  font-size: 0.9em;
+  color: #2563eb;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* For User */
+
+
+.user-turn > .message-timestamp {
+  position: absolute;
+  top: -0.2em; /* จัดตำแหน่งให้อยู่เหนือ Bubble */
+  right: 8px;
 }

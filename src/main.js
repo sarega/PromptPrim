@@ -16,6 +16,7 @@ import { initCoreUI } from './js/core/core.ui.js';
 import { initGlobalKeybindings } from './js/core/core.keyboard.js';
 import { initRightSidebarToggle } from './js/modules/chat/chat.ui.js';
 import { initGlobalDropdownListener } from './js/core/core.ui.js';
+// import { updateSummarizationActionMenu } from './js/modules/project/project.ui.js';
 
 // UI & Handler Modules (Import all necessary modules)
 import * as ProjectUI from './js/modules/project/project.ui.js';
@@ -193,8 +194,12 @@ function setupEventSubscriptions() {
     bus.subscribe('settings:ollamaUrlChanged', ProjectHandlers.handleOllamaUrlChanged);
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
+    
+    bus.subscribe('ui:renderSummarizationSelector', ProjectUI.renderSummarizationPresetSelector);
     bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange);
-    bus.subscribe('settings:saveSummaryPreset', MemoryHandlers.handleSaveSummarizationPreset);
+    bus.subscribe('settings:saveSummaryPreset', (payload) => MemoryHandlers.handleSaveSummarizationPreset(payload));
+    bus.subscribe('settings:deleteSummaryPreset', MemoryHandlers.deleteSummarizationPreset);
+    bus.subscribe('settings:renameSummaryPreset', MemoryHandlers.renameSummarizationPreset);
 
     console.log("✅ Central Event Bus ready.");
 }

@@ -90,3 +90,39 @@ export async function clearObjectStores(storeNames) {
         }
     });
 }
+
+/**
+ * [NEW & SAFER] Deletes an entire IndexedDB database by its project ID.
+ * This is safer than clearing stores on Safari.
+ * @param {string} projectId - The ID of the project whose database should be deleted.
+ * @returns {Promise<void>}
+ */
+export async function deleteDb(projectId) {
+    const dbName = `${DB_NAME_PREFIX}${projectId}`;
+    
+    // ปิดการเชื่อมต่อปัจจุบันก่อน (ถ้ามี) เพื่อให้แน่ใจว่าลบได้
+    const db = getDb(); // ใช้ getDb() ที่คุณมีอยู่แล้ว
+    if (db && db.name === dbName) {
+        db.close();
+    }
+
+    return new Promise((resolve, reject) => {
+        console.log(`[DB] Attempting to delete database: ${dbName}`);
+        const deleteRequest = indexedDB.deleteDatabase(dbName);
+        
+        deleteRequest.onsuccess = () => {
+            console.log(`[DB] Successfully deleted database.`);
+            resolve();
+        };
+        deleteRequest.onerror = (e) => {
+            console.error('[DB] Error deleting database:', e.target.error);
+            reject(e.target.error);
+        };
+        deleteRequest.onblocked = () => {
+            console.warn('[DB] Database delete was blocked. Please reload the application.');
+            // บอกให้ผู้ใช้ reload หน้าเว็บ เพราะมี connection เก่าค้างอยู่
+            showCustomAlert("Could not clear old project data because a connection is still open. Please reload the page and try again.", "Error");
+            reject('Database blocked');
+        };
+    });
+}

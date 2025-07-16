@@ -8,7 +8,7 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 30px;
     align-items: center; 
     /* [KEY] เพิ่ม padding ด้านข้างแบบ Responsive และด้านล่างให้มากขึ้น */
     padding: 20px 6vw 40px 6vw; 
@@ -100,9 +100,11 @@
     justify-content: space-between;
     gap: 10px;
     flex-shrink: 0;
-    overflow: hidden;
+    overflow: visible;
     transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
     will-change: transform, max-height;
+    position: relative; /* << เพิ่มบรรทัดนี้เข้ามา */
+    z-index: 10;
 }
 
 /* [FIX] Rotate the icon inside the button, not the button itself, to prevent alignment shifts. */
@@ -136,7 +138,7 @@
 #context-inspector-trigger-btn {
     background: none; border: none; cursor: pointer;
     padding: 2px 5px; font-size: 16px; line-height: 1;
-    color: var(--primary-color);
+    color: #64748b; /* <--- เปลี่ยนเป็นสีเทาเข้มที่อ่านง่าย */
 }
 #context-inspector-trigger-btn:hover { opacity: 0.7; }
 .status-dot {

@@ -184,12 +184,16 @@ export async function sendMessage() {
             userMessageContent.push({ type: 'image_url', url: file.data });
         });
     }
-
-    session.history.push({ 
+    const userMessage = { 
         role: 'user', 
         content: userMessageContent,
-        speaker: 'You'
-    });
+        speaker: 'You',
+        timestamp: Date.now()
+    };
+    console.log('[DEBUG 1.1] User message created:', userMessage); // << เพิ่ม Log
+
+    session.history.push(userMessage);
+
     
     // [NEW] ตรวจสอบเงื่อนไขเพื่อเริ่มการตั้งชื่ออัตโนมัติ
     // ทำงานเมื่อเป็น Session ใหม่ และนี่คือข้อความแรก
@@ -251,12 +255,17 @@ async function sendSingleAgentMessage() {
 
         // 3. เมื่อ stream จบ, อัปเดต message history ด้วยเนื้อหาฉบับสมบูรณ์
         const finalResponseText = renderer.getFinalContent();
-        session.history[assistantMsgIndex] = { 
+        const assistantMessage = { 
             role: 'assistant', 
             content: finalResponseText,
             speaker: agentName, 
-            isLoading: false 
+            isLoading: false,
+            timestamp: Date.now()
         };
+        console.log('[DEBUG 1.2] Assistant message created:', assistantMessage); // << เพิ่ม Log
+
+        session.history[assistantMsgIndex] = assistantMessage;
+
         // console.log("🟢 Assistant final content:", JSON.stringify(finalResponseText));
 
     } catch (error) {
