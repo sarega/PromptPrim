@@ -510,23 +510,59 @@ export async function deleteSummary(logId) {
 // --- Message Action Handlers ---
 export async function copyMessageToClipboard({ index, event }) {
     if (event) event.stopPropagation();
+    // 1. ดึงปุ่มที่ถูกคลิกมาจาก event object
+    const copyButton = event.currentTarget;
+
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) return;
     const message = session.history[index];
     if (!message) return;
-    let textToCopy = '';
+
+    let plainTextContent = '';
     if (typeof message.content === 'string') {
-        textToCopy = message.content;
+        plainTextContent = message.content;
     } else if (Array.isArray(message.content)) {
-        textToCopy = message.content.find(p => p.type === 'text')?.text || '';
+        plainTextContent = message.content.find(p => p.type === 'text')?.text || '';
     }
+
+    let htmlContent = '';
+    if (message.role === 'assistant' && window.marked) {
+        htmlContent = marked.parse(plainTextContent, { gfm: true, breaks: false });
+    } else {
+        htmlContent = `<p>${plainTextContent.replace(/\n/g, '<br>')}</p>`;
+    }
+
     try {
-        await navigator.clipboard.writeText(textToCopy);
-        showCustomAlert('Copied to clipboard!');
+        const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+        const textBlob = new Blob([plainTextContent], { type: 'text/plain' });
+        const clipboardItem = new ClipboardItem({
+            'text/html': htmlBlob,
+            'text/plain': textBlob,
+        });
+
+        await navigator.clipboard.write([clipboardItem]);
+
+        // --- 2. เปลี่ยน Feedback จาก Modal เป็นการเปลี่ยนไอคอน ---
+        if (copyButton) {
+            const iconSpan = copyButton.querySelector('.material-symbols-outlined');
+            if (iconSpan) {
+                const originalIcon = iconSpan.textContent; // เก็บไอคอนเดิมไว้ (content_copy)
+                iconSpan.textContent = 'check'; // เปลี่ยนเป็นไอคอน check
+
+                // ตั้งเวลา 1.5 วินาทีเพื่อเปลี่ยนไอคอนกลับเป็นเหมือนเดิม
+                setTimeout(() => {
+                    iconSpan.textContent = originalIcon;
+                }, 1500);
+            }
+        }
+        // showCustomAlert('Copied as rich text!'); // << ลบ Modal เดิมทิ้ง
+
     } catch (err) {
-        console.error('Failed to copy message:', err);
-        showCustomAlert('Failed to copy message.', 'Error');
+        console.error('Failed to copy rich text, falling back to plain text:', err);
+        await navigator.clipboard.writeText(plainTextContent);
+        // ยังคงแสดง Modal สำหรับกรณีที่เกิด Error หรือ Warning
+        showCustomAlert('Failed to copy rich text, copied as plain text instead.', 'Warning');
     }
 }
 

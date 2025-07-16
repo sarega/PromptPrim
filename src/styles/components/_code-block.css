@@ -49,24 +49,43 @@ body.dark-mode .composer-editor pre {
 }
 
 /* 4. Copy Button (Preserved and integrated) */
-.copy-code-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background-color: #4a5568;
-    color: white;
-    border: none;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.2s ease-in-out;
+
+/* ทำให้ <pre> tag เป็นตำแหน่งอ้างอิงได้ */
+.message-content pre {
+  position: relative;
 }
 
-.code-block-wrapper:hover .copy-code-btn {
-    opacity: 1;
+/* สไตล์สำหรับปุ่ม Copy ของแต่ละ Code Block */
+.code-block-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+
+  background-color: #4a5568;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  
+  /* ทำให้ซ่อนไว้ก่อน แล้วแสดงเมื่อ hover */
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
 }
+
+/* แสดงปุ่มเมื่อนำเมาส์ไปวางบนกรอบของโค้ด */
+.message-content pre:hover .code-block-copy-btn {
+  opacity: 1;
+}
+
+/* สไตล์สำหรับ Dark Mode */
+body.dark-mode .code-block-copy-btn {
+  background-color: #3e4c5f;
+  border: 1px solid #5a6b82;
+}
+
 
 /* ========================================================
    == DEFINITIVE FIX FOR SCROLLBAR IN CODE BLOCKS       ==

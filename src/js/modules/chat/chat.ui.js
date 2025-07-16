@@ -76,6 +76,7 @@ function lazyRenderContent(textContent, targetContainer) {
             // เมื่อวาดเสร็จทั้งหมดแล้ว ให้เรียก enhanceCodeBlocks อีกครั้ง
             // เพื่อใส่ปุ่ม Copy ให้กับโค้ดบล็อกที่เพิ่งวาดเสร็จ
             enhanceCodeBlocks(targetContainer.closest('.message-content'));
+            addCopyToCodeBlocks(targetContainer); // << เรียกใช้ฟังก์ชันใหม่
             scrollToBottom();
             return;
         }
@@ -129,6 +130,41 @@ function formatRelativeTimestamp(timestamp) {
         });
     }
 }
+
+// ฟังก์ชันใหม่สำหรับเพิ่มปุ่ม Copy ให้กับทุก Code Block
+function addCopyToCodeBlocks(contentElement) {
+  // 1. ค้นหา <pre> tag ทั้งหมดที่อยู่ใน Bubble นี้
+  const codeBlocks = contentElement.querySelectorAll('pre');
+
+  // 2. วนลูปไปที่แต่ละอัน
+  codeBlocks.forEach(preElement => {
+    // 3. ทำให้ <pre> เป็นตำแหน่งอ้างอิงสำหรับปุ่ม
+    preElement.style.position = 'relative';
+
+    // 4. สร้างปุ่ม Copy "ใหม่" ทุกครั้ง
+    const button = document.createElement('button');
+    button.className = 'code-block-copy-btn'; // ใช้คลาสใหม่ที่ชัดเจน
+    button.textContent = 'Copy';
+
+    // 5. เพิ่ม Event Listener ให้ปุ่ม
+    button.addEventListener('click', (e) => {
+      e.stopPropagation(); // ป้องกันไม่ให้ Event ไปกระทบส่วนอื่น
+      const code = preElement.querySelector('code');
+      const textToCopy = code ? code.innerText : preElement.innerText;
+      
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        button.textContent = 'Copied!';
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 1500);
+      });
+    });
+
+    // 6. นำปุ่มไปแปะใน <pre>
+    preElement.appendChild(button);
+  });
+}
+
 
 function createMessageElement(message, index) {
     const { role, content, speaker, isLoading, isError, isSummary } = message;
@@ -216,6 +252,7 @@ function createMessageElement(message, index) {
             try {
                 if (role === 'assistant') {
                     streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
+                    addCopyToCodeBlocks(streamingContentSpan); 
                 } else if (role === 'user') {
                     if (Array.isArray(content)) {
                         content.forEach(part => {
