@@ -10,6 +10,10 @@
     font-family: var(--main-font-family);
     font-size: var(--main-font-size);
 }
+html {
+  -webkit-text-size-adjust: 100%; /* For Safari on iOS */
+  text-size-adjust: 100%; /* Standard property */
+}
 
 html, body {
     height: 100%;
@@ -19,7 +23,10 @@ html, body {
 body {
     background: var(--background-gradient);
     color: var(--text-dark);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
+
 html, body {
     overflow: hidden;
     position: fixed; /* << ล็อกตำแหน่งของ body */

@@ -71,13 +71,13 @@ function initHorizontalResizer(resizer, panelToResize) {
     if (!resizer || !panelToResize) return;
     
     let initialMouseY = 0, initialPanelHeight = 0;
+    let lastMouseY = 0; // << เพิ่มตัวแปรเก็บตำแหน่งล่าสุด
+    let ticking = false; // << เพิ่ม "ธง" เพื่อเช็คสถานะ
 
     const onMouseDown = (e) => {
         e.preventDefault();
-        
-        // [FIX] เพิ่มคลาส .active ทันทีที่กดเมาส์
         resizer.classList.add('active');
-        document.body.style.cursor = 'row-resize'; // เปลี่ยน cursor ของทั้งหน้าจอ
+        document.body.style.cursor = 'row-resize';
 
         if (panelToResize.classList.contains('collapsed')) {
             panelToResize.classList.remove('collapsed');
@@ -91,26 +91,34 @@ function initHorizontalResizer(resizer, panelToResize) {
         document.addEventListener('mouseup', onMouseUp);
     };
 
+    // แก้ไขฟังก์ชัน onMouseMove ใหม่
     const onMouseMove = (e) => {
-        const deltaY = e.clientY - initialMouseY;
-        let newHeight = initialPanelHeight - deltaY;
-        const minHeight = parseInt(getComputedStyle(panelToResize).minHeight, 10) || 50;
-        if (newHeight < minHeight) newHeight = minHeight;
-        panelToResize.style.flexBasis = `${newHeight}px`;
+        lastMouseY = e.clientY; // แค่บันทึกตำแหน่งเมาส์ล่าสุด
+        
+        if (!ticking) {
+            window.requestAnimationFrame(() => {
+                // คำนวณและเปลี่ยนความสูงในนี้
+                const deltaY = lastMouseY - initialMouseY;
+                let newHeight = initialPanelHeight - deltaY;
+                const minHeight = parseInt(getComputedStyle(panelToResize).minHeight, 10) || 50;
+                if (newHeight < minHeight) newHeight = minHeight;
+                
+                panelToResize.style.flexBasis = `${newHeight}px`;
+                ticking = false; // รีเซ็ตธง
+            });
+            ticking = true; // ตั้งธงว่ากำลังรอวาดผล
+        }
     };
 
     const onMouseUp = () => {
-        // [FIX] ลบคลาส .active และคืนค่า cursor เมื่อปล่อยเมาส์
         resizer.classList.remove('active');
         document.body.style.cursor = '';
-
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
     };
     
     resizer.addEventListener('mousedown', onMouseDown);
 }
-
 function initializePanelControls() {
     if (!DOM.sessionsPanel) return;
 

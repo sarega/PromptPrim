@@ -31,8 +31,8 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/index-BCExddK3.js"></script>
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/index-9p8V_Z2x.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/index-CncRzHev.js"></script>
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/index-B-nzBl4b.css">
 </head>
 <body>
 
@@ -102,8 +102,12 @@
                             <label for="system-utility-summary-prompt">Summarization Prompt Template</label>
                             <div class="form-group">
                                 <div class="flex-group">
-                                    <select id="system-utility-summary-preset-select"></select>
-                                    <button id="save-summary-preset-btn" class="btn btn-small btn-secondary">Save as Preset</button>
+                                    <select id="system-utility-summary-preset-select" style="flex-grow: 1;"></select>
+                                    <div id="summary-preset-actions" class="dropdown align-right">
+                                        <button class="btn btn-small btn-secondary" data-action="toggle-menu">Actions &#9662;</button>
+                                        <div class="dropdown-content">
+                                            </div>
+                                    </div>
                                 </div>
                             </div>
                             <textarea id="system-utility-summary-prompt" rows="8"></textarea>
@@ -256,35 +260,36 @@
             <div class="chat-input-wrapper">
                 <div id="file-preview-container" class="hidden"></div>
                 <div class="input-container-seamless">
-                    <div id="chat-actions-container" class="dropdown input-adornment left">
-                        <button class="btn-icon" id="chat-actions-btn" title="More Actions">
-                            <span class="material-symbols-outlined">add_circle</span>
-                        </button>
-                        <div id="chat-actions-menu" class="dropdown-content bottom-up">
-                            <a href="#" data-action="open-composer">
-                                <span class="material-symbols-outlined">edit_square</span> Composer
-                            </a>
-                            <a href="#" data-action="summarize">
-                                <span class="material-symbols-outlined">psychology</span> Summarize
-                            </a>
-                            <a href="#" data-action="upload-file">
-                                <span class="material-symbols-outlined">attach_file</span> Upload files
-                            </a>
-                        </div>
-                    </div>
                     <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
-                    <div class="input-adornment right">
-                        <button class="btn send-btn" id="sendBtn" title="Send Message">
-                            <span class="material-symbols-outlined">send</span>
-                        </button>
-                        <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">
-                            <span class="material-symbols-outlined">stop_circle</span>
-                        </button>
+                    
+                    <div class="input-actions-row">
+                        
+                        <div class="input-actions-left">
+                            <div id="chat-actions-container" class="dropdown input-adornment left">
+                                <button class="btn-icon" id="chat-actions-btn" title="More Actions">
+                                    <span class="material-symbols-outlined">add_circle</span>
+                                </button>
+                                <div id="chat-actions-menu" class="dropdown-content bottom-up">
+                                    </div>
+                            </div>
+                            </div>
+
+                        <div class="input-actions-right">
+                            <button class="btn send-btn" id="sendBtn" title="Send Message">
+                                <span class="material-symbols-outlined">send</span>
+                            </button>
+                            <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">
+                                <span class="material-symbols-outlined">stop_circle</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
             
             <div id="status-panel">
+                <button id="mobile-composer-toggle" class="btn-icon mobile-only" title="Toggle Composer">
+                    <span class="material-symbols-outlined">keyboard_arrow_up</span>
+                </button>
                 <div class="status-left">
                     <div class="status-dot" id="statusDot"></div>
                     <span id="statusText" class="status-text-content">Disconnected</span>
@@ -439,7 +444,7 @@
     <div id="right-sidebar-overlay"></div>
     
     <!-- ===== HIDDEN INPUTS ===== -->
-    <input type="file" id="load-project-input" class="hidden" accept=".json">
+    <input type="file" id="load-project-input" class="hidden" accept=".prim,.json">
     <input type="file" id="load-memory-package-input" class="hidden" accept=".json">
     <input type="file" id="file-input" class="hidden" multiple>
     

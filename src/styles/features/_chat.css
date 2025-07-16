@@ -309,15 +309,6 @@ body.dark-mode .inline-edit-textarea:focus {
 #chatInput::-webkit-scrollbar { display: none; }
 #chatInput:focus { outline: none; box-shadow: none; }
 
-/* .input-adornment {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-.input-adornment.left { margin-right: 5px; }
-.input-adornment.right { margin-left: 5px; } */
-
 /* --- New Gemini-style Input Layout --- */
 
 /* ตัวครอบหลัก: เปลี่ยนเป็นแนวตั้ง */
