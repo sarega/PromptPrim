@@ -818,3 +818,27 @@ async function triggerAutoNameGeneration(session) {
         console.error("Auto-rename process failed:", e);
     }
 }
+
+export function clearSummaryContext({ index }) {
+    const project = stateManager.getProject();
+    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    if (!session) return;
+
+    // 1. ตรวจสอบว่า message ที่กำลังจะลบ คือตัวที่ให้ context อยู่หรือไม่
+    const messageToDelete = session.history[index];
+    const activeLogId = session.summaryState?.activeSummaryId;
+
+    if (activeLogId && messageToDelete?.summaryLogId === activeLogId) {
+        // 2. ถ้าใช่, ให้เคลียร์ active summary ออกจาก state ของ session
+        session.summaryState.activeSummaryId = null;
+        console.log(`Summary context for log ID ${activeLogId} has been cleared.`);
+    }
+
+    // 3. ลบ message (ที่เป็น marker หรือ bubble) ออกจาก history
+    session.history.splice(index, 1);
+    
+    // 4. บันทึกและอัปเดต UI
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('ui:renderMessages');
+    showCustomAlert("Marker/Context has been removed from this chat.", "Info");
+}

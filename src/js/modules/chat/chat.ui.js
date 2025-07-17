@@ -61,112 +61,70 @@ function enhanceCodeBlocks(messageElement) {
     });
 }
 
-/**
- * [NEW] ฟังก์ชันกลางสำหรับวาดเนื้อหาแบบ Lazy-Rendering
- * @param {string} textContent - เนื้อหาข้อความทั้งหมด
- * @param {HTMLElement} targetDiv - contentDiv ที่จะให้ใส่เนื้อหา
- */
 function lazyRenderContent(textContent, targetContainer) {
-    const chunks = textContent.split(/\n{2,}/); // แยกตามย่อหน้า
+    const chunks = textContent.split(/\n{2,}/);
     let chunkIndex = 0;
-    targetContainer.innerHTML = ''; // เคลียร์ของเก่า
+    targetContainer.innerHTML = '';
 
     function renderNextChunk() {
         if (chunkIndex >= chunks.length) {
-            // เมื่อวาดเสร็จทั้งหมดแล้ว ให้เรียก enhanceCodeBlocks อีกครั้ง
-            // เพื่อใส่ปุ่ม Copy ให้กับโค้ดบล็อกที่เพิ่งวาดเสร็จ
-            enhanceCodeBlocks(targetContainer.closest('.message-content'));
-            addCopyToCodeBlocks(targetContainer); // << เรียกใช้ฟังก์ชันใหม่
+            addCopyToCodeBlocks(targetContainer);
             scrollToBottom();
             return;
         }
-
-        // ใช้ div เป็น container เพราะ chunk อาจเป็น list, table หรืออื่นๆ
         const chunkContainer = document.createElement('div');
-        
-        // [FIX] เปลี่ยนจาก .textContent เป็น .innerHTML + marked.parse()
-        // เพื่อให้แปลง Markdown เป็น HTML ก่อนแสดงผล
         chunkContainer.innerHTML = marked.parse(chunks[chunkIndex] || '', { gfm: true, breaks: false });
-
         targetContainer.appendChild(chunkContainer);
-
         chunkIndex++;
-        
         requestAnimationFrame(() => {
             scrollToBottom();
             renderNextChunk();
         });
     }
-
     renderNextChunk();
 }
 
-// เพิ่มฟังก์ชันเล็กๆ นี้เข้าไปในไฟล์เพื่อช่วยแปลงเวลา
+
 function formatRelativeTimestamp(timestamp) {
     if (!timestamp) return '';
-
     const now = new Date();
     const messageDate = new Date(timestamp);
-
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
 
     if (messageDate >= startOfToday) {
-        // ถ้าเป็นวันนี้: แสดงแค่เวลา
-        return messageDate.toLocaleTimeString('th-TH', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
+        return messageDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false });
     } else if (messageDate >= startOfYesterday) {
-        // ถ้าเป็นเมื่อวาน: แสดงคำว่า "Yesterday"
         return 'Yesterday';
     } else {
-        // ถ้าเก่ากว่านั้น: แสดงวันที่แบบสั้น
-        return messageDate.toLocaleDateString('th-TH', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
+        return messageDate.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 }
 
-// ฟังก์ชันใหม่สำหรับเพิ่มปุ่ม Copy ให้กับทุก Code Block
+
 function addCopyToCodeBlocks(contentElement) {
-  // 1. ค้นหา <pre> tag ทั้งหมดที่อยู่ใน Bubble นี้
   const codeBlocks = contentElement.querySelectorAll('pre');
-
-  // 2. วนลูปไปที่แต่ละอัน
   codeBlocks.forEach(preElement => {
-    // 3. ทำให้ <pre> เป็นตำแหน่งอ้างอิงสำหรับปุ่ม
+    if (preElement.querySelector('.code-block-copy-btn')) return; // ป้องกันการสร้างปุ่มซ้ำ
     preElement.style.position = 'relative';
-
-    // 4. สร้างปุ่ม Copy "ใหม่" ทุกครั้ง
     const button = document.createElement('button');
-    button.className = 'code-block-copy-btn'; // ใช้คลาสใหม่ที่ชัดเจน
+    button.className = 'code-block-copy-btn';
     button.textContent = 'Copy';
-
-    // 5. เพิ่ม Event Listener ให้ปุ่ม
     button.addEventListener('click', (e) => {
-      e.stopPropagation(); // ป้องกันไม่ให้ Event ไปกระทบส่วนอื่น
+      e.stopPropagation();
       const code = preElement.querySelector('code');
       const textToCopy = code ? code.innerText : preElement.innerText;
-      
       navigator.clipboard.writeText(textToCopy).then(() => {
         button.textContent = 'Copied!';
-        setTimeout(() => {
-          button.textContent = 'Copy';
-        }, 1500);
+        setTimeout(() => { button.textContent = 'Copy'; }, 1500);
       });
     });
-
-    // 6. นำปุ่มไปแปะใน <pre>
     preElement.appendChild(button);
   });
 }
 
 
-function createMessageElement(message, index) {
+function createMessageElement(message, index, session) {
     const { role, content, speaker, isLoading, isError, isSummary } = message;
     const project = stateManager.getProject();
     const LONG_TEXT_THRESHOLD = 2000;
@@ -180,147 +138,161 @@ function createMessageElement(message, index) {
     if (isError) msgDiv.classList.add('error');
     if (isSummary) msgDiv.classList.add('system-summary-message');
 
-    // --- ตรรกะการแสดงผลชื่อและเวลา (ฉบับแก้ไขใหม่ ปลอดภัย) ---
     if (role === 'assistant' && speaker) {
         const speakerAgent = project.agentPresets?.[speaker];
         const speakerIcon = speakerAgent ? speakerAgent.icon : '🤖';
         const speakerLabelWrapper = document.createElement('div');
         speakerLabelWrapper.className = 'speaker-label-wrapper';
-
         const speakerLabel = document.createElement('span');
         speakerLabel.className = 'speaker-label';
-
-        // 1. ใส่แค่ "ไอคอน" กับ "ชื่อ" ลงไปใน Label หลักก่อน
         speakerLabel.innerHTML = `${speakerIcon} ${speaker}`;
-
-        // 2. ตรวจสอบว่ามี timestamp หรือไม่ ถ้ามี ให้สร้าง element ของเวลาขึ้นมา
         if (message.timestamp) {
-            console.log(`[DEBUG 3] Timestamp found: ${message.timestamp}`); // << Log ที่ 2: ยืนยันว่าเจอ timestamp
-            const formattedTime = formatRelativeTimestamp(message.timestamp);
             const timeEl = document.createElement('span');
             timeEl.className = 'message-timestamp';
-            // 3. ใส่ "ตัวคั่น" และ "เวลา" เข้าไปใน element ใหม่นี้
-            timeEl.innerHTML = `&nbsp;• ${formattedTime}`;
-            
-            // 4. นำ element เวลา ไปต่อท้าย Label หลัก
+            timeEl.innerHTML = `&nbsp;• ${formatRelativeTimestamp(message.timestamp)}`;
             speakerLabel.appendChild(timeEl);
         }
-
         speakerLabelWrapper.appendChild(speakerLabel);
         turnWrapper.appendChild(speakerLabelWrapper);
-
     } else if (role === 'user' && message.timestamp) {
-        // (ส่วนของ User ยังคงเหมือนเดิม)
-        const formattedTime = formatRelativeTimestamp(message.timestamp);
         const timeEl = document.createElement('span');
         timeEl.className = 'message-timestamp';
-        timeEl.textContent = formattedTime;
+        timeEl.textContent = formatRelativeTimestamp(message.timestamp);
         turnWrapper.appendChild(timeEl);
     }
-    // ----------------------------------
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    msgDiv.appendChild(contentDiv);
 
-    // --- ส่วนที่เหลือของฟังก์ชันทั้งหมดเหมือนเดิมทุกประการ ---
-    if (isLoading) {
-        contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
-    } else {
-        const streamingContentSpan = document.createElement('span');
-        streamingContentSpan.className = 'streaming-content';
-        contentDiv.appendChild(streamingContentSpan);
-
-        let fullTextContent = '';
-        let isLong = false;
+    // --- Logic การสร้างเนื้อหาและปุ่ม ---
+    if (message.isSummaryMarker || message.isSummary) {
+        msgDiv.classList.add('summary-marker');
+        const markerText = document.createElement('span');
+        markerText.textContent = message.content;
+        const markerActions = document.createElement('div');
+        markerActions.className = 'summary-marker-actions';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'btn-icon small';
+        editBtn.title = 'Edit this Summary';
+        editBtn.innerHTML = `<span class="material-symbols-outlined">edit_note</span>`;
         
-        if (isSummary) {
-            isLong = true;
-            fullTextContent = content;
-        } else if (role === 'user') {
-            fullTextContent = Array.isArray(content) ? content.filter(p => p.type === 'text').map(p => p.text).join('\n') : (content || '');
-            isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
-        } else if (role === 'assistant' || role === 'system') {
-            fullTextContent = content || '';
-            isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
+        // [แก้ไข] ตอนนี้เรามีตัวแปร session ที่ถูกต้องแล้ว
+        const logIdForAction = message.summaryLogId || session.summaryState?.activeSummaryId;
+        if (logIdForAction) {
+            editBtn.onclick = () => stateManager.bus.publish('summary:editFromChat', { logId: logIdForAction });
         }
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-icon small danger';
+        deleteBtn.title = 'Remove Marker from Chat';
+        deleteBtn.innerHTML = `<span class="material-symbols-outlined">delete</span>`;
+        deleteBtn.onclick = () => stateManager.bus.publish('chat:clearSummaryContext', { index });
 
-        if (isLong) {
-            streamingContentSpan.innerHTML = `<div class="loading-text">Loading large message...</div>`;
-            setTimeout(() => lazyRenderContent(fullTextContent, streamingContentSpan), 0);
-        } else {
-            try {
-                if (role === 'assistant') {
-                    streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
-                    addCopyToCodeBlocks(streamingContentSpan); 
-                } else if (role === 'user') {
-                    if (Array.isArray(content)) {
-                        content.forEach(part => {
-                            if (part.type === 'text' && part.text) {
-                                const p = document.createElement('p');
-                                p.textContent = part.text;
-                                streamingContentSpan.appendChild(p);
-                            } else if (part.type === 'image_url' && part.url) {
-                                const img = document.createElement('img');
-                                img.src = part.url;
-                                img.className = 'multimodal-image';
-                                streamingContentSpan.appendChild(img);
-                            }
-                        });
-                    } else if (typeof content === 'string') {
-                        const p = document.createElement('p');
-                        p.textContent = content;
-                        streamingContentSpan.appendChild(p);
-                    }
-                } 
-                else if (role === 'system' && typeof content === 'string') {
-                    streamingContentSpan.textContent = content;
-                }
-            } catch (e) {
-                console.error("Content rendering failed:", e);
-                streamingContentSpan.textContent = 'Error displaying content';
-            }
-            enhanceCodeBlocks(contentDiv);
-        }
-    }
-    
-    if (!isLoading && !isError && !isSummary) {
+        markerActions.append(editBtn, deleteBtn);
+        msgDiv.append(markerText, markerActions);
+        
+    } else if (role === 'system') {
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.textContent = message.content;
+        msgDiv.appendChild(contentDiv);
         const actions = document.createElement('div');
         actions.className = 'message-actions';
-        const iconStyle = 'style="font-size: 18px;"';
-        
-        const btnEdit = document.createElement('button');
-        btnEdit.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>edit</span>`;
-        btnEdit.title = 'Edit';
-        btnEdit.onclick = (event) => stateManager.bus.publish('chat:editMessage', { index, event });
-        actions.appendChild(btnEdit);
-
-        const btnCopy = document.createElement('button');
-        btnCopy.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>content_copy</span>`;
-        btnCopy.title = 'Copy';
-        btnCopy.onclick = (event) => stateManager.bus.publish('chat:copyMessage', { index, event });
-        actions.appendChild(btnCopy);
-
-        if (role === 'assistant') {
-            const btnRegenerate = document.createElement('button');
-            btnRegenerate.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>refresh</span>`;
-            btnRegenerate.title = 'Regenerate';
-            btnRegenerate.onclick = (event) => stateManager.bus.publish('chat:regenerateMessage', { index, event });
-            actions.appendChild(btnRegenerate);
-        }
-
         const btnDelete = document.createElement('button');
-        btnDelete.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>delete_forever</span>`;
+        btnDelete.innerHTML = `<span class="material-symbols-outlined" style="font-size: 18px;">delete_forever</span>`;
         btnDelete.title = 'Delete';
         btnDelete.onclick = (event) => stateManager.bus.publish('chat:deleteMessage', { index, event });
         actions.appendChild(btnDelete);
-
         msgDiv.appendChild(actions);
+
+    } else {
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        msgDiv.appendChild(contentDiv);
+
+        if (isLoading) {
+            contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
+        } else {
+            const streamingContentSpan = document.createElement('span');
+            streamingContentSpan.className = 'streaming-content';
+            contentDiv.appendChild(streamingContentSpan);
+            let fullTextContent = '';
+            let isLong = false;
+            if (role === 'user') {
+                fullTextContent = Array.isArray(content) ? content.filter(p => p.type === 'text').map(p => p.text).join('\n') : (content || '');
+                isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
+            } else if (role === 'assistant') {
+                fullTextContent = content || '';
+                isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
+            }
+            if (isLong) {
+                streamingContentSpan.innerHTML = `<div class="loading-text">Loading large message...</div>`;
+                setTimeout(() => lazyRenderContent(fullTextContent, streamingContentSpan), 0);
+            } else {
+                try {
+                    if (role === 'assistant') {
+                        streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
+                        addCopyToCodeBlocks(streamingContentSpan);
+                    } else if (role === 'user') {
+                        if (Array.isArray(content)) {
+                            content.forEach(part => {
+                                if (part.type === 'text' && part.text) {
+                                    const p = document.createElement('p');
+                                    p.textContent = part.text;
+                                    streamingContentSpan.appendChild(p);
+                                } else if (part.type === 'image_url' && part.url) {
+                                    const img = document.createElement('img');
+                                    img.src = part.url;
+                                    img.className = 'multimodal-image';
+                                    streamingContentSpan.appendChild(img);
+                                }
+                            });
+                        } else if (typeof content === 'string') {
+                            const p = document.createElement('p');
+                            p.textContent = content;
+                            streamingContentSpan.appendChild(p);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Content rendering failed:", e);
+                    streamingContentSpan.textContent = 'Error displaying content';
+                }
+            }
+        }
+        
+        if (!isLoading && !isError) {
+            const actions = document.createElement('div');
+            actions.className = 'message-actions';
+            const iconStyle = 'style="font-size: 18px;"';
+            const btnEdit = document.createElement('button');
+            btnEdit.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>edit</span>`;
+            btnEdit.title = 'Edit';
+            btnEdit.onclick = (event) => stateManager.bus.publish('chat:editMessage', { index, event });
+            actions.appendChild(btnEdit);
+            if (role !== 'assistant') {
+                const btnCopy = document.createElement('button');
+                btnCopy.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>content_copy</span>`;
+                btnCopy.title = 'Copy';
+                btnCopy.onclick = (event) => stateManager.bus.publish('chat:copyMessage', { index, event });
+                actions.appendChild(btnCopy);
+            }
+            if (role === 'assistant') {
+                const btnRegenerate = document.createElement('button');
+                btnRegenerate.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>refresh</span>`;
+                btnRegenerate.title = 'Regenerate';
+                btnRegenerate.onclick = (event) => stateManager.bus.publish('chat:regenerateMessage', { index, event });
+                actions.appendChild(btnRegenerate);
+            }
+            const btnDelete = document.createElement('button');
+            btnDelete.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>delete_forever</span>`;
+            btnDelete.title = 'Delete';
+            btnDelete.onclick = (event) => stateManager.bus.publish('chat:deleteMessage', { index, event });
+            actions.appendChild(btnDelete);
+            msgDiv.appendChild(actions);
+        }
     }
     
     turnWrapper.appendChild(msgDiv);
     return turnWrapper;
 }
+
 function initMobileScrollBehavior() {
     const chatArea = document.querySelector('.main-chat-area');
     const messagesContainer = document.getElementById('chatMessages');
@@ -427,26 +399,17 @@ export function renderMessages() {
         return;
     }
     
-    // [CRITICAL DEBUG] แสดงข้อมูลทั้งหมดที่จะนำมาวาด
-    // console.log("📜 [UI] History to be rendered:", JSON.parse(JSON.stringify(session.history)));
-
     container.innerHTML = '';
 
     if (session.history && session.history.length > 0) {
         session.history.forEach((msg, index) => {
-            const messageElement = createMessageElement(msg, index);
+            // [แก้ไข] ส่ง session เข้าไปเป็นพารามิเตอร์ตัวที่สาม
+            const messageElement = createMessageElement(msg, index, session); 
             container.appendChild(messageElement);
         });
-    } else {
     }
 
-    // เลื่อนหน้าจอไปที่ข้อความล่าสุด
     scrollToBottom();
-    if (window.hljs) {
-        document.querySelectorAll('pre code').forEach((block) => {
-            hljs.highlightElement(block);
-        });
-    }
 }
 
 export function showStreamingTarget(index) {
@@ -474,23 +437,13 @@ export function scrollToBottom() {
     }
 }
 
-
-
 export function clearChat() {
-    const container = document.getElementById('chatMessages');
-    if (container) container.innerHTML = '';
-    updateChatTitle('AI Assistant'); // Reset title
+    document.getElementById('chatMessages').innerHTML = '';
+    updateChatTitle('AI Assistant');
 }
 
-/**
- * Updates the title in the chat header.
- * @param {string} title - The new title to display.
- */
 export function updateChatTitle(title) {
-    const chatTitleElement = document.getElementById('chat-title');
-    if (chatTitleElement) {
-        chatTitleElement.textContent = title || 'AI Assistant';
-    }
+    document.getElementById('chat-title').textContent = title || 'AI Assistant';
 }
 
 /**
@@ -522,13 +475,9 @@ function checkScrollabilityForSmartUI() {
 
 export function renderFilePreviews(files) {
     const container = document.getElementById('file-preview-container');
-    if (!container) return;
-
     container.classList.toggle('hidden', !files || files.length === 0);
-
     container.innerHTML = '';
     if (!files || files.length === 0) return;
-
     files.forEach((file, index) => {
         const item = document.createElement('div');
         item.className = 'file-preview-item';
@@ -539,36 +488,25 @@ export function renderFilePreviews(files) {
             previewContent = `<div class="file-preview-thumbnail file-icon">📄</div>`;
         }
         item.innerHTML = `${previewContent}<span class="file-preview-name">${file.name}</span><button class="remove-file-btn" data-action="chat:removeFile" data-index="${index}">&times;</button>`;
-
         container.appendChild(item);
-
     });
 }
 
 export function updateContextInspector() {
-    // ดึงข้อมูลล่าสุดทั้งหมด
     const { totalTokens, agent, agentNameForDisplay } = getContextData();
-
-    // อัปเดต Status Bar
     document.getElementById('active-agent-status').textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
     document.getElementById('token-count-status').textContent = `~${totalTokens.toLocaleString()} Tokens`;
 }
 
-
 export function showContextInspector() {
-    // ดึงข้อมูลล่าสุดทั้งหมด
     const { finalSystemPrompt, totalTokens, agentNameForDisplay, model } = getContextData();
-    
-    // บรรจุข้อมูลลง Modal และแสดงผลทันที
     document.getElementById('inspector-agent-name').textContent = agentNameForDisplay;
     document.getElementById('inspector-agent-model').textContent = model;
     document.getElementById('inspector-token-count').textContent = `~${totalTokens.toLocaleString()}`;
     document.getElementById('inspector-system-prompt').textContent = finalSystemPrompt || '(No system prompt or memories active)';
-    
     document.getElementById('context-inspector-modal').style.display = 'flex';
 }
 
-// แก้ไขฟังก์ชัน hideContextInspector
 export function hideContextInspector() {
     document.getElementById('context-inspector-modal').style.display = 'none';
 }
@@ -577,28 +515,19 @@ function initChatActionMenu() {
     const container = document.getElementById('chat-actions-container');
     const button = document.getElementById('chat-actions-btn');
     const menu = document.getElementById('chat-actions-menu');
-
     if (!container || !button || !menu) return;
 
-    // Listener สำหรับปุ่ม + เพื่อ "สร้างและเปิด" เมนู
     button.addEventListener('click', (e) => {
         e.stopPropagation();
-        menu.innerHTML = ''; // เคลียร์เมนูเก่า
-
-        // --- สร้างเมนูพื้นฐาน ---
+        menu.innerHTML = '';
         menu.innerHTML = `
             <a href="#" data-action="open-composer"><span class="material-symbols-outlined">edit_square</span> Composer</a>
             <a href="#" data-action="chat:summarize"><span class="material-symbols-outlined">psychology</span> Summarize</a>
             <a href="#" data-action="upload-file"><span class="material-symbols-outlined">attach_file</span> Upload files</a>
         `;
-        // --- ตรวจสอบสถานะเพื่อสร้างเมนู "Clear Summary" ---
         const project = stateManager.getProject();
         const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-        console.log("Checking for active summary. ID:", session?.summaryState?.activeSummaryId);
-
         if (session && session.summaryState?.activeSummaryId) {
-            console.log("✅ Active summary found. Creating 'Clear Summary' button.");
-
             menu.innerHTML += `
                 <div class="dropdown-divider"></div>
                 <a href="#" data-action="chat:clearSummary" class="is-destructive"><span class="material-symbols-outlined">layers_clear</span> Clear Summary Context</a>
@@ -607,14 +536,11 @@ function initChatActionMenu() {
         container.classList.toggle('open');
     });
 
-    // [FIX] Listener สำหรับจัดการเมื่อคลิกที่ตัวเลือกในเมนู
     menu.addEventListener('click', (e) => {
         const actionTarget = e.target.closest('[data-action]');
         if (actionTarget) {
             e.preventDefault();
             const action = actionTarget.dataset.action;
-
-            // --- นำ Logic การจัดการ Action กลับมาไว้ที่นี่ ---
             switch (action) {
                 case 'open-composer':
                     stateManager.bus.publish('ui:toggleComposer');
@@ -626,17 +552,13 @@ function initChatActionMenu() {
                     document.getElementById('file-input')?.click();
                     break;
                 case 'chat:clearSummary':
-                    stateManager.bus.publish('chat:clearSummary');
+                    stateManager.bus.publish('chat:clearSummaryContext', { index: -1 }); // Special index
                     break;
             }
-            // ---------------------------------------------
-            
-            // เมื่อคลิกแล้วให้ปิดเมนู
             container.classList.remove('open');
         }
     });
 
-    // Listener สำหรับปิดเมนูเมื่อคลิกที่พื้นที่อื่น
     document.addEventListener('click', (e) => {
         if (container.classList.contains('open') && !container.contains(e.target)) {
             container.classList.remove('open');
@@ -700,21 +622,17 @@ export async function proceedWithStreaming(streamingSpan) {
 
 // --- Main UI Initialization ---
 export function initChatUI() {
-    // --- 1. Get DOM Elements ---
     const chatInput = document.getElementById('chatInput');
     const fileInput = document.getElementById('file-input');
     const previewContainer = document.getElementById('file-preview-container');
 
-    // --- 2. Setup Event Listeners ---
     if (chatInput) {
-        // Listener สำหรับส่งข้อความด้วย Enter
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 stateManager.bus.publish('chat:sendMessage');
             }
         });
-        // Listener สำหรับปรับขนาด Textarea และอัปเดต Token Count
         const debouncedUpdate = debounce(() => {
             chatInput.style.height = 'auto';
             chatInput.style.height = (chatInput.scrollHeight) + 'px';
@@ -723,37 +641,30 @@ export function initChatUI() {
         chatInput.addEventListener('input', debouncedUpdate);
     }
 
-    // [FIX] รวม Listener ทั้งหมดไว้ด้วยกัน และลบตัวที่ซ้ำซ้อนออก
     document.getElementById('sendBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:sendMessage'));
     document.getElementById('stopBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:stopGeneration'));
     document.getElementById('context-inspector-trigger-btn')?.addEventListener('click', showContextInspector);
     document.querySelector('#context-inspector-modal .btn-secondary')?.addEventListener('click', hideContextInspector);
     
-    // Listener ของ File Input มีแค่ตัวนี้ตัวเดียว
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
             stateManager.bus.publish('chat:fileUpload', e);
         });
     }
 
-    // Delegated listener สำหรับปุ่มลบไฟล์ใน Preview
     if (previewContainer) {
         previewContainer.addEventListener('click', (e) => {
             if (e.target.matches('.remove-file-btn')) {
                 const indexToRemove = parseInt(e.target.dataset.index, 10);
-                // ส่ง Event ไปบอก handler ให้ลบไฟล์ออกจาก State
                 stateManager.bus.publish('chat:removeFile', { index: indexToRemove });
             }
         });
     }
-    // --- 3. Initialize Sub-modules ---
+    
     initChatActionMenu();
-    // initMobileScrollBehavior();
 
-    // --- 4. Subscribe to Global Events ---
     stateManager.bus.subscribe('session:loaded', () => updateContextInspector());
     stateManager.bus.subscribe('entity:selected', () => updateContextInspector());
-    stateManager.bus.subscribe('composer:visibilityChanged', updateComposerToggleButton);
     stateManager.bus.subscribe('ui:renderMessages', renderMessages);
     stateManager.bus.subscribe('ui:renderFilePreviews', ({ files }) => renderFilePreviews(files));
     stateManager.bus.subscribe('ui:updateChatTitle', ({ title }) => updateChatTitle(title));
@@ -762,9 +673,7 @@ export function initChatUI() {
         document.getElementById('stopBtn')?.classList.toggle('hidden', !isLoading);
     });
 
-    // --- 5. Set Initial UI State ---
-    updateComposerToggleButton();
-    console.log("✅ Chat UI Initialized with a clean structure.");
+    console.log("✅ Chat UI Initialized.");
 }
 
 export function initRightSidebarToggle() {

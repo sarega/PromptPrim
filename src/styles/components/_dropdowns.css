@@ -184,3 +184,57 @@
     bottom: 100%; /* กำหนดให้ขอบล่างของเมนู อยู่ที่ขอบบนของปุ่ม */
     margin-bottom: 8px; /* เพิ่มระยะห่างเล็กน้อยระหว่างปุ่มกับเมนู */
 }
+
+/* --- Styles for Searchable Select Component --- */
+.searchable-select-wrapper {
+    position: relative;
+}
+
+.searchable-select-options {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 2100; /* ให้อยู่เหนือกว่า Modal ทั่วไป */
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 5px;
+}
+
+.searchable-select-options.hidden {
+    display: none;
+}
+
+.searchable-option-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: background-color 0.2s ease;
+}
+
+.searchable-option-item:hover {
+    background-color: #f0f4f8;
+}
+
+.searchable-option-item small {
+    display: block;
+    color: #718096;
+    font-size: 0.8rem;
+}
+
+/* Dark Mode */
+body.dark-mode .searchable-select-options {
+    background-color: #2d3748;
+    border-color: #4a5568;
+}
+body.dark-mode .searchable-option-item:hover {
+    background-color: #4a5568;
+}
+body.dark-mode .searchable-option-item small {
+    color: #a0aec0;
+}

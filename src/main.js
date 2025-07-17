@@ -34,11 +34,10 @@ import * as GroupUI from './js/modules/group/group.ui.js';
 import * as GroupHandlers from './js/modules/group/group.handlers.js';
 import * as MemoryUI from './js/modules/memory/memory.ui.js';
 import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
-import * as SummaryUI from './js/modules/summary/summary.ui.js';
 import * as ComposerHandlers from './js/modules/composer/composer.handlers.js'; // <-- ตรวจสอบว่ามีบรรทัดนี้
+import * as SummaryUI from './js/modules/summary/summary.ui.js';
+import * as SummaryHandlers from './js/modules/summary/summary.handlers.js';
 
-
-// import { initChatHandlers } from './js/modules/chat/chat.handlers.js';
 
 // --- State for Lazy Initialization ---
 let isStudioInitialized = false;
@@ -167,24 +166,28 @@ function setupEventSubscriptions() {
     bus.subscribe('summary:view', ({ logId }) => SummaryUI.showSummaryModal(logId));
     bus.subscribe('summary:load', ({ logId }) => ChatHandlers.loadSummaryIntoContext(logId));
     bus.subscribe('summary:delete', ({ logId }) => ChatHandlers.deleteSummary(logId));
+    bus.subscribe('summary:editFromChat', ({ logId }) => {
+        SummaryUI.showSummarizationCenter();
+        setTimeout(() => SummaryUI.selectLog(logId), 50);
+    });
+    bus.subscribe('summary:deleteFromChat', SummaryHandlers.deleteSummaryFromChat);
+    bus.subscribe('chat:clearSummaryContext', ChatHandlers.clearSummaryContext); 
     bus.subscribe('entity:select', ({ type, name }) => ProjectHandlers.selectEntity(type, name));
 
     // Chat Actions
+    bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
+    bus.subscribe('composer:heightChanged', SessionHandlers.saveComposerHeight);
     bus.subscribe('chat:deleteMessage', (payload) => ChatHandlers.deleteMessage(payload));
 
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
     bus.subscribe('chat:stopGeneration', ChatHandlers.stopGeneration);
     bus.subscribe('chat:editMessage', ({ index }) => ChatHandlers.editMessage({ index }));
-    // bus.subscribe('chat:deleteMessage', ({ index }) => ChatHandlers.deleteMessage({ index }));
     bus.subscribe('chat:copyMessage', ({ index, event }) => ChatHandlers.copyMessageToClipboard({ index, event }));
     bus.subscribe('chat:regenerateMessage', ({ index }) => ChatHandlers.regenerateMessage({ index }));
-
     bus.subscribe('chat:fileUpload', (event) => ChatHandlers.handleFileUpload(event));
     bus.subscribe('chat:removeFile', ({ index }) => ChatHandlers.removeAttachedFile({ index }));
-    bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
-    bus.subscribe('composer:heightChanged', SessionHandlers.saveComposerHeight);
-
-    bus.subscribe('chat:summarize', ChatHandlers.handleManualSummarize);
+    
+    bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);    
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
 
     bus.subscribe('upload-file', () => { document.getElementById('file-input')?.click();});
@@ -195,11 +198,11 @@ function setupEventSubscriptions() {
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
     
-    bus.subscribe('ui:renderSummarizationSelector', ProjectUI.renderSummarizationPresetSelector);
-    bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange);
-    bus.subscribe('settings:saveSummaryPreset', (payload) => MemoryHandlers.handleSaveSummarizationPreset(payload));
-    bus.subscribe('settings:deleteSummaryPreset', MemoryHandlers.deleteSummarizationPreset);
-    bus.subscribe('settings:renameSummaryPreset', MemoryHandlers.renameSummarizationPreset);
+    // bus.subscribe('ui:renderSummarizationSelector', ProjectUI.renderSummarizationPresetSelector);
+    // bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange);
+    // bus.subscribe('settings:saveSummaryPreset', (payload) => MemoryHandlers.handleSaveSummarizationPreset(payload));
+    // bus.subscribe('settings:deleteSummaryPreset', MemoryHandlers.deleteSummarizationPreset);
+    // bus.subscribe('settings:renameSummaryPreset', MemoryHandlers.renameSummarizationPreset);
 
     console.log("✅ Central Event Bus ready.");
 }

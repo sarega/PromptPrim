@@ -96,7 +96,7 @@
                             <label for="system-utility-prompt">System Prompt (สำหรับสร้าง Agent Profile)</label>
                             <textarea id="system-utility-prompt" rows="4"></textarea>
                         </div>
-                        <div class="form-group">
+                        <!-- <div class="form-group">
                             <label for="system-utility-summary-prompt">Summarization Prompt Template</label>
                             <div class="form-group">
                                 <div class="flex-group">
@@ -110,7 +110,7 @@
                             </div>
                             <textarea id="system-utility-summary-prompt" rows="8"></textarea>
                             <p class="modal-warning">ใช้ ${previousSummary} และ ${newMessages} เป็นตัวแปร</p>
-                        </div>
+                        </div> -->
                         <details>
                             <summary>Advanced Parameters</summary>
                             <div>
@@ -348,7 +348,79 @@
             <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Group</button></div>
         </div>
     </div>
-    
+    <div id="summarization-modal" class="modal-overlay">
+        <div class="modal-box is-resizable" style="max-width: 950px; width: 90vw;">
+            <div class="modal-header">
+                <h3>Conversation Summary Center</h3>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" data-tab="logs">Summary Logs</button>
+                    <button class="tab-btn" data-tab="settings">Settings</button>
+                </div>
+
+                <!-- Tab Content: Logs -->
+                <div class="tab-content active" data-tab-content="logs">
+                    <div class="summary-log-layout">
+                        <div class="log-list-column">
+                            <div id="summary-log-list-modal" class="item-list">
+                                <!-- Log items will be rendered here by JS -->
+                            </div>
+                        </div>
+                        <div class="log-editor-column">
+                            <div class="form-group">
+                                <label for="summary-editor-title">Summary Title</label>
+                                <input type="text" id="summary-editor-title" placeholder="A concise title for this summary...">
+                            </div>
+                            <div class="form-group" style="flex-grow: 1; display: flex; flex-direction: column;">
+                                <label for="summary-editor-content">Summary Content (Editable)</label>
+                                <textarea id="summary-editor-content" style="flex-grow: 1; width: 100%; resize: none;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Settings -->
+                <div class="tab-content" data-tab-content="settings">
+                    <div class="form-group">
+                        <label for="summary-model-search-input">Summarization Model</label>
+                        <!-- [NEW] Searchable Select Component -->
+                        <div class="searchable-select-wrapper" id="summary-model-search-wrapper">
+                            <input type="text" id="summary-model-search-input" placeholder="Search models..." autocomplete="off">
+                            <input type="hidden" id="summary-model-value"> <!-- ใช้เก็บค่าที่เลือก -->
+                            <div id="summary-model-options-container" class="searchable-select-options hidden">
+                                <!-- รายการ Model ที่กรองแล้วจะแสดงที่นี่ -->
+                            </div>
+                        </div>
+                        <p class="modal-warning">Select a model to use for generating new summaries.</p>
+                    </div>
+                    <hr>
+                    <div class="form-group">
+                        <label>Summarization Prompt Template</label>
+                        <div class="flex-group">
+                            <select id="summary-modal-preset-select" style="flex-grow: 1;"></select>
+                            <div id="summary-modal-preset-actions" class="dropdown align-right">
+                                <button class="btn btn-small btn-secondary" data-action="toggle-menu">Actions &#9662;</button>
+                                <div class="dropdown-content"></div>
+                            </div>
+                        </div>
+                        <textarea id="summary-modal-prompt-textarea" rows="8"></textarea>
+                        <p class="modal-warning">Use ${previousSummary} and ${newMessages} as variables.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="summary-modal-close-btn">Close</button>
+                <div id="summary-editor-actions" class="hidden">
+                    <button class="btn btn-danger" id="summary-editor-delete-btn">Delete Log</button>
+                    <button class="btn" id="summary-editor-load-btn">Load to Context</button>
+                    <button class="btn" id="summary-editor-save-btn">Save Changes</button>
+                </div>
+                <button class="btn" id="summarize-conversation-btn">✨ Summarize Conversation</button>
+            </div>
+        </div>
+    </div>
     <div id="agent-editor-modal" class="modal-overlay">
         <div class="modal-box">
             <h3 id="agent-modal-title">Create/Edit Agent</h3>

@@ -105,7 +105,7 @@ export async function loadAllProviderModels() {
         const systemAgent = project.globalSettings.systemUtilityAgent;
         const defaultAgent = project.agentPresets['Default Agent'];
         if (systemAgent && (!systemAgent.model || !allModels.some(m => m.id === systemAgent.model))) {
-            const preferredDefaults = ['google/gemma-2-9b-it', 'openai/gpt-4o-mini'];
+            const preferredDefaults = ['google/gemma-3-27b-it', 'openai/gpt-4o-mini'];
             const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
             if (availableDefaultModel) {
                 systemAgent.model = availableDefaultModel;

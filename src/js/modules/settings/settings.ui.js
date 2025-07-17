@@ -41,7 +41,7 @@ export function initSettingsUI() {
     const systemSettingsFields = [
         'system-utility-model-select',
         'system-utility-prompt',
-        'system-utility-summary-prompt',
+        'summary-modal-prompt-textarea',
         'system-utility-temperature',
         'system-utility-topP'
     ];

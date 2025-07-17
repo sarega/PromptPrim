@@ -273,3 +273,7 @@ body.dark-mode #composer-editor .composer-content-area a {
 body.dark-mode #composer-editor .composer-content-area a:hover {
   color: #bbdefb; /* << สีตอน hover ก็ใช้สีเดียวกัน */
 }
+
+body.dark-mode .tab-btn {
+    color: var(--text-dark);
+}

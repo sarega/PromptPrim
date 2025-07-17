@@ -440,7 +440,7 @@ export async function loadGlobalSettings() {
     const sysAgent = gs.systemUtilityAgent || defaultSystemUtilityAgent;
     document.getElementById('system-utility-model-select').value = sysAgent.model || '';
     document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
-    document.getElementById('system-utility-summary-prompt').value = sysAgent.summarizationPrompt || '';
+    document.getElementById('summary-modal-prompt-textarea').value = sysAgent.summarizationPrompt || '';
     document.getElementById('system-utility-temperature').value = sysAgent.temperature ?? 1.0;
     document.getElementById('system-utility-topP').value = sysAgent.topP ?? 1.0;
     stateManager.bus.publish('ui:renderSummarizationSelector');
@@ -476,7 +476,7 @@ export function saveSystemUtilityAgentSettings() {
     const agentSettings = project.globalSettings.systemUtilityAgent;
     agentSettings.model = document.getElementById('system-utility-model-select').value;
     agentSettings.systemPrompt = document.getElementById('system-utility-prompt').value;
-    agentSettings.summarizationPrompt = document.getElementById('system-utility-summary-prompt').value;
+    agentSettings.summarizationPrompt = document.getElementById('summary-modal-prompt-textarea').value;
     agentSettings.temperature = parseFloat(document.getElementById('system-utility-temperature').value);
     agentSettings.topP = parseFloat(document.getElementById('system-utility-topP').value);
     stateManager.setProject(project);

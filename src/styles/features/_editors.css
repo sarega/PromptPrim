@@ -203,3 +203,142 @@
     white-space: pre-wrap;
     word-wrap: break-word;
 }
+
+/* --- New Summarization Modal Styles --- */
+.modal-body-columns {
+    display: flex;
+    flex-grow: 1;
+    gap: 20px;
+    overflow: hidden;
+}
+.modal-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.modal-column.left {
+    flex: 1;
+    min-width: 280px;
+}
+.modal-column.right {
+    flex: 2;
+}
+.tab-buttons {
+    display: flex;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+.tab-btn {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+.tab-btn.active {
+    border-bottom-color: var(--accent-color);
+    font-weight: 600;
+}
+.tab-content {
+    display: none;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+.tab-content.active {
+    display: block;
+}
+
+/* --- New Summarization Modal Styles --- */
+.modal-body-columns {
+    display: flex; flex-grow: 1; gap: 20px;
+    overflow: hidden; min-height: 450px;
+}
+.modal-column {
+    display: flex; flex-direction: column; min-height: 0;
+}
+.modal-column.left {
+    flex: 1; min-width: 300px;
+    border-right: 1px solid var(--border-color);
+    padding-right: 20px;
+}
+.modal-column.right { flex: 2; }
+.tab-buttons {
+    display: flex; margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+.tab-btn {
+    padding: 10px 15px; cursor: pointer; border: none; background: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    font-size: 0.9rem; color: var(--text-dark); /* เพิ่มสีตัวอักษร */
+}
+.tab-btn.active {
+    border-bottom-color: var(--accent-color);
+    font-weight: 600;
+}
+.tab-content { display: none; flex-grow: 1; overflow-y: auto; }
+.tab-content.active { display: flex; flex-direction: column; }
+#summary-log-list-modal .item { cursor: pointer; }
+#summary-editor-actions { display: flex; gap: 10px; }
+#summary-editor-actions.hidden { display: none; }
+
+@media (max-width: 800px) {
+    .modal-body-columns { flex-direction: column; min-height: 0; }
+    .modal-column.left { border-right: none; padding-right: 0; max-height: 250px; }
+}
+
+
+/* [FIX] Media Query สำหรับทำให้ Modal เป็น Responsive */
+@media (max-width: 800px) {
+    .modal-body-columns {
+        flex-direction: column; /* เปลี่ยนเป็นแนวตั้ง */
+        min-height: 0;
+    }
+    .modal-column.left {
+        border-right: none;
+        padding-right: 0;
+        max-height: 250px; /* จำกัดความสูงของ Log List บนมือถือ */
+        flex-shrink: 0;
+    }
+}
+
+/* --- New Styles for Summarization Modal Layout --- */
+.summary-log-layout {
+    display: flex;
+    flex-grow: 1;
+    gap: 20px;
+    overflow: hidden;
+    min-height: 400px; /* Set a minimum height */
+}
+
+.log-list-column {
+    flex: 1;
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color);
+    padding-right: 20px;
+}
+
+.log-editor-column {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Responsive for mobile */
+@media (max-width: 800px) {
+    .summary-log-layout {
+        flex-direction: column;
+        min-height: 0;
+    }
+    .log-list-column {
+        border-right: none;
+        padding-right: 0;
+        max-height: 200px; /* Limit height of log list on mobile */
+        flex-shrink: 0;
+        margin-bottom: 15px;
+    }
+}

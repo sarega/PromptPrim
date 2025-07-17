@@ -62,3 +62,32 @@
     color: #718096;
     margin-top: 5px;
 }
+
+/* เพิ่มเข้าไปในไฟล์ CSS */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+    flex-shrink: 0;
+    /* background-color: var(--bg-color-secondary); */
+
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    color: #888;
+}
+body.dark-mode .modal-close-btn {
+    color: var(--text-dark);
+}

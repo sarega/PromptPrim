@@ -133,64 +133,50 @@ export function renderEntitySelector() {
     }
 }
 
-// [NEW] ฟังก์ชันควบคุมการแสดงผลของปุ่มจัดการ Preset
-function updateSummarizationActionButtons() {
-    const selector = document.getElementById('system-utility-summary-preset-select');
-    const saveBtn = document.getElementById('save-summary-btn');
-    const deleteBtn = document.getElementById('delete-summary-preset-btn');
-    if (!selector || !saveBtn || !deleteBtn) return;
+// export function renderSummarizationPresetSelector() {
+//     const project = stateManager.getProject();
+//     if (!project || !project.globalSettings) return;
+//     const selector = document.getElementById('summary-modal-preset-select');
+//     const userPresets = project.globalSettings.summarizationPromptPresets || {};
+//     const currentPromptText = document.getElementById('summary-modal-prompt-textarea').value;
+//     const previouslySelectedValue = selector.value;
+//     selector.innerHTML = '';
+//     let matchingPresetName = null;
+//     const factoryGroup = document.createElement('optgroup');
+//     factoryGroup.label = 'Factory Presets';
+//     for (const presetName in defaultSummarizationPresets) {
+//         factoryGroup.appendChild(new Option(presetName, presetName));
+//         if (defaultSummarizationPresets[presetName].trim() === currentPromptText.trim()) {
+//             matchingPresetName = presetName;
+//         }
+//     }
+//     selector.appendChild(factoryGroup);
+//     const userPresetNames = Object.keys(userPresets).filter(p => !defaultSummarizationPresets.hasOwnProperty(p));
+//     if (userPresetNames.length > 0) {
+//         const userGroup = document.createElement('optgroup');
+//         userGroup.label = 'User Presets';
+//         userPresetNames.forEach(presetName => {
+//             userGroup.appendChild(new Option(presetName, presetName));
+//             if (userPresets[presetName].trim() === currentPromptText.trim()) {
+//                 matchingPresetName = presetName;
+//             }
+//         });
+//         selector.appendChild(userGroup);
+//     }
+//     if (matchingPresetName) {
+//         selector.value = matchingPresetName;
+//     } else if (previouslySelectedValue && selector.querySelector(`option[value="${previouslySelectedValue}"]`)) {
+//         selector.value = previouslySelectedValue;
+//     } else if (currentPromptText.trim() !== '') {
+//         const customOption = new Option('--- Custom (Unsaved) ---', 'custom', true, true);
+//         customOption.disabled = true;
+//         selector.add(customOption);
+//         selector.value = 'custom';
+//     }
+//     updateSummarizationActionMenu();
+// }
 
-    const selectedOption = selector.options[selector.selectedIndex];
-    const isFactory = defaultSummarizationPresets.hasOwnProperty(selectedOption?.value);
-    const isCustom = selectedOption?.value === 'custom';
 
-    saveBtn.classList.toggle('hidden', isFactory || isCustom);
-    deleteBtn.classList.toggle('hidden', isFactory || isCustom);
-}
-
-
-export function renderSummarizationPresetSelector() {
-    const project = stateManager.getProject();
-    if (!project || !project.globalSettings) return;
-    const selector = document.getElementById('system-utility-summary-preset-select');
-    const userPresets = project.globalSettings.summarizationPromptPresets || {};
-    const currentPromptText = document.getElementById('system-utility-summary-prompt').value;
-    const previouslySelectedValue = selector.value;
-    selector.innerHTML = '';
-    let matchingPresetName = null;
-    const factoryGroup = document.createElement('optgroup');
-    factoryGroup.label = 'Factory Presets';
-    for (const presetName in defaultSummarizationPresets) {
-        factoryGroup.appendChild(new Option(presetName, presetName));
-        if (defaultSummarizationPresets[presetName].trim() === currentPromptText.trim()) {
-            matchingPresetName = presetName;
-        }
-    }
-    selector.appendChild(factoryGroup);
-    const userPresetNames = Object.keys(userPresets).filter(p => !defaultSummarizationPresets.hasOwnProperty(p));
-    if (userPresetNames.length > 0) {
-        const userGroup = document.createElement('optgroup');
-        userGroup.label = 'User Presets';
-        userPresetNames.forEach(presetName => {
-            userGroup.appendChild(new Option(presetName, presetName));
-            if (userPresets[presetName].trim() === currentPromptText.trim()) {
-                matchingPresetName = presetName;
-            }
-        });
-        selector.appendChild(userGroup);
-    }
-    if (matchingPresetName) {
-        selector.value = matchingPresetName;
-    } else if (previouslySelectedValue && selector.querySelector(`option[value="${previouslySelectedValue}"]`)) {
-        selector.value = previouslySelectedValue;
-    } else if (currentPromptText.trim() !== '') {
-        const customOption = new Option('--- Custom (Unsaved) ---', 'custom', true, true);
-        customOption.disabled = true;
-        selector.add(customOption);
-        selector.value = 'custom';
-    }
-    updateSummarizationActionMenu();
-}
 export function initProjectUI() {
     // --- Subscribe to Events (ส่วนนี้ของคุณถูกต้องแล้ว) ---
     stateManager.bus.subscribe('project:loaded', (eventData) => {
@@ -202,8 +188,8 @@ export function initProjectUI() {
     stateManager.bus.subscribe('entity:selected', renderEntitySelector);
     stateManager.bus.subscribe('agent:listChanged', renderEntitySelector);
     stateManager.bus.subscribe('group:listChanged', renderEntitySelector);
-    stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
-    stateManager.bus.subscribe('ui:updateSummaryActionButtons', updateSummarizationActionButtons);
+    // stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
+    // stateManager.bus.subscribe('ui:updateSummaryActionButtons', updateSummarizationActionButtons);
     stateManager.bus.subscribe('ui:showSaveAsModal', showSaveAsModal);
 
     // --- Setup Event Listeners ---
@@ -257,73 +243,20 @@ export function initProjectUI() {
     
     document.getElementById('load-project-input')?.addEventListener('change', (e) => stateManager.bus.publish('project:fileSelectedForOpen', e));
     document.getElementById('custom-entity-selector-trigger')?.addEventListener('click', toggleCustomEntitySelector);
-    document.getElementById('system-utility-summary-preset-select')?.addEventListener('change', () => {
-        stateManager.bus.publish('settings:summaryPresetChanged');
-    });
-    document.getElementById('system-utility-summary-prompt')?.addEventListener('input', renderSummarizationPresetSelector);
 
-    const summaryActionsWrapper = document.getElementById('summary-preset-actions');
-    if (summaryActionsWrapper) {
-        summaryActionsWrapper.querySelector('button[data-action="toggle-menu"]')?.addEventListener('click', toggleDropdown);
-        summaryActionsWrapper.querySelector('.dropdown-content')?.addEventListener('click', (e) => {
-            const actionTarget = e.target.closest('a[data-action]');
-            if (!actionTarget) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const action = actionTarget.dataset.action;
-            const saveAs = actionTarget.dataset.saveAs === 'true';
-            stateManager.bus.publish(action, { saveAs });
-            summaryActionsWrapper.classList.remove('open');
-        });
-    }
+    // const summaryActionsWrapper = document.getElementById('summary-modal-preset-actions');
+    // if (summaryActionsWrapper) {
+    //     summaryActionsWrapper.querySelector('button[data-action="toggle-menu"]')?.addEventListener('click', toggleDropdown);
+    //     summaryActionsWrapper.querySelector('.dropdown-content')?.addEventListener('click', (e) => {
+    //         const actionTarget = e.target.closest('a[data-action]');
+    //         if (!actionTarget) return;
+    //         e.preventDefault();
+    //         e.stopPropagation();
+    //         const action = actionTarget.dataset.action;
+    //         const saveAs = actionTarget.dataset.saveAs === 'true';
+    //         stateManager.bus.publish(action, { saveAs });
+    //         summaryActionsWrapper.classList.remove('open');
+    //     });
+    // }
     console.log("Project UI Initialized with definitive listeners.");
-}
-
-// [NEW] ฟังก์ชันสำหรับสร้าง Action Menu ของ Preset
-export function updateSummarizationActionMenu() {
-    const selector = document.getElementById('system-utility-summary-preset-select');
-    const menuContent = document.querySelector('#summary-preset-actions .dropdown-content');
-    if (!selector || !menuContent) return;
-
-    menuContent.innerHTML = ''; // เคลียร์เมนูเก่า
-
-    const selectedOption = selector.options[selector.selectedIndex];
-    const isFactory = defaultSummarizationPresets.hasOwnProperty(selectedOption?.value);
-    const isCustom = selectedOption?.value === 'custom';
-
-    // Helper function สำหรับสร้างลิงก์พร้อม onclick
-    const createActionLink = (text, action, payload = {}) => {
-        const link = document.createElement('a');
-        link.href = '#';
-        link.textContent = text;
-        link.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            stateManager.bus.publish(action, payload);
-            link.closest('.dropdown.open')?.classList.remove('open');
-        };
-        return link;
-    };
-
-    // สร้างเมนูตามสถานะ
-    if (isCustom || isFactory) {
-        const saveAsLink = createActionLink(
-            isFactory ? 'Save as a Copy...' : 'Save as New Preset...',
-            'settings:saveSummaryPreset',
-            { saveAs: true }
-        );
-        menuContent.appendChild(saveAsLink);
-    } else { // เป็น User Preset
-        const saveLink = createActionLink('Save Changes', 'settings:saveSummaryPreset', { saveAs: false });
-        const saveAsLink = createActionLink('Save as New Preset...', 'settings:saveSummaryPreset', { saveAs: true });
-        const renameLink = createActionLink('Rename...', 'settings:renameSummaryPreset');
-        const deleteLink = createActionLink('Delete Preset', 'settings:deleteSummaryPreset');
-        deleteLink.classList.add('is-destructive');
-
-        menuContent.appendChild(saveLink);
-        menuContent.appendChild(renameLink);
-        menuContent.appendChild(saveAsLink);
-        menuContent.appendChild(document.createElement('div')).className = 'dropdown-divider';
-        menuContent.appendChild(deleteLink);
-    }
 }
