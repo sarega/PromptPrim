@@ -209,7 +209,11 @@ export function showSummarizationCenter() {
     // เคลียร์ editor, วาด list ใหม่, และอัปเดตปุ่ม action
     selectLog(null);
     renderLogList();
+    
     renderSummarizationPresetSelector();
+    
+    SummaryHandlers.handleSummarizationPresetChange();
+
     updateModalActionsVisibility();
 
     // --- [KEY CHANGE] เรียกใช้ Searchable Model Selector ตัวใหม่ ---
