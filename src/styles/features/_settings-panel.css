@@ -85,7 +85,9 @@
 }
 
 .tab-content.active {
-    display: block;
+    display: block; 
+    margin-left: 20px;
+    margin-right: 20px;
 }
 
 /* Dark Mode Styles */
