@@ -61,25 +61,34 @@ const _appState = {
 const eventBus = {
     events: {},
     subscribe(eventName, fn) {
+        // [PATCH] Only subscribe if the provided argument is a function.
+        if (typeof fn !== 'function') {
+            console.warn(`Attempted to subscribe to "${eventName}" with a non-function.`, fn);
+            return () => {}; // Return a no-op unsubscribe function
+        }
+
         this.events[eventName] = this.events[eventName] || [];
         this.events[eventName].push(fn);
-        return () => { this.events[eventName] = this.events[eventName].filter(eventFn => fn !== eventFn); };
-    },
-    // [FIX] เพิ่มฟังก์ชัน subscribeOnce ที่ทำงานได้อย่างถูกต้อง
-    subscribeOnce(eventName, fn) {
-        const onceFn = (data) => {
-            // เมื่อ event ทำงาน, ให้เรียกฟังก์ชันที่ส่งเข้ามา
-            fn(data);
-            // จากนั้นลบตัวเองออกจากการเป็น subscriber
-            this.events[eventName] = this.events[eventName].filter(eventFn => eventFn !== onceFn);
+
+        // Return a function to allow unsubscribing
+        return () => {
+            this.events[eventName] = this.events[eventName].filter(eventFn => fn !== eventFn);
         };
-        // ใช้ .subscribe เดิมเพื่อเพิ่ม listener แบบใช้ครั้งเดียวเข้าไป
-        this.subscribe(eventName, onceFn);
     },
+    // ... (subscribeOnce can remain the same) ...
     publish(eventName, data) {
         if (this.events[eventName]) {
-            // ใช้ .slice() เพื่อป้องกันปัญหาหากมีการ unsubscribe ระหว่างที่ loop ทำงาน
-            this.events[eventName].slice().forEach(fn => fn(data));
+            // Use .slice() to prevent issues if a subscriber unsubscribes itself.
+            this.events[eventName].slice().forEach(fn => {
+                // [PATCH] Double-check that the subscriber is a function before calling.
+                if (typeof fn === 'function') {
+                    try {
+                        fn(data);
+                    } catch (e) {
+                        console.error(`Error in subscriber for event "${eventName}":`, e);
+                    }
+                }
+            });
         }
     }
 };

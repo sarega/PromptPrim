@@ -60,6 +60,18 @@ body.focus-mode #chatInput {
     font-size: 1.1rem;
 }
 
-/* ในไฟล์ src/styles/layout/_app-wrapper.css */
+/* --- 1. เพิ่มในไฟล์: src/styles/layout/_app-wrapper.css --- */
+.main-view-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
 
-/* --- Right Sidebar Collapsed State --- */
+.content-columns-wrapper {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}

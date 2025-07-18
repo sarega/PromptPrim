@@ -4,7 +4,7 @@
 // ===============================================
 
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
-import { showCustomAlert, toggleDropdown } from '../../core/core.ui.js';
+import { showCustomAlert, toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
 
 // --- Private Helper Functions (Not Exported) ---
 function createAgentElement(name, preset) {
@@ -121,36 +121,47 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     const utilityAgent = project.globalSettings.systemUtilityAgent;
     const modelInfo = allModels.find(m => m.id === utilityAgent.model);
 
+    // --- ส่วนของการตั้งค่า Title และข้อมูล Enhancer (คงไว้เหมือนเดิม) ---
     document.getElementById('agent-modal-title').textContent = isEditing ? `Edit Agent: ${agentName}` : "Create New Agent";
     document.getElementById('enhancer-model-name').textContent = modelInfo?.name || utilityAgent.model || 'Not Configured';
 
-    if (isEditing && agentName) {
-        const agent = project.agentPresets[agentName];
-        if (!agent) { showCustomAlert("Agent not found."); return; }
-        
-        document.getElementById('agent-name-input').value = agentName;
-        Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
-            const element = document.getElementById(elId);
-            if(element && elId !== 'agent-name-input') {
-                 const value = agent[ALL_AGENT_SETTINGS_IDS[elId]];
-                 element[element.type === 'checkbox' ? 'checked' : 'value'] = value !== undefined ? value : '';
-            }
-        });
-    } else {
-        document.getElementById('agent-name-input').value = '';
-        Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
-            const element = document.getElementById(elId);
-            if(element && elId !== 'agent-name-input') {
-                const value = defaultAgentSettings[ALL_AGENT_SETTINGS_IDS[elId]];
-                element[element.type === 'checkbox' ? 'checked' : 'value'] = value !== undefined ? value : '';
-            }
-        });
+    let agentForForm = defaultAgentSettings;
+    let nameForForm = '';
+
+    if (isEditing && agentName && project.agentPresets[agentName]) {
+        agentForForm = project.agentPresets[agentName];
+        nameForForm = agentName;
+    }
+
+    // --- ส่วนของการกรอกข้อมูลในฟอร์ม (คงไว้เหมือนเดิม) ---
+    document.getElementById('agent-name-input').value = nameForForm;
+    Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
+        const element = document.getElementById(elId);
+        const key = ALL_AGENT_SETTINGS_IDS[elId];
+        if (element && key !== 'name' && key !== 'model') {
+             const value = agentForForm[key];
+             element[element.type === 'checkbox' ? 'checked' : 'value'] = value !== undefined ? value : '';
+        }
+    });
+
+    if (!isEditing) {
         document.getElementById('enhancer-prompt-input').value = '';
     }
-    
-    populateModelSelectors();
+
+    // --- [KEY CHANGE] เรียกใช้ Searchable Model Selector ตัวใหม่ ---
+    const initialModelId = agentForForm.model || '';
+    createSearchableModelSelector(
+        'agent-model-search-wrapper', // ID ของ Wrapper Div ใน HTML
+        initialModelId,               // ID ของโมเดลที่ถูกเลือกไว้ตอนแรก
+        (selectedModelId) => {        // Callback ที่จะทำงานเมื่อผู้ใช้เลือกโมเดลใหม่
+            // อัปเดตค่าใน hidden input ซึ่งจะถูกใช้เมื่อกด Save
+            document.getElementById('agent-model-select').value = selectedModelId;
+        }
+    );
+
     document.getElementById('agent-editor-modal').style.display = 'flex';
 }
+
 export function hideAgentEditor() {
     document.getElementById('agent-editor-modal').style.display = 'none';
     stateManager.setState('editingAgentName', null);

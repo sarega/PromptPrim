@@ -27,7 +27,6 @@
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    /* --- เอา resize และ min-width/height ออกจากตรงนี้ --- */
 }
 
 /* 3. [NEW] คลาสเสริมสำหรับ Modal ที่ต้องการให้ปรับขนาดได้เท่านั้น */
@@ -43,6 +42,8 @@
 .modal-body {
     overflow-y: auto;
     padding-right: 15px;
+    flex-grow: 1;      /* <-- เพิ่ม: ทำให้ Body ขยายเต็มพื้นที่ที่เหลือ */
+    min-height: 0;     /* <-- เพิ่ม: เทคนิคแก้ปัญหา scroll ใน flexbox */
 }
 
 .modal-box h3 {
@@ -68,9 +69,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 15px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
-    margin-bottom: 20px;
+    /* margin-bottom: 10px; */
     flex-shrink: 0;
     /* background-color: var(--bg-color-secondary); */
 

@@ -10,20 +10,20 @@ export async function generateNewSummary() {
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) return;
 
-    // --- [NEW LOGIC] ---
-    // 1. ดึง Model ที่เลือกจาก Dropdown ใหม่
-   const selectedModelId = document.getElementById('summary-model-value').value;
+    // [FIX] Read the model ID from the correct hidden input within the summary modal
+    const selectedModelId = document.getElementById('summary-model-value').value;
+    
     if (!selectedModelId) {
         showCustomAlert("Please select a model for summarization in the Settings tab.", "Error");
         return;
     }
-    // 2. สร้าง Agent ชั่วคราวสำหรับใช้ในการ Summarize
+    
+    // สร้าง Agent ชั่วคราวสำหรับใช้ในการ Summarize
     const agentForSummary = {
-        ...project.globalSettings.systemUtilityAgent, // ใช้ค่า Temp, TopP จาก Global
-        model: selectedModelId // แต่ใช้ Model ที่เลือกใหม่
+        ...project.globalSettings.systemUtilityAgent, // ใช้ค่า Parameters (Temp, TopP) จาก Global
+        model: selectedModelId                        // แต่ใช้ Model ที่เลือกใหม่จากหน้า Summary Center
     };
-    // ------------------
-
+    
     const historyToSummarize = session.history.filter(msg => msg.role === 'user' || msg.role === 'assistant');
     if (historyToSummarize.length === 0) {
         showCustomAlert('Not enough messages to summarize.', 'Info');
@@ -38,7 +38,7 @@ export async function generateNewSummary() {
             .replace(/\$\{previousSummary\}/g, "This is a full-history summary from the beginning.")
             .replace(/\$\{newMessages\}/g, newMessagesText);
 
-        // 3. เรียกใช้ LLM ด้วย Agent ที่สร้างขึ้นใหม่
+        // เรียกใช้ LLM ด้วย Agent ที่สร้างขึ้นมาอย่างถูกต้อง
         const summaryContent = await callLLM(agentForSummary, [{ role: 'user', content: summaryPrompt }]);
         
         document.getElementById('summary-editor-title').value = `Summary of "${session.name}" at ${new Date().toLocaleTimeString()}`;

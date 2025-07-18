@@ -119,12 +119,26 @@ export function toggleDropdown(event) {
 // เราจะเรียกใช้ฟังก์ชันนี้เพียงครั้งเดียวใน main.js
 export function initGlobalDropdownListener() {
     document.addEventListener('click', (e) => {
+        // --- Part 1: Handle old-style dropdowns with .open class ---
         const openDropdown = document.querySelector('.dropdown.open');
         if (openDropdown && !openDropdown.contains(e.target)) {
             openDropdown.classList.remove('open');
         }
+
+        // --- Part 2: Handle new searchable selectors ---
+        // Find any searchable select that is currently showing its options
+        const activeSearchableSelect = document.querySelector('.searchable-select-wrapper .searchable-select-options:not(.hidden)');
+        if (activeSearchableSelect) {
+            // Find the parent wrapper of this specific options container
+            const wrapper = activeSearchableSelect.closest('.searchable-select-wrapper');
+            // If the click was outside of its parent wrapper, hide the options
+            if (wrapper && !wrapper.contains(e.target)) {
+                activeSearchableSelect.classList.add('hidden');
+            }
+        }
     });
 }
+
 export function applyFontSettings() {
     const project = stateManager.getProject();
     if (project?.globalSettings?.fontFamilySelect) {
@@ -267,4 +281,78 @@ export function showContextMenu(options, event) {
     setTimeout(() => {
         document.addEventListener('click', closeMenu, true);
     }, 0);
+}
+
+/**
+ * [NEW & REUSABLE] Creates a searchable model selector component.
+ * @param {string} wrapperId - The ID of the main container div for the selector.
+ * @param {string} initialModelId - The ID of the model that should be selected initially.
+ * @param {function(string):void} onSelect - The callback function to run when a model is selected. It receives the model ID.
+ */
+export function createSearchableModelSelector(wrapperId, initialModelId, onSelect) {
+    const wrapper = document.getElementById(wrapperId);
+    // [FIX] เพิ่มการตรวจสอบว่า wrapper มีจริงหรือไม่ ก่อนจะทำงานต่อ
+    if (!wrapper) {
+        console.error(`Searchable selector wrapper with ID "${wrapperId}" not found.`);
+        return;
+    }
+
+    // ป้องกันการ attach listener ซ้ำซ้อน
+    if (wrapper.dataset.initialized) return;
+
+    const searchInput = wrapper.querySelector('input[type="text"]');
+    const valueInput = wrapper.querySelector('input[type="hidden"]');
+    const optionsContainer = wrapper.querySelector('.searchable-select-options');
+    if (!searchInput || !valueInput || !optionsContainer) return;
+
+    const allModels = stateManager.getState().allProviderModels || [];
+
+    const renderOptions = (modelsToRender) => {
+        optionsContainer.innerHTML = '';
+        if (modelsToRender.length === 0) {
+            optionsContainer.innerHTML = `<div class="searchable-option-item">No models found.</div>`;
+            return;
+        }
+        modelsToRender.forEach(model => {
+            const item = document.createElement('div');
+            item.className = 'searchable-option-item';
+            item.dataset.value = model.id;
+            item.innerHTML = `${model.name} <small>${model.id}</small>`;
+            item.addEventListener('click', () => {
+                searchInput.value = model.name;
+                valueInput.value = model.id;
+                optionsContainer.classList.add('hidden');
+                if(onSelect) onSelect(model.id); // Call the provided callback
+            });
+            optionsContainer.appendChild(item);
+        });
+    };
+
+    searchInput.addEventListener('input', () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        const filtered = allModels.filter(m => m.name.toLowerCase().includes(searchTerm) || m.id.toLowerCase().includes(searchTerm));
+        renderOptions(filtered);
+
+        // [CRITICAL FIX] ถ้าช่องค้นหาว่าง ให้แสดงรายการทั้งหมดอีกครั้ง
+        if (searchTerm === '') {
+            renderOptions(allModels);
+        }
+    });
+
+    searchInput.addEventListener('focus', () => {
+        renderOptions(allModels);
+        optionsContainer.classList.remove('hidden');
+    });
+
+    // ตั้งค่าเริ่มต้น
+    const currentModel = allModels.find(m => m.id === initialModelId);
+    if (currentModel) {
+        searchInput.value = currentModel.name;
+        valueInput.value = currentModel.id;
+    } else {
+        searchInput.value = '';
+        valueInput.value = '';
+    }
+
+    wrapper.dataset.initialized = 'true';
 }

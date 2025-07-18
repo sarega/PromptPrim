@@ -15,35 +15,166 @@
 }
 
 
+/* แก้ไข Rule ของ .main-chat-area */
 .main-chat-area {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background: var(--bg-workspace-chat); /* <--- เปลี่ยนตรงนี้ */
-    transition: width 0.3s ease-in-out;
+    background: var(--bg-workspace-chat);
     position: relative;
     width: 100%; 
     overflow: hidden;
 }
 
 .chat-header {
-    padding: 10px 25px;
+    padding: 8px 20px; /* ปรับ padding ให้เหมาะสม */
     border-bottom: 1px solid var(--border-color);
     background: var(--white-alpha-95);
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; /* จัดให้กระจายตัว ซ้าย-กลาง-ขวา */
     align-items: center;
-    /* ปรับแก้ padding ตรงนี้เพื่อเพิ่ม/ลดความสูงของ Header */
-    padding-top: 0.2rem;
-    padding-bottom: 0.2 rem;
-    gap: 0.75rem; /* Provides spacing between header items */
-    transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    gap: 1rem;
     flex-shrink: 0;
-    will-change: transform, max-height; /* Performance hint for browser */
-    position: relative;
     z-index: 10;
 }
 
+/* [NEW] สร้าง Container สำหรับแต่ละส่วนใน Header */
+.header-left, .header-center, .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.header-left {
+    flex: 1;
+    justify-content: flex-start;
+}
+.header-center {
+    flex: 1;
+    justify-content: center;
+}
+.header-right {
+    flex: 1;
+    justify-content: flex-end;
+}
+/* --- 2. เพิ่มในไฟล์ใหม่: src/styles/components/_user-profile.css --- */
+
+.user-profile-container {
+    position: relative;
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: #7f9cf5;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.user-avatar:hover,
+.user-profile-container.open .user-avatar {
+    border-color: var(--accent-color);
+}
+
+#user-profile-menu {
+    width: 260px;
+    padding: 8px;
+    /* จัดตำแหน่งให้เปิดจากมุมขวาบน */
+    right: 0;
+    top: calc(100% + 8px); 
+}
+
+#user-profile-menu .menu-header {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+}
+
+#user-profile-menu .user-name {
+    font-weight: 600;
+    display: block;
+}
+
+#user-profile-menu .user-plan {
+    font-size: 0.8rem;
+    color: #4ade80; /* สีเขียวสำหรับ Pro */
+    font-weight: 500;
+}
+
+#user-profile-menu .menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#user-profile-menu a.menu-item:hover {
+    background-color: #f0f4f8;
+}
+
+#user-profile-menu .is-destructive:hover {
+    background-color: #fee2e2;
+    color: #ef4444;
+}
+
+#user-profile-menu hr {
+    margin: 6px 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Theme Switcher in Dropdown */
+.theme-switcher-inline {
+    display: flex;
+    gap: 4px;
+}
+.theme-switcher-inline label {
+    display: flex;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.theme-switcher-inline input {
+    display: none;
+}
+.theme-switcher-inline label:hover {
+    background-color: #f0f4f8;
+}
+.theme-switcher-inline input:checked + .material-symbols-outlined {
+    color: var(--accent-color);
+}
+
+/* Dark Mode Styles */
+body.dark-mode .user-avatar {
+    background-color: #a78bfa;
+}
+body.dark-mode #user-profile-menu a.menu-item:hover {
+    background-color: #374151;
+}
+body.dark-mode #user-profile-menu .is-destructive:hover {
+    background-color: #452323;
+    color: #f87171;
+}
+body.dark-mode .theme-switcher-inline label:hover {
+    background-color: #374151;
+}
+
+
+
+
+/* --- Main Content Wrapper --- */
 .main-content-wrapper {
     flex-grow: 1;
     display: flex;
@@ -103,7 +234,7 @@
     overflow: visible;
     transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
     will-change: transform, max-height;
-    position: relative; /* << เพิ่มบรรทัดนี้เข้ามา */
+    position: relative;
     z-index: 10;
 }
 

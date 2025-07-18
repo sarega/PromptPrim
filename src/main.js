@@ -37,6 +37,7 @@ import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
 import * as ComposerHandlers from './js/modules/composer/composer.handlers.js'; // <-- ตรวจสอบว่ามีบรรทัดนี้
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
 import * as SummaryHandlers from './js/modules/summary/summary.handlers.js';
+import * as UserUI from './js/modules/user/user.ui.js';
 
 
 // --- State for Lazy Initialization ---
@@ -198,63 +199,12 @@ function setupEventSubscriptions() {
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
     
-    // bus.subscribe('ui:renderSummarizationSelector', ProjectUI.renderSummarizationPresetSelector);
-    // bus.subscribe('settings:summaryPresetChanged', MemoryHandlers.handleSummarizationPresetChange);
-    // bus.subscribe('settings:saveSummaryPreset', (payload) => MemoryHandlers.handleSaveSummarizationPreset(payload));
-    // bus.subscribe('settings:deleteSummaryPreset', MemoryHandlers.deleteSummarizationPreset);
-    // bus.subscribe('settings:renameSummaryPreset', MemoryHandlers.renameSummarizationPreset);
-
     console.log("✅ Central Event Bus ready.");
 }
 
-// --- Theme Management Logic ---
-function initializeTheme() {
-    const themeSwitcher = document.getElementById('theme-switcher');
-    if (!themeSwitcher) return;
-
-    const themeRadios = themeSwitcher.querySelectorAll('input[type="radio"]');
-    const savedTheme = localStorage.getItem('theme') || 'system';
-    
-    // อ้างอิงถึง Stylesheet ของ highlight.js ทั้งสองอัน
-    const lightThemeSheet = document.getElementById('hljs-light-theme');
-    const darkThemeSheet = document.getElementById('hljs-dark-theme');
-    
-    const applyTheme = (theme) => {
-        document.body.classList.remove('dark-mode', 'light-mode');
-        
-        let isDark = theme === 'dark';
-        if (theme === 'system') {
-            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        }
-
-        document.body.classList.add(isDark ? 'dark-mode' : 'light-mode');
-
-        // [DEFINITIVE FIX] สั่งเปิด/ปิด Stylesheet ของโค้ดตาม Theme
-        if (lightThemeSheet) lightThemeSheet.disabled = isDark;
-        if (darkThemeSheet) darkThemeSheet.disabled = !isDark;
-    };
-
-    themeRadios.forEach(radio => {
-        if (radio.value === savedTheme) radio.checked = true;
-        radio.addEventListener('change', (event) => {
-            const selectedTheme = event.target.value;
-            localStorage.setItem('theme', selectedTheme);
-            applyTheme(selectedTheme);
-        });
-    });
-
-    applyTheme(savedTheme);
-
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if ((localStorage.getItem('theme') || 'system') === 'system') {
-            applyTheme('system');
-        }
-    });
-}
 // // --- Application Entry Point ---
 
 function initializeUI() {
-    initializeTheme();
     initCoreUI();
     initGlobalKeybindings();
     setupLayout();
@@ -272,6 +222,7 @@ function initializeUI() {
     MemoryUI.initMemoryUI();
     SummaryUI.initSummaryUI();
     ChatHandlers.initMessageInteractions();
+    UserUI.initUserProfileUI(); // << เพิ่มอันนี้เข้ามาแทน
 
     console.log("✅ All UI modules initialized.");
 }

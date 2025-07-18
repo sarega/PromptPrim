@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-light-theme">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-dark-theme" disabled>
-    <!-- <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" /> -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&family=IBM+Plex+Sans+Thai:wght@400;700&family=Mitr:wght@400;700&family=Noto+Sans+Thai:wght@400;700&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
@@ -44,73 +43,57 @@
         <!-- ===== SETTINGS PANEL ===== -->
         <div id="settings-panel">
             <div class="settings-header">
-                <h2>Global Settings</h2>
-                <button class="close-settings-btn" title="Close Settings">&times;</button>
-            </div>
+                <h2>Settings</h2>
+                <button type="button" class="close-settings-btn" title="Close Settings">&times;</button>            </div>
             <div class="settings-content">
-                <div class="section-box">
-                    <h3>About PromptPrim Studio</h3>
-                    <p>Version: <span id="app-version"></span></p>
+                <!-- Tab Buttons -->
+                <div class="tab-buttons">
+                    <button type="button" class="tab-btn active" data-tab="services">
+                        <span class="material-symbols-outlined">power</span> Services & APIs
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="system">
+                        <span class="material-symbols-outlined">smart_toy</span> System Agents
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="tools">
+                        <span class="material-symbols-outlined">extension</span> Extensions
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="about">
+                        <span class="material-symbols-outlined">info</span> About
+                    </button>
                 </div>
-                <div class="section-box">
-                    <h3>🎨 การแสดงผล</h3>
-                    <div class="form-group">
-                        <label for="fontFamilySelect">ฟอนต์</label>
-                        <select id="fontFamilySelect">
-                            <option value="'Sarabun', sans-serif">สารบรรณ (Sarabun)</option>
-                            <option value="'Noto Sans Thai', sans-serif">Noto Sans Thai</option>
-                            <option value="'IBM Plex Sans Thai', sans-serif">IBM Plex Sans Thai</option>
-                            <option value="'Mitr', sans-serif">มิตร (Mitr)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="section-box">
-                    <h3>🌗 ธีม</h3>
-                    <div class="form-group" id="theme-switcher">
-                        <label><input type="radio" name="theme" value="light" checked> สว่าง</label>
-                        <label><input type="radio" name="theme" value="dark"> มืด</label>
-                        <label><input type="radio" name="theme" value="system"> ตามระบบ</label>
-                    </div>
-                </div>
-                <div class="section-box">
-                    <h3>🔧 API Settings</h3>
-                    <div class="form-group">
-                        <label for="apiKey">OpenRouter API Key</label>
-                        <input type="password" id="apiKey" autocomplete="current-password">
-                    </div>
-                    <div class="form-group">
-                        <label for="ollamaBaseUrl">Ollama Base URL</label>
-                        <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434">
-                    </div>
-                    <button id="load-models-btn" class="btn btn-small">โหลด/รีเฟรช Model List</button>
-                </div>
-                <details class="collapsible-section">
-                    <summary><h3>⚙️ System Utility Agent Settings</h3></summary>
+
+                <!-- Tab Content: Services & APIs -->
+                <div class="tab-content active" data-tab-content="services">
                     <div class="section-box">
-                        <p class="modal-warning">Model นี้จะใช้สำหรับงานเบื้องหลัง เช่น สรุปความ, สร้าง Agent Profile, ฯลฯ</p>
+                        <h3>API Settings</h3>
                         <div class="form-group">
-                            <label for="system-utility-model-select">System Utility Model</label>
-                            <select id="system-utility-model-select"></select>
+                            <label for="apiKey">OpenRouter API Key</label>
+                            <input type="password" id="apiKey" autocomplete="off">
                         </div>
                         <div class="form-group">
-                            <label for="system-utility-prompt">System Prompt (สำหรับสร้าง Agent Profile)</label>
+                            <label for="ollamaBaseUrl">Ollama Base URL</label>
+                            <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434" autocomplete="url">
+                        </div>
+                    <button type="button" id="load-models-btn" class="btn btn-small">Load/Refresh Model List</button>                    </div>
+                </div>
+
+                <!-- Tab Content: System Agents -->
+                <div class="tab-content" data-tab-content="system">
+                    <div class="section-box">
+                        <p class="modal-warning">Models used for background tasks like summarization, auto-naming, etc.</p>
+                        <div class="form-group">
+                            <label for="system-model-search-input">System Utility Model</label>
+                                <div class="searchable-select-wrapper" id="settings-system-model-wrapper">      
+                                <input type="text" id="system-model-search-input" placeholder="Search models..." autocomplete="off">
+                                <input type="hidden" id="system-utility-model-select">
+                                <div id="system-model-options-container" class="searchable-select-options hidden"></div>
+                            </div>
+                        </div>
+                        <!-- [FIX] เพิ่ม Textarea ที่ขาดหายไปกลับเข้ามา -->
+                        <div class="form-group">
+                            <label for="system-utility-prompt">System Prompt (for Agent Profile Generation)</label>
                             <textarea id="system-utility-prompt" rows="4"></textarea>
                         </div>
-                        <!-- <div class="form-group">
-                            <label for="system-utility-summary-prompt">Summarization Prompt Template</label>
-                            <div class="form-group">
-                                <div class="flex-group">
-                                    <select id="system-utility-summary-preset-select" style="flex-grow: 1;"></select>
-                                    <div id="summary-preset-actions" class="dropdown align-right">
-                                        <button class="btn btn-small btn-secondary" data-action="toggle-menu">Actions &#9662;</button>
-                                        <div class="dropdown-content">
-                                            </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <textarea id="system-utility-summary-prompt" rows="8"></textarea>
-                            <p class="modal-warning">ใช้ ${previousSummary} และ ${newMessages} เป็นตัวแปร</p>
-                        </div> -->
                         <details>
                             <summary>Advanced Parameters</summary>
                             <div>
@@ -119,7 +102,20 @@
                             </div>
                         </details>
                     </div>
-                </details>
+                </div>
+
+                <!-- Tab Content: Extensions & Tools -->
+                <div class="tab-content" data-tab-content="tools">
+                    <p class="no-items-message">Extensions will be available here in the future.</p>
+                </div>
+
+                <!-- Tab Content: About -->
+                <div class="tab-content" data-tab-content="about">
+                    <div class="section-box">
+                        <h3>About PromptPrim Studio</h3>
+                        <p>Version: <span id="app-version"></span></p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -130,164 +126,208 @@
 
             <!-- ===== SESSIONS PANEL (COLUMN 1) ===== -->
             <div id="sessions-panel" class="sessions-panel sidebar">
-                <div class="sidebar-header">
-                    <div class="sidebar-top-row">
-                        <h1 class="app-main-title">PromptPrim</h1>
-                        <div>
-                            <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">
-                                <span class="material-symbols-outlined">settings</span>
-                            </button>
-                            <button id="close-sidebar-btn" class="menu-toggle-btn mobile-only" title="Close Sidebar">
-                                <span class="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="sidebar-bottom-row">
-                        <div class="dropdown align-left">
-                            <button class="btn btn-small">Project</button>
-                            <div class="dropdown-content">
-                                <a href="#" data-action="newProject">New...</a>
-                                <a href="#" data-action="openProject">Open...</a>
-                                <a href="#" data-action="saveProject">Save</a>
-                                <a href="#" data-action="saveProjectAs">Save As...</a>
-                            </div>
-                        </div>
-                        <h2 id="project-title" class="project-title">Untitled Project</h2>
-                    </div>
-                </div>
-                <div class="sidebar-content">
-                    <div class="sessions-frame">
-                        <div class="section-box">
-                            <div class="section-header">
-                                <h3><span class="material-symbols-outlined">folder</span> Chat Sessions</h3>
-                                <button id="new-chat-btn" class="btn-icon" title="New Chat">
-                                    <span class="material-symbols-outlined">add</span>
-                                </button>
-                            </div>
-                            <div id="pinnedSessionList" class="item-list"></div>
-                            <div id="sessionListContainer" class="item-list"></div>
-                            <details class="collapsible-section hidden" id="archivedSessionsSection">
-                                <summary>Archived Sessions</summary>
-                                <div id="archivedSessionList" class="item-list"></div>
-                            </details>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- END SESSIONS PANEL -->
-
-            <!-- ===== MAIN CHAT AREA (COLUMN 2) ===== -->
-        <div id="main-chat-panel" class="main-chat-area">
-            <div class="chat-header">
-                <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sessions Panel">
-                    <span class="material-symbols-outlined">menu</span>
-                </button>
-                <h1 id="chat-title" class="chat-title">AI Assistant</h1>
-                <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
-                    <select id="entitySelector" class="hidden"></select>
-                    <div id="custom-entity-selector-trigger" class="custom-select-trigger">
-                        <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
-                        <span id="custom-entity-selector-text">Default Agent</span>
-                        <span class="custom-select-arrow"></span>
-                    </div>
-                    <div id="custom-entity-selector-options" class="custom-select-options"></div>
-                </div>
-                <button id="toggle-right-sidebar-btn" class="menu-toggle-btn" title="Toggle Agent & Asset Studio">
-                    <span class="material-symbols-outlined">construction</span>
-                </button>
-                
-            </div>
-
-            <div class="main-content-wrapper">
-                <div class="chat-messages" id="chatMessages"></div>
-
-                <div id="resizer-row" class="panel-resizer horizontal"></div>
-
-            <div id="composer-panel" class="composer-panel collapsed">
-                <div class="composer-header">
-                    <div class="composer-title-area">
-                        <h3><span class="material-symbols-outlined">edit_square</span> Composer</h3>
-                    </div>
-
-                    <div class="composer-tools-area">
-                        <button class="btn-icon small" data-command="formatBlock" data-value="H1" title="Heading 1">H1</button>
-                        <button class="btn-icon small" data-command="formatBlock" data-value="H2" title="Heading 2">H2</button>
-                        <button class="btn-icon small" data-command="formatBlock" data-value="H3" title="Heading 3">H3</button>
-                        <button class="btn-icon small" data-command="formatBlock" data-value="P" title="Paragraph">P</button>
-                        <div class="toolbar-divider"></div>
-                        <div class="dropdown">
-                            <button class="btn-icon small" id="color-picker-btn" title="Text Color">
-                                <span class="material-symbols-outlined">format_color_text</span>
-                            </button>
-                            <div id="color-palette" class="dropdown-content"></div>
-                        </div>
-                        <div class="toolbar-divider"></div>
-                        <button class="btn-icon small" data-command="bold" title="Bold"><span class="material-symbols-outlined">format_bold</span></button>
-                        <button class="btn-icon small" data-command="italic" title="Italic"><span class="material-symbols-outlined">format_italic</span></button>
-                        <button class="btn-icon small" data-command="underline" title="Underline"><span class="material-symbols-outlined">format_underlined</span></button>
-                        <button class="btn-icon small" data-command="strikeThrough" title="Strikethrough"><span class="material-symbols-outlined">format_strikethrough</span></button>
-                        <div class="toolbar-divider"></div>
-                        <button class="btn-icon small" data-command="insertUnorderedList" title="Bulleted List"><span class="material-symbols-outlined">format_list_bulleted</span></button>
-                        <button class="btn-icon small" data-command="insertOrderedList" title="Numbered List"><span class="material-symbols-outlined">format_list_numbered</span></button>
-                    </div>
-
-                    <div class="composer-actions">
-
-                        <button class="btn-icon" id="composer-collapse-btn" title="Collapse">
-                            <span class="material-symbols-outlined">keyboard_arrow_down</span>
+            <div class="sidebar-header">
+                <div class="sidebar-top-row">
+                    <h1 class="app-main-title">PromptPrim</h1>
+                    <div>
+                        <button id="settings-btn" class="menu-toggle-btn" title="Global Settings">
+                            <span class="material-symbols-outlined">settings</span>
                         </button>
-                        <button class="btn-icon" id="composer-expand-btn" title="Expand/Collapse">
-                            <span class="material-symbols-outlined">fullscreen</span>
-                        </button>
-                        <button id="export-composer-btn" class="btn-icon" title="Export Content">
-                            <span class="material-symbols-outlined">save</span>
+                        <button id="close-sidebar-btn" class="menu-toggle-btn mobile-only" title="Close Sidebar">
+                            <span class="material-symbols-outlined">close</span>
                         </button>
                     </div>
                 </div>
-                
-                <div id="composer-editor" class="composer-editor">
-                    <div class="composer-content-area" contenteditable="true" spellcheck="false"></div>
-                </div>        
-            </div>
-            <!-- <div class="chat-panel-bottom"> 
-                    <div class="chat-input-wrapper">
-                        <div id="file-preview-container" class="hidden"></div>
-                        <div class="input-container-seamless"></div>
+                <div class="sidebar-bottom-row">
+                    <div class="dropdown align-left">
+                        <button class="btn btn-small">Project</button>
+                        <div class="dropdown-content">
+                            <a href="#" data-action="newProject">New...</a>
+                            <a href="#" data-action="openProject">Open...</a>
+                            <a href="#" data-action="saveProject">Save</a>
+                            <a href="#" data-action="saveProjectAs">Save As...</a>
+                        </div>
                     </div>
-            </div> -->
-            <div class="chat-input-wrapper">
-                <div id="file-preview-container" class="hidden"></div>
-                <div class="input-container-seamless">
-                    <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
-                    
-                    <div class="input-actions-row">
-                        
-                        <div class="input-actions-left">
-                            <div id="chat-actions-container" class="dropdown input-adornment left">
-                                <button class="btn-icon" id="chat-actions-btn" title="More Actions">
-                                    <span class="material-symbols-outlined">add_circle</span>
-                                </button>
-                                <div id="chat-actions-menu" class="dropdown-content bottom-up">
-                                    </div>
-                            </div>
-                            </div>
-
-                        <div class="input-actions-right">
-                            <button class="btn send-btn" id="sendBtn" title="Send Message">
-                                <span class="material-symbols-outlined">send</span>
-                            </button>
-                            <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">
-                                <span class="material-symbols-outlined">stop_circle</span>
+                    <h2 id="project-title" class="project-title">Untitled Project</h2>
+                </div>
+            </div>
+            <div class="sidebar-content">
+                <div class="sessions-frame">
+                    <div class="section-box">
+                        <div class="section-header">
+                            <h3><span class="material-symbols-outlined">folder</span> Chat Sessions</h3>
+                            <button id="new-chat-btn" class="btn-icon" title="New Chat">
+                                <span class="material-symbols-outlined">add</span>
                             </button>
                         </div>
+                        <div id="pinnedSessionList" class="item-list"></div>
+                        <div id="sessionListContainer" class="item-list"></div>
+                        <details class="collapsible-section hidden" id="archivedSessionsSection">
+                            <summary>Archived Sessions</summary>
+                            <div id="archivedSessionList" class="item-list"></div>
+                        </details>
                     </div>
                 </div>
             </div>
+        </div>
+        <!-- END SESSIONS PANEL -->
+
+        <!-- [NEW] CONTAINER หลักสำหรับพื้นที่ด้านขวา (Chat + Studio) -->
+        <!-- [NEW] CONTAINER หลักสำหรับพื้นที่ด้านขวา (Chat + Studio) -->
+        <div class="main-view-container">
             
+            <!-- [ย้ายมานี่] HEADER -->
+            <div class="chat-header">
+                <!-- ส่วนซ้าย: ปุ่ม Hamburger และชื่อ Chat -->
+                <div class="header-left">
+                    <button id="hamburger-btn" class="menu-toggle-btn" title="Toggle Sessions Panel">
+                        <span class="material-symbols-outlined">menu</span>
+                    </button>
+                    <h1 id="chat-title" class="chat-title">AI Assistant</h1>
+                </div>
+
+                <!-- ส่วนกลาง: Entity Selector และปุ่มเปิด Studio -->
+                <div class="header-center">
+                    <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
+                        <select id="entitySelector" class="hidden"></select>
+                        <div id="custom-entity-selector-trigger" class="custom-select-trigger">
+                            <span id="custom-entity-selector-icon" class="item-icon">🤖</span>
+                            <span id="custom-entity-selector-text">Default Agent</span>
+                            <span class="custom-select-arrow"></span>
+                        </div>
+                        <div id="custom-entity-selector-options" class="custom-select-options"></div>
+                    </div>
+                    <button id="toggle-right-sidebar-btn" class="menu-toggle-btn" title="Toggle Agent & Asset Studio">
+                        <span class="material-symbols-outlined">construction</span>
+                    </button>
+                </div>
+
+                <!-- ส่วนขวา: User Profile -->
+                <div class="header-right">
+                    <div class="user-profile-container dropdown">
+                        <button id="user-profile-btn" class="user-avatar" data-action="toggle-menu" title="User Profile">
+                            <!-- Placeholder: อาจจะเป็นรูปภาพหรือตัวอักษรแรกของชื่อ -->
+                            <span>K</span> 
+                        </button>
+                        <div id="user-profile-menu" class="dropdown-content">
+                            <div class="menu-header">
+                                <span class="user-name">Kaiwan Kul.</span>
+                                <span class="user-plan">Pro Plan</span>
+                            </div>
+                            <div class="menu-item" id="user-credits">
+                                <span>Credits</span>
+                                <span>1,250,000</span>
+                            </div>
+                            <hr>
+                            <a href="#" class="menu-item" data-action="user:account">Account</a>
+                            <a href="#" class="menu-item" data-action="user:settings">Settings</a>
+                            <div class="menu-item theme-switcher-menu">
+                                <span>Theme</span>
+                                <div id="theme-switcher-dropdown" class="theme-switcher-inline">
+                                    <label title="Light"><input type="radio" name="theme-menu" value="light"><span class="material-symbols-outlined">light_mode</span></label>
+                                    <label title="Dark"><input type="radio" name="theme-menu" value="dark"><span class="material-symbols-outlined">dark_mode</span></label>
+                                    <label title="System"><input type="radio" name="theme-menu" value="system"><span class="material-symbols-outlined">desktop_windows</span></label>
+                                </div>
+                            </div>
+                            <hr>
+                            <a href="#" class="menu-item" data-action="user:help">Help</a>
+                            <a href="#" class="menu-item is-destructive" data-action="user:logout">Log Out</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- [NEW] CONTAINER สำหรับคอลัมน์กลางและขวา -->
+            <div class="content-columns-wrapper">
+                
+                <!-- MAIN CHAT AREA (คอลัมน์กลาง) -->
+                <div id="main-chat-panel" class="main-chat-area">
+                    <div class="main-content-wrapper">
+                        <div class="chat-messages" id="chatMessages"></div>
+                        <div id="resizer-row" class="panel-resizer horizontal"></div>
+                        <div id="composer-panel" class="composer-panel collapsed">
+                            <div class="composer-header">
+                                <div class="composer-title-area">
+                                    <h3><span class="material-symbols-outlined">edit_square</span> Composer</h3>
+                                </div>
+                                <div class="composer-tools-area">
+                                    <button class="btn-icon small" data-command="formatBlock" data-value="H1" title="Heading 1">H1</button>
+                                    <button class="btn-icon small" data-command="formatBlock" data-value="H2" title="Heading 2">H2</button>
+                                    <button class="btn-icon small" data-command="formatBlock" data-value="H3" title="Heading 3">H3</button>
+                                    <button class="btn-icon small" data-command="formatBlock" data-value="P" title="Paragraph">P</button>
+                                    <div class="toolbar-divider"></div>
+                                    <div class="dropdown">
+                                        <button class="btn-icon small" id="color-picker-btn" title="Text Color">
+                                            <span class="material-symbols-outlined">format_color_text</span>
+                                        </button>
+                                        <div id="color-palette" class="dropdown-content"></div>
+                                    </div>
+                                    <div class="toolbar-divider"></div>
+                                    <button class="btn-icon small" data-command="bold" title="Bold"><span class="material-symbols-outlined">format_bold</span></button>
+                                    <button class="btn-icon small" data-command="italic" title="Italic"><span class="material-symbols-outlined">format_italic</span></button>
+                                    <button class="btn-icon small" data-command="underline" title="Underline"><span class="material-symbols-outlined">format_underlined</span></button>
+                                    <button class="btn-icon small" data-command="strikeThrough" title="Strikethrough"><span class="material-symbols-outlined">format_strikethrough</span></button>
+                                    <div class="toolbar-divider"></div>
+                                    <button class="btn-icon small" data-command="insertUnorderedList" title="Bulleted List"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+                                    <button class="btn-icon small" data-command="insertOrderedList" title="Numbered List"><span class="material-symbols-outlined">format_list_numbered</span></button>
+                                </div>
+                                <div class="composer-actions">
+                                    <button class="btn-icon" id="composer-collapse-btn" title="Collapse">
+                                        <span class="material-symbols-outlined">keyboard_arrow_down</span>
+                                    </button>
+                                    <button class="btn-icon" id="composer-expand-btn" title="Expand/Collapse">
+                                        <span class="material-symbols-outlined">fullscreen</span>
+                                    </button>
+                                    <button id="export-composer-btn" class="btn-icon" title="Export Content">
+                                        <span class="material-symbols-outlined">save</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="composer-editor" class="composer-editor">
+                                <div class="composer-content-area" contenteditable="true" spellcheck="false"></div>
+                            </div>        
+                        </div>
+                        <div class="chat-input-wrapper">
+                            <div id="file-preview-container" class="hidden"></div>
+                            <div class="input-container-seamless">
+                                <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
+                                <div class="input-actions-row">
+                                    <div class="input-actions-left">
+                                        <div id="chat-actions-container" class="dropdown input-adornment left">
+                                            <button class="btn-icon" id="chat-actions-btn" title="More Actions">
+                                                <span class="material-symbols-outlined">add_circle</span>
+                                            </button>
+                                            <div id="chat-actions-menu" class="dropdown-content bottom-up"></div>
+                                        </div>
+                                    </div>
+                                    <div class="input-actions-right">
+                                        <button class="btn send-btn" id="sendBtn" title="Send Message">
+                                            <span class="material-symbols-outlined">send</span>
+                                        </button>
+                                        <button class="btn stop-btn hidden" id="stopBtn" title="Stop Generation">
+                                            <span class="material-symbols-outlined">stop_circle</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STUDIO PANEL (SIDEBAR ขวา) -->
+                <div id="studio-panel" class="right-sidebar">
+                    <div class="studio-header">
+                        <h1>Agent & Asset Studio</h1>
+                    </div>
+                    <div class="studio-content">
+                        <div class="studio-assets-container"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- [ย้ายมานี่] STATUS BAR -->
             <div id="status-panel">
-                <button id="mobile-composer-toggle" class="btn-icon mobile-only" title="Toggle Composer">
-                    <span class="material-symbols-outlined">keyboard_arrow_up</span>
-                </button>
                 <div class="status-left">
                     <div class="status-dot" id="statusDot"></div>
                     <span id="statusText" class="status-text-content">Disconnected</span>
@@ -298,21 +338,11 @@
                 </div>
                 <button id="context-inspector-trigger-btn" title="Inspect Context">&#8505;</button>
             </div>
-        </div>
-            <!-- END MAIN CHAT AREA -->
-        </div>
 
-        <div id="studio-panel" class="right-sidebar">
-            <div class="studio-header">
-                <h1>Agent & Asset Studio</h1>
-            </div>
-            <div class="studio-content">
-                <div class="studio-assets-container">
-                    </div>
-            </div>
         </div>
     </div>
     
+
     <!-- ===== OVERLAYS & MODALS (Remains unchanged) ===== -->
     <div id="mobile-overlay" class="mobile-overlay"></div>
     
@@ -386,7 +416,7 @@
                     <div class="form-group">
                         <label for="summary-model-search-input">Summarization Model</label>
                         <!-- [NEW] Searchable Select Component -->
-                        <div class="searchable-select-wrapper" id="summary-model-search-wrapper">
+                            <div class="searchable-select-wrapper" id="summary-model-wrapper">                            
                             <input type="text" id="summary-model-search-input" placeholder="Search models..." autocomplete="off">
                             <input type="hidden" id="summary-model-value"> <!-- ใช้เก็บค่าที่เลือก -->
                             <div id="summary-model-options-container" class="searchable-select-options hidden">
@@ -428,8 +458,10 @@
                 <div class="agent-editor-column">
                     <div class="form-group"><label for="agent-name-input">Agent Name</label><input type="text" id="agent-name-input" placeholder="e.g., Python Expert"></div>
                     <div class="form-group"><label for="agent-icon-input">Agent Icon (Emoji)</label><input type="text" id="agent-icon-input" placeholder="🧑‍💻"></div>
-                    <div class="form-group"><label for="agent-model-select">Model</label><select id="agent-model-select"></select></div>
-                    <hr>
+                    <div class="searchable-select-wrapper" id="agent-model-search-wrapper">
+                        <input type="text" id="agent-model-search-input" placeholder="Search models..." autocomplete="off">
+                        <input type="hidden" id="agent-model-select"> <div id="agent-model-options-container" class="searchable-select-options hidden"></div>
+                    </div>                    <hr>
                     <div class="section-box">
                         <h4>📝 System Prompt &amp; Parameters</h4>
                         <div class="form-group"><label for="agent-system-prompt">คำสั่งเริ่มต้นของระบบ</label><textarea id="agent-system-prompt" rows="5"></textarea></div>

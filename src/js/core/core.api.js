@@ -79,18 +79,33 @@ async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
 
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-    const project = JSON.parse(JSON.stringify(stateManager.getProject()));
+    const project = stateManager.getProject(); // ดึงข้อมูลโปรเจกต์จาก State มาเป็นฐาน
     if (!project?.globalSettings) return;
 
-    const apiKey = project.globalSettings.apiKey?.trim() || '';
-    const baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
+    let apiKey = '';
+    let baseUrl = '';
+
+    // [SMART FIX] ตรวจสอบว่า Settings Panel เปิดอยู่หรือไม่ เพื่อเลือกแหล่งข้อมูลที่ถูกต้อง
+    const settingsPanel = document.getElementById('settings-panel');
+    if (settingsPanel && settingsPanel.classList.contains('open')) {
+        // กรณีที่ 1: Panel เปิดอยู่ (ผู้ใช้กด Refresh เอง) -> ให้ดึงค่าล่าสุดจากหน้าจอโดยตรง
+        console.log("[API] Settings panel is open. Reading values directly from input fields.");
+        apiKey = document.getElementById('apiKey')?.value.trim() || '';
+        baseUrl = document.getElementById('ollamaBaseUrl')?.value.trim() || '';
+    } else {
+        // กรณีที่ 2: Panel ปิดอยู่ (เช่น ตอนเริ่มโหลดแอป) -> ให้ใช้ค่าที่บันทึกไว้ใน State
+        console.log("[API] Settings panel is closed. Using persisted values from state manager.");
+        apiKey = project.globalSettings.apiKey?.trim() || '';
+        baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
+    }
+
     let allModels = [];
     try {
         const fetchPromises = [];
         if (apiKey) {
             fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
         }
-        if (import.meta.env.DEV && baseUrl) {
+        if (baseUrl) {
             fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
         }
         const results = await Promise.all(fetchPromises);

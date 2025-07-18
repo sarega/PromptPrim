@@ -283,17 +283,13 @@
 #summary-editor-actions { display: flex; gap: 10px; }
 #summary-editor-actions.hidden { display: none; }
 
-@media (max-width: 800px) {
-    .modal-body-columns { flex-direction: column; min-height: 0; }
-    .modal-column.left { border-right: none; padding-right: 0; max-height: 250px; }
-}
-
 
 /* [FIX] Media Query สำหรับทำให้ Modal เป็น Responsive */
 @media (max-width: 800px) {
     .modal-body-columns {
         flex-direction: column; /* เปลี่ยนเป็นแนวตั้ง */
         min-height: 0;
+        min-width: 0;  /* <-- บรรทัดสำคัญ: อนุญาตให้ Modal หดได้เล็กกว่า 450px */
     }
     .modal-column.left {
         border-right: none;
@@ -301,7 +297,62 @@
         max-height: 250px; /* จำกัดความสูงของ Log List บนมือถือ */
         flex-shrink: 0;
     }
+    /* 1. กำหนดให้ Modal เป็น Flex Container แบบเต็มความสูง */
+    #summarization-modal .modal-box {
+        min-width: 0 !important; /* <-- คำสั่งสำคัญ: ยกเลิกความกว้างขั้นต่ำ */
+        width: 100% !important;  /* กำหนดให้ความกว้างเป็น 100% ของจอเสมอ */
+        padding-left: 15px !important;
+        padding-right: 15px !important;
+        box-sizing: border-box !important; /* ป้องกันปัญหา padding ดัน layout ล้น */
+    }
+
+
+    /* 2. ทำให้ Body (ส่วนเนื้อหา) ขยายเต็มพื้นที่ที่เหลือและ scroll ได้ */
+    #summarization-modal .modal-body {
+        flex-grow: 1;       /* <-- คำสั่งสำคัญ: ให้ขยายเต็มพื้นที่ว่าง */
+        overflow-y: auto;   /* ทำให้เนื้อหา scroll ได้เมื่อล้น */
+        padding: 10px 0;    /* ปรับ padding แนวตั้งเล็กน้อย */
+        min-height: 0;      /* เทคนิคแก้ปัญหา scroll ใน flexbox */
+        display: flex;      /* ทำให้ข้างในเป็น flex container ด้วย */
+        flex-direction: column; /* จัดเรียง form group แนวตั้ง */
+        gap: 3px;          /* ระยะห่างระหว่าง Title และ Content */
+    }
+    #summarization-modal .modal-column {
+        min-width: 0 !important;
+    }
+    /* 3. ทำให้ Textarea ขยายเต็มพื้นที่ที่เหลือใน Body */
+    #summarization-modal .modal-body .form-group:has(#summary-editor-content) {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0; /* เอา margin เดิมออก */
+    }
+
+    #summarization-modal #summary-editor-content {
+        flex-grow: 1; /* ขยายให้เต็มพื้นที่ใน form group */
+        resize: none; /* ปิดการย่อขยายด้วยมือบนมือถือ */
+    }
+
+    /* 4. จัดวางปุ่ม Actions ให้อยู่ด้านล่างสุด */
+    #summarization-modal .modal-actions {
+        flex-direction: row;        /* กลับมาเรียงแนวนอน */
+        justify-content: space-between; /* จัดให้กระจายตัว */
+        gap: 10px;
+        margin-top: auto;
+        padding-top: 10px;
+        border-top: 1px solid var(--border-color);
+    }
+   #summarization-modal .modal-actions .btn {
+        flex-grow: 1; /* ทำให้ปุ่มขยายเต็มพื้นที่เท่าๆ กัน */
+    }
+
+
 }
+#summarization-modal .modal-actions .btn {
+    padding: 8px 16px; /* ลดขนาดปุ่ม */
+    font-size: 0.9rem;
+}
+
 
 /* --- New Styles for Summarization Modal Layout --- */
 .summary-log-layout {
@@ -322,10 +373,29 @@
     padding-right: 20px;
 }
 
+.log-editor-column .form-group:has(#summary-editor-content) {
+    flex-grow: 1; /* ทำให้ form group ของ textarea ขยาย */
+    display: flex;
+    flex-direction: column;
+}
+
 .log-editor-column {
     flex: 2;
     display: flex;
     flex-direction: column;
+}
+#summary-editor-content {
+    flex-grow: 1; /* ทำให้ textarea ขยายเต็มพื้นที่ */
+    resize: vertical;
+    /* min-height: 150px;  */
+}
+#summarization-modal .searchable-select-wrapper input[type="text"],
+#summarization-modal #summary-modal-preset-select {
+    padding: 8px 12px; /* ลดขนาดช่อง input/select */
+}
+
+#summarization-modal #summary-modal-preset-actions .btn {
+    padding: 8px 12px; /* ลดขนาดปุ่ม Actions */
 }
 
 /* Responsive for mobile */

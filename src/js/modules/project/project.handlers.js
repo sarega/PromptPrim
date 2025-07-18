@@ -433,17 +433,14 @@ export async function persistCurrentProject() {
 export async function loadGlobalSettings() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
-    const gs = project.globalSettings;
-    document.getElementById('apiKey').value = gs.apiKey || "";
-    document.getElementById('ollamaBaseUrl').value = gs.ollamaBaseUrl || "";
+
+    // หน้าที่เดียวของฟังก์ชันนี้คือการสั่งให้ UI ที่เกี่ยวข้องไปอัปเดตตัวเอง
+    // โดยเฉพาะฟอนต์ ซึ่งเป็นสิ่งเดียวที่ต้องมีผลทันทีทั่วทั้งแอป
     stateManager.bus.publish('ui:applyFontSettings');
-    const sysAgent = gs.systemUtilityAgent || defaultSystemUtilityAgent;
-    document.getElementById('system-utility-model-select').value = sysAgent.model || '';
-    document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
-    document.getElementById('summary-modal-prompt-textarea').value = sysAgent.summarizationPrompt || '';
-    document.getElementById('system-utility-temperature').value = sysAgent.temperature ?? 1.0;
-    document.getElementById('system-utility-topP').value = sysAgent.topP ?? 1.0;
-    stateManager.bus.publish('ui:renderSummarizationSelector');
+    
+    // เราจะไม่ยุ่งกับ Element ของ Settings Panel จากที่นี่อีกต่อไป
+    // ปล่อยให้เป็นหน้าที่ของ settings.ui.js จัดการตัวเอง
+    console.log("Global settings loaded into state.");
 }
 
 export function handleFontChange(font) {
@@ -463,25 +460,32 @@ export function handleApiKeyChange(key) {
 
 }
 
-export function handleOllamaUrlChange(url) {
+export function handleOllamaUrlChanged(url) {
     const project = stateManager.getProject();
     project.globalSettings.ollamaBaseUrl = url;
     stateManager.setProject(project);
-    stateManager.updateAndPersistState();
+    stateManager.updateAndPersistState(); // <-- บรรทัดนี้สำคัญที่สุด
 }
 
 export function saveSystemUtilityAgentSettings() {
     const project = stateManager.getProject();
     if (!project.globalSettings) return;
     const agentSettings = project.globalSettings.systemUtilityAgent;
+
+    // [แก้ไข] ดึงค่าจาก Element ที่ยังคงอยู่ใน Settings Panel เท่านั้น
     agentSettings.model = document.getElementById('system-utility-model-select').value;
     agentSettings.systemPrompt = document.getElementById('system-utility-prompt').value;
-    agentSettings.summarizationPrompt = document.getElementById('summary-modal-prompt-textarea').value;
     agentSettings.temperature = parseFloat(document.getElementById('system-utility-temperature').value);
     agentSettings.topP = parseFloat(document.getElementById('system-utility-topP').value);
+    
+    // [ลบออก] ไม่ต้องบันทึก summarizationPrompt จากที่นี่แล้ว
+    // agentSettings.summarizationPrompt = document.getElementById('summary-modal-prompt-textarea').value;
+    
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
-    stateManager.bus.publish('ui:renderSummarizationSelector');
+    
+    // [ลบออก] ไม่ต้อง publish event นี้จากที่นี่แล้ว
+    // stateManager.bus.publish('ui:renderSummarizationSelector');
 }
 
 export function migrateProjectData(projectData) {

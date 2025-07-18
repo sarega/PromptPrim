@@ -1,7 +1,7 @@
 // src/js/modules/summary/summary.ui.js (Definitive, Complete & Corrected Version)
 
 import { stateManager, defaultSummarizationPresets } from '../../core/core.state.js';
-import { toggleDropdown } from '../../core/core.ui.js';
+import { toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
 import * as SummaryHandlers from './summary.handlers.js';
 
 let activeLogId = null;
@@ -200,18 +200,35 @@ export function renderLogList() {
 export function showSummarizationCenter() {
     const modal = document.getElementById('summarization-modal');
     if (!modal) return;
-    // 1. รีเซ็ตแท็บทั้งหมดให้ไม่ active
+
+    // --- ส่วนของการรีเซ็ต Tab และ UI (คงไว้เหมือนเดิม) ---
     modal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
-    // 2. บังคับให้แท็บ Logs และเนื้อหาของมัน active เสมอเมื่อเปิด
     modal.querySelector('.tab-btn[data-tab="logs"]')?.classList.add('active');
     modal.querySelector('.tab-content[data-tab-content="logs"]')?.classList.add('active');
-    // -------------------------
     
-    selectLog(null); // เคลียร์ Editor
-    renderSummarizationPresetSelector(); // วาด Preset
-    populateSummaryModelSelector(); // << เพิ่มการเรียกใช้ฟังก์ชันใหม่
-    // เพื่อตั้งค่าการแสดงผลของปุ่มให้ถูกต้องเมื่อเปิด Modal ครั้งแรก
-    updateModalActionsVisibility(); 
+    // เคลียร์ editor, วาด list ใหม่, และอัปเดตปุ่ม action
+    selectLog(null);
+    renderLogList();
+    renderSummarizationPresetSelector();
+    updateModalActionsVisibility();
+
+    // --- [KEY CHANGE] เรียกใช้ Searchable Model Selector ตัวใหม่ ---
+    const project = stateManager.getProject();
+    const initialModelId = document.getElementById('summary-model-value')?.value || project.globalSettings.systemUtilityAgent?.model;
+    
+    // เราจะเรียกใช้ Component นี้เฉพาะในส่วนของ Tab Settings
+    createSearchableModelSelector(
+        'summary-model-wrapper', // <--- ใช้ ID ใหม่
+        initialModelId,                 // ID ของโมเดลที่ถูกเลือกไว้ตอนแรก
+        (selectedModelId) => {          // Callback ที่จะทำงานเมื่อผู้ใช้เลือกโมเดลใหม่
+            // บันทึก Model ที่เลือกลงใน State ของ System Agent โดยตรง
+            const valueInput = document.getElementById('summary-model-value');
+            if (valueInput) {
+                valueInput.value = selectedModelId;
+            }
+        }
+    );
+
     modal.style.display = 'flex';
 }
 
@@ -230,10 +247,10 @@ export function setSummaryLoading(isLoading) {
 }
 
 function populateSummaryModelSelector() {
-    const wrapper = document.getElementById('summary-model-search-wrapper');
-    const searchInput = document.getElementById('summary-model-search-input');
-    const valueInput = document.getElementById('summary-model-value');
-    const optionsContainer = document.getElementById('summary-model-options-container');
+    const wrapper = document.getElementById('system-model-search-wrapper');
+    const searchInput = document.getElementById('system-model-search-input');
+    const valueInput = document.getElementById('system-utility-model-select');
+    const optionsContainer = document.getElementById('system-model-options-container');
     if (!wrapper || !searchInput || !valueInput || !optionsContainer) return;
 
     const allModels = stateManager.getState().allProviderModels || [];
