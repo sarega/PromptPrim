@@ -266,13 +266,12 @@ function createMessageElement(message, index, session) {
             btnEdit.title = 'Edit';
             btnEdit.onclick = (event) => stateManager.bus.publish('chat:editMessage', { index, event });
             actions.appendChild(btnEdit);
-            if (role !== 'assistant') {
-                const btnCopy = document.createElement('button');
-                btnCopy.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>content_copy</span>`;
-                btnCopy.title = 'Copy';
-                btnCopy.onclick = (event) => stateManager.bus.publish('chat:copyMessage', { index, event });
-                actions.appendChild(btnCopy);
-            }
+            // [FIX] สร้างปุ่ม Copy สำหรับทุก Role ที่ไม่ใช่ System Message
+            const btnCopy = document.createElement('button');
+            btnCopy.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>content_copy</span>`;
+            btnCopy.title = 'Copy';
+            btnCopy.onclick = (event) => stateManager.bus.publish('chat:copyMessage', { index, event });
+            actions.appendChild(btnCopy);
             if (role === 'assistant') {
                 const btnRegenerate = document.createElement('button');
                 btnRegenerate.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>refresh</span>`;

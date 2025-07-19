@@ -75,71 +75,55 @@ export function renderAgentPresets(assetsContainer) {
     }
 }
 
-export function populateModelSelectors() {
-    const allModels = stateManager.getState().allProviderModels || [];
+function setAgentEditorInitialModel() {
     const project = stateManager.getProject();
-    const selectors = [
-        document.getElementById('agent-model-select'),
-        document.getElementById('system-utility-model-select')
-    ];
-    
-    if (selectors.some(s => !s) || !project.globalSettings) return;
+    if (!project) return;
 
-    const openrouterGroup = document.createElement('optgroup');
-    openrouterGroup.label = 'OpenRouter';
-    const ollamaGroup = document.createElement('optgroup');
-    ollamaGroup.label = 'Ollama';
+    const agentModelSearchInput = document.getElementById('agent-model-search-input');
+    const agentModelValueInput = document.getElementById('agent-model-select');
+    if (!agentModelSearchInput || !agentModelValueInput) return;
 
-    allModels.forEach(model => {
-        const option = new Option(model.name, model.id);
-        (model.provider === 'openrouter' ? openrouterGroup : ollamaGroup).appendChild(option);
-    });
+    const allModels = stateManager.getState().allProviderModels || [];
+    const editingAgentName = stateManager.getState().editingAgentName;
+    let selectedModelId = defaultAgentSettings.model; // ค่าเริ่มต้น
 
-    selectors.forEach(selector => {
-        const savedValue = selector.value;
-        selector.innerHTML = '<option value="">-- Select a Model --</option>';
-        if (openrouterGroup.childElementCount > 0) selector.appendChild(openrouterGroup.cloneNode(true));
-        if (ollamaGroup.childElementCount > 0) selector.appendChild(ollamaGroup.cloneNode(true));
-        
-        if (selector.id === 'system-utility-model-select') {
-            selector.value = project.globalSettings.systemUtilityAgent?.model || '';
-        } else if (selector.id === 'agent-model-select') {
-            const editingAgentName = stateManager.getState().editingAgentName;
-            if (editingAgentName && project.agentPresets[editingAgentName]) {
-                selector.value = project.agentPresets[editingAgentName].model;
-            } else {
-                selector.value = savedValue;
-            }
-        }
-    });
+    // ถ้ากำลังแก้ไข Agent ที่มีอยู่ ให้ดึงค่า Model ของ Agent ตัวนั้นมา
+    if (editingAgentName && project.agentPresets[editingAgentName]) {
+        selectedModelId = project.agentPresets[editingAgentName].model;
+    }
+
+    // ค้นหาข้อมูล Model จาก ID ที่เลือกไว้
+    const selectedModel = allModels.find(m => m.id === selectedModelId);
+
+    // ตั้งค่าที่แสดงผลและค่าที่ซ่อนไว้ในฟอร์ม
+    if (selectedModel) {
+        agentModelSearchInput.value = selectedModel.name;
+        agentModelValueInput.value = selectedModel.id;
+    } else {
+        // กรณีหาไม่เจอ (เช่น Model ถูกลบไปแล้ว) ให้เคลียร์ค่า
+        agentModelSearchInput.value = '';
+        agentModelValueInput.value = '';
+    }
 }
 
 export function showAgentEditor(isEditing = false, agentName = null) {
     stateManager.setState('editingAgentName', isEditing ? agentName : null);
     const project = stateManager.getProject();
-    const allModels = stateManager.getState().allProviderModels;
-    const utilityAgent = project.globalSettings.systemUtilityAgent;
-    const modelInfo = allModels.find(m => m.id === utilityAgent.model);
-
-    // --- ส่วนของการตั้งค่า Title และข้อมูล Enhancer (คงไว้เหมือนเดิม) ---
+    
     document.getElementById('agent-modal-title').textContent = isEditing ? `Edit Agent: ${agentName}` : "Create New Agent";
-    document.getElementById('enhancer-model-name').textContent = modelInfo?.name || utilityAgent.model || 'Not Configured';
+    
+    // ดึงข้อมูล Agent ที่จะใช้กรอกฟอร์ม
+    const agentDataForForm = (isEditing && agentName && project.agentPresets[agentName])
+        ? project.agentPresets[agentName]
+        : defaultAgentSettings;
 
-    let agentForForm = defaultAgentSettings;
-    let nameForForm = '';
-
-    if (isEditing && agentName && project.agentPresets[agentName]) {
-        agentForForm = project.agentPresets[agentName];
-        nameForForm = agentName;
-    }
-
-    // --- ส่วนของการกรอกข้อมูลในฟอร์ม (คงไว้เหมือนเดิม) ---
-    document.getElementById('agent-name-input').value = nameForForm;
+    // กรอกข้อมูลในฟอร์ม (ยกเว้น Model)
+    document.getElementById('agent-name-input').value = isEditing ? agentName : '';
     Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
         const element = document.getElementById(elId);
         const key = ALL_AGENT_SETTINGS_IDS[elId];
         if (element && key !== 'name' && key !== 'model') {
-             const value = agentForForm[key];
+             const value = agentDataForForm[key];
              element[element.type === 'checkbox' ? 'checked' : 'value'] = value !== undefined ? value : '';
         }
     });
@@ -147,16 +131,11 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     if (!isEditing) {
         document.getElementById('enhancer-prompt-input').value = '';
     }
-
-    // --- [KEY CHANGE] เรียกใช้ Searchable Model Selector ตัวใหม่ ---
-    const initialModelId = agentForForm.model || '';
+    
+    // [FIX] เรียกใช้ Component โดยตรง โดยส่งแค่ ID ของโมเดลเริ่มต้นไป
     createSearchableModelSelector(
-        'agent-model-search-wrapper', // ID ของ Wrapper Div ใน HTML
-        initialModelId,               // ID ของโมเดลที่ถูกเลือกไว้ตอนแรก
-        (selectedModelId) => {        // Callback ที่จะทำงานเมื่อผู้ใช้เลือกโมเดลใหม่
-            // อัปเดตค่าใน hidden input ซึ่งจะถูกใช้เมื่อกด Save
-            document.getElementById('agent-model-select').value = selectedModelId;
-        }
+        'agent-model-search-wrapper',
+        agentDataForForm.model // ส่ง Model ID ของ Agent ตัวนั้นๆ ไปเป็นค่าเริ่มต้น
     );
 
     document.getElementById('agent-editor-modal').style.display = 'flex';
@@ -167,95 +146,8 @@ export function hideAgentEditor() {
     stateManager.setState('editingAgentName', null);
 }
 
-// export function initAgentUI() {
-//         stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
-//         console.log("🎉 'agent:profileGenerated' event received. Populating form...", profileData);
-        
-//         // ใช้ชื่อ field จาก JSON ที่ได้รับมาโดยตรง
-//         document.getElementById('agent-name-input').value = profileData.agent_name || '';
-//         document.getElementById('agent-icon-input').value = profileData.agent_icon || '🤖';
-//         document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
-//         document.getElementById('agent-temperature').value = profileData.temperature ?? 1.0;
-//         document.getElementById('agent-topP').value = profileData.top_p ?? 1.0;
-//         document.getElementById('agent-topK').value = profileData.top_k ?? 0;
-//         document.getElementById('agent-presence-penalty').value = profileData.presence_penalty ?? 0.0;
-//         document.getElementById('agent-frequency-penalty').value = profileData.frequency_penalty ?? 0.0;
-//     });
-
-//     stateManager.bus.subscribe('agent:enhancerStatus', ({ text, color }) => {
-//         const statusDiv = document.getElementById('enhancer-status');
-//         if (statusDiv) {
-//             statusDiv.textContent = text;
-//             statusDiv.style.color = color || 'var(--text-dark)';
-//         }
-//     });
-
-//     // --- [CRITICAL FIX] แก้ไข Event Listener ให้ดักฟังบน Sidebar ขวาอันใหม่ ---
-//     // เปลี่ยนจาก '#studio-modal .studio-assets-container' มาเป็น '#studio-panel'
-//     const studioPanel = document.getElementById('studio-panel');
-//     if (studioPanel) {
-//         // ใช้ Event Delegation กับ Panel แม่ เพื่อให้ดักจับทุกคลิกที่เกิดขึ้นข้างในได้
-//         studioPanel.addEventListener('click', (e) => {
-//             // Listener for the "Add Agent" button (+) in the section header
-//             const addAgentButton = e.target.closest('button[data-action="createAgent"]');
-//             if (addAgentButton) {
-//                 e.preventDefault();
-//                 stateManager.bus.publish('agent:create');
-//                 return;
-//             }
-
-//             // Listeners for items in the agent list (Edit/Delete buttons)
-//             const agentItem = e.target.closest('.item[data-agent-name]');
-//             if (!agentItem) return;
-
-//             const agentName = agentItem.dataset.agentName;
-//             const actionButton = e.target.closest('button[data-action]');
-
-//             if (actionButton) {
-//                 const action = actionButton.dataset.action;
-//                 if (action === 'edit') {
-//                     stateManager.bus.publish('agent:edit', { agentName });
-//                 } else if (action === 'delete') {
-//                     stateManager.bus.publish('agent:delete', { agentName });
-//                 }
-//             } else {
-//                 // ถ้าคลิกที่ตัว Item เอง (ไม่ใช่ปุ่ม) ก็สามารถเลือกเป็น Active Agent ได้
-//                 const entity = { type: 'agent', name: agentName };
-//                 stateManager.bus.publish('entity:select', entity);
-//             }
-//         });
-//     }
-
-//     // --- ส่วนของ Listener สำหรับ Agent Editor Modal ยังคงเหมือนเดิม ---
-//     const agentEditorModal = document.getElementById('agent-editor-modal');
-//     if (agentEditorModal) {
-//         agentEditorModal.addEventListener('click', (e) => {
-//             const target = e.target;
-//             if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
-//                 stateManager.bus.publish('agent:save');
-//             } else if (target.closest('#generate-agent-profile-btn')) {
-//                 stateManager.bus.publish('agent:generateProfile');
-//             } else if (target.matches('.btn-secondary') || target.closest('.modal-close-btn')) {
-//                 hideAgentEditor();
-//             }
-//         });
-//     }
-
-//     // --- Subscriptions อื่นๆ ---
-//     stateManager.bus.subscribe('models:loaded', populateModelSelectors);
-//     stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
-
-//     console.log("✅ Agent UI and its listeners initialized correctly.");
-// }
-
-/**
- * [REVISED & COMPLETE] Initializes the UI functionalities specific to the Agent Editor.
- * The conflicting delegated event listener for the studio panel has been removed.
- * All item clicks in the studio are now exclusively handled by initStudioUI().
- */
 export function initAgentUI() {
     // --- Event Listener for the Agent Editor Modal ---
-    // This part is correct and remains, as it's specific to the agent editor.
     const agentEditorModal = document.getElementById('agent-editor-modal');
     if (agentEditorModal) {
         agentEditorModal.addEventListener('click', (e) => {
@@ -271,9 +163,7 @@ export function initAgentUI() {
     }
 
     // --- Event Bus Subscriptions ---
-    // These are necessary for the modal and form to function correctly.
     stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
-        console.log("🎉 'agent:profileGenerated' event received. Populating form...", profileData);
         document.getElementById('agent-name-input').value = profileData.agent_name || '';
         document.getElementById('agent-icon-input').value = profileData.agent_icon || '🤖';
         document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
@@ -292,8 +182,19 @@ export function initAgentUI() {
         }
     });
 
-    stateManager.bus.subscribe('models:loaded', populateModelSelectors);
     stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
+
+    // --- [FIX] Subscribe to 'models:loaded' to refresh the editor if it's open ---
+    stateManager.bus.subscribe('models:loaded', () => {
+        const agentEditorModal = document.getElementById('agent-editor-modal');
+        // ตรวจสอบว่า Modal กำลังแสดงผลอยู่หรือไม่
+        if (agentEditorModal && agentEditorModal.style.display === 'flex') {
+            console.log('[AgentUI] Models loaded. Refreshing agent editor content.');
+            // เรียกฟังก์ชัน showAgentEditor ซ้ำอีกครั้งเพื่อวาด Dropdown ใหม่
+            const editingAgentName = stateManager.getState().editingAgentName;
+            showAgentEditor(!!editingAgentName, editingAgentName);
+        }
+    });
 
     console.log("✅ Agent UI Initialized (Conflicting studio listener removed).");
 }

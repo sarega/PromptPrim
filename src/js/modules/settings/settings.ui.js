@@ -91,32 +91,13 @@ function initSearchableModelSelector() {
     }
 }
 
-export function populateModelSelectors() {
-    const allModels = stateManager.getState().allProviderModels || [];
-    const project = stateManager.getProject();
-    
-    const agentModelSelector = document.getElementById('agent-model-select');
-    if (!agentModelSelector || !project.globalSettings) return;
-
-    // ... (โค้ดสร้าง optgroup เหมือนเดิม)
-
-    const savedValue = agentModelSelector.value;
-    agentModelSelector.innerHTML = '<option value="">-- Select a Model --</option>';
-    if (openrouterGroup.childElementCount > 0) agentModelSelector.appendChild(openrouterGroup.cloneNode(true));
-    if (ollamaGroup.childElementCount > 0) agentModelSelector.appendChild(ollamaGroup.cloneNode(true));
-    
-    const editingAgentName = stateManager.getState().editingAgentName;
-    if (editingAgentName && project.agentPresets[editingAgentName]) {
-        agentModelSelector.value = project.agentPresets[editingAgentName].model;
-    } else {
-        agentModelSelector.value = savedValue;
-    }
-}
-
 function renderSettingsPanel() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
+
     const gs = project.globalSettings;
+        console.log("UI sees these globalSettings:", gs);
+
     const sysAgent = gs.systemUtilityAgent || {};
 
     // API Settings
@@ -150,13 +131,9 @@ export function initSettingsUI() {
     console.log("🚀 Initializing Settings UI...");
     initTabs();
     
-    // This subscription is potentially redundant if renderSettingsPanel always calls the component creation.
-    // It's safer to leave it to renderSettingsPanel. Let's remove this to avoid conflicts.
-    // stateManager.bus.subscribe('models:loaded', initSearchableModelSelector);
-
     const bus = stateManager.bus;
 
-    // --- API Key Input Listener with Debounce ---
+    // --- Event Listeners for inputs ---
     const apiKeyInput = document.getElementById('apiKey');
     if (apiKeyInput) {
         apiKeyInput.addEventListener('input', debounce((e) => {
@@ -164,7 +141,6 @@ export function initSettingsUI() {
         }, 500));
     }
 
-    // --- Ollama Base URL Input Listener with Debounce ---
     const ollamaUrlInput = document.getElementById('ollamaBaseUrl');
     if (ollamaUrlInput) {
         ollamaUrlInput.addEventListener('input', debounce((e) => {
@@ -172,22 +148,26 @@ export function initSettingsUI() {
         }, 500));
     }
 
-    // --- Load Models Button Listener ---
     const loadModelsBtn = document.getElementById('load-models-btn');
     if (loadModelsBtn) {
         loadModelsBtn.addEventListener('click', () => bus.publish('api:loadModels'));
     }
 
-    // --- System Agent Settings Listeners ---
-    const systemSettingsFields = [
-        'system-utility-prompt',
-        'system-utility-temperature',
-        'system-utility-topP'
-    ];
+    const systemSettingsFields = ['system-utility-prompt', 'system-utility-temperature', 'system-utility-topP'];
     systemSettingsFields.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('change', () => bus.publish('settings:systemAgentChanged'));
+        }
+    });
+
+    // --- [FIX] Subscribe to 'models:loaded' to refresh the panel if it's open ---
+    stateManager.bus.subscribe('models:loaded', () => {
+        const settingsPanel = document.getElementById('settings-panel');
+        // สั่งให้วาดข้อมูลใน Panel ใหม่ เฉพาะในกรณีที่ Panel กำลังเปิดอยู่เท่านั้น
+        if (settingsPanel && settingsPanel.classList.contains('open')) {
+            console.log('[SettingsUI] Models loaded. Refreshing settings panel content.');
+            renderSettingsPanel();
         }
     });
 

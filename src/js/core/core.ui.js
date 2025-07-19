@@ -289,16 +289,30 @@ export function showContextMenu(options, event) {
  * @param {string} initialModelId - The ID of the model that should be selected initially.
  * @param {function(string):void} onSelect - The callback function to run when a model is selected. It receives the model ID.
  */
-export function createSearchableModelSelector(wrapperId, initialModelId, onSelect) {
+export function createSearchableModelSelector(wrapperId, initialModelId) {
     const wrapper = document.getElementById(wrapperId);
-    // [FIX] เพิ่มการตรวจสอบว่า wrapper มีจริงหรือไม่ ก่อนจะทำงานต่อ
     if (!wrapper) {
         console.error(`Searchable selector wrapper with ID "${wrapperId}" not found.`);
         return;
     }
 
-    // ป้องกันการ attach listener ซ้ำซ้อน
-    if (wrapper.dataset.initialized) return;
+    // ใช้ dataset เพื่อป้องกันการผูก listener ซ้ำซ้อน
+    if (wrapper.dataset.initialized === 'true') {
+        // ถ้าเคยสร้างแล้ว ให้อัปเดตค่าเริ่มต้นพอ
+        const searchInput = wrapper.querySelector('input[type="text"]');
+        const valueInput = wrapper.querySelector('input[type="hidden"]');
+        const allModels = stateManager.getState().allProviderModels || [];
+        const currentModel = allModels.find(m => m.id === initialModelId);
+
+        if (currentModel) {
+            searchInput.value = currentModel.name;
+            valueInput.value = currentModel.id;
+        } else {
+            searchInput.value = '';
+            valueInput.value = '';
+        }
+        return;
+    }
 
     const searchInput = wrapper.querySelector('input[type="text"]');
     const valueInput = wrapper.querySelector('input[type="hidden"]');
@@ -320,9 +334,8 @@ export function createSearchableModelSelector(wrapperId, initialModelId, onSelec
             item.innerHTML = `${model.name} <small>${model.id}</small>`;
             item.addEventListener('click', () => {
                 searchInput.value = model.name;
-                valueInput.value = model.id;
+                valueInput.value = model.id; // Component อัปเดตค่าของตัวเอง
                 optionsContainer.classList.add('hidden');
-                if(onSelect) onSelect(model.id); // Call the provided callback
             });
             optionsContainer.appendChild(item);
         });
@@ -332,11 +345,7 @@ export function createSearchableModelSelector(wrapperId, initialModelId, onSelec
         const searchTerm = searchInput.value.toLowerCase();
         const filtered = allModels.filter(m => m.name.toLowerCase().includes(searchTerm) || m.id.toLowerCase().includes(searchTerm));
         renderOptions(filtered);
-
-        // [CRITICAL FIX] ถ้าช่องค้นหาว่าง ให้แสดงรายการทั้งหมดอีกครั้ง
-        if (searchTerm === '') {
-            renderOptions(allModels);
-        }
+        if (searchTerm === '') renderOptions(allModels);
     });
 
     searchInput.addEventListener('focus', () => {
@@ -344,7 +353,6 @@ export function createSearchableModelSelector(wrapperId, initialModelId, onSelec
         optionsContainer.classList.remove('hidden');
     });
 
-    // ตั้งค่าเริ่มต้น
     const currentModel = allModels.find(m => m.id === initialModelId);
     if (currentModel) {
         searchInput.value = currentModel.name;

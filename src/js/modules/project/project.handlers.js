@@ -241,10 +241,12 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
     
     // [SECURITY FIX] สร้าง Deep Copy และลบข้อมูลที่ไม่ควรบันทึก
     const projectToSave = JSON.parse(JSON.stringify(stateManager.getProject()));
+    /* [DEV-MODE] Temporarily disabled key deletion for easier development.
     if (projectToSave.globalSettings) {
         delete projectToSave.globalSettings.apiKey;
         delete projectToSave.globalSettings.ollamaBaseUrl;
     }
+    */
     
     const migratedProjectToSave = migrateProjectData(projectToSave);
     

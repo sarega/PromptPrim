@@ -267,6 +267,8 @@ export async function generateAndRenameSession(history){
 
 function constructApiCall(agent, messages, stream = false) {
     const project = stateManager.getProject();
+    console.log("API call sees these globalSettings:", project.globalSettings);
+
     const allModels = stateManager.getState().allProviderModels;
     const modelData = allModels.find(m => m.id === agent.model);
     if (!modelData) throw new Error(`Model data for agent.model ID '${agent.model}' not found.`);
