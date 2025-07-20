@@ -257,7 +257,7 @@ export async function handleProjectSaveConfirm(projectNameFromModal) {
         const a = document.createElement('a');
         
         // [CUSTOM EXTENSION] เปลี่ยนนามสกุลเป็น .prim
-        a.download = `${newName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.prim`;
+        a.download = `${newName.replace(/[^a-z0-9\u0E00-\u0E7F]/gi, '_').toLowerCase()}.prim`;
         
         a.href = url;
         document.body.appendChild(a);
