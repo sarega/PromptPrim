@@ -111,7 +111,8 @@ export function initMessageInteractions() {
 
 // --- Helper Functions ---
 export function estimateTokens(text) {
-    if (typeof text !== 'string' || !text) return 0; // [FIX] Guard clause
+    if (typeof text !== 'string' || !text) return 0;
+    // A common approximation is that 1 token is roughly 4 characters.
     return Math.round(text.length / 4);
 }
 
@@ -233,7 +234,7 @@ async function sendSingleAgentMessage() {
     // [CREDIT CHECK] ตรวจสอบเครดิตก่อนส่ง
     const profile = UserService.getCurrentUserProfile();
     if (profile.userCredits <= 0) {
-        showCustomAlert("Your credits have run out. Please upgrade to a Pro plan to continue.", "Credits Depleted");
+        showCustomAlert("Your userCredits have run out. Please upgrade to a Pro plan to continue.", "Credits Depleted");
         return;
     }
 
@@ -783,7 +784,7 @@ export function deleteMessage({ index }) {
  * @param {object} session - The session object to be renamed.
  */
 async function triggerAutoNameGeneration(session) {
-    // หน่วงเวลาเล็กน้อยเพื่อให้แน่ใจว่า UI หลักทำงานไปก่อน
+    // A slight delay to ensure the main chat UI updates first
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
@@ -803,30 +804,29 @@ async function triggerAutoNameGeneration(session) {
 
         const titlePrompt = `Based on the user's initial query, create a concise title (3-5 words) and a single relevant emoji. Respond ONLY with a JSON object like {"title": "your title", "emoji": "👍"}.\n\nUser's Query: "${userContent}"`;
 
-        // เรียก API และรับ response object กลับมา
+        // The callLLM function now returns an object: { content, usage }
         const response = await callLLM({ ...utilityAgent, temperature: 0.1 }, [{ role: 'user', content: titlePrompt }]);
         
-        // หักเครดิต
-        UserService.burnCreditsForUsage(response.usage, utilityAgent.model);        
-        // Parse ผลลัพธ์ที่ได้
+        // Burn userCredits using the `usage` part of the response
+        UserService.burnCreditsForUsage(response.usage, utilityAgent.model);
+        
         let newTitleData = {};
         try {
-            const jsonMatch = responseText.match(/{.*}/s);
+            // [FIX] Use `response.content` instead of the undefined `responseText`
+            const jsonMatch = response.content.match(/{.*}/s);
             newTitleData = JSON.parse(jsonMatch[0]);
         } catch (e) {
-            console.error("Failed to parse title JSON:", responseText);
+            console.error("Failed to parse title JSON:", response.content);
             newTitleData = { title: userContent.substring(0, 30), emoji: '💬' };
         }
         
         const newName = `${newTitleData.emoji || '💬'} ${newTitleData.title || 'New Chat'}`;
         stateManager.bus.publish('session:autoRename', { sessionId: session.id, newName: newName });
 
-
     } catch (e) {
         console.error("Auto-rename process failed:", e);
     }
 }
-
 export function clearSummaryContext({ index }) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);

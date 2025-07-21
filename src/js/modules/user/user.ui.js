@@ -53,7 +53,7 @@ function updateUserProfileDisplay() {
 
     const nameSpan = document.querySelector('.user-profile-menu .user-name');
     const planSpan = document.querySelector('.user-profile-menu .user-plan');
-    const creditSpan = document.querySelector('#user-credits span:last-child');
+    const creditSpan = document.querySelector('#user-userCredits span:last-child');
     const avatarSpan = document.querySelector('#user-profile-btn span');
 
     if (nameSpan) {
@@ -68,16 +68,6 @@ function updateUserProfileDisplay() {
     }
     if (avatarSpan && profile.userName) {
         avatarSpan.textContent = profile.userName.charAt(0).toUpperCase();
-    }
-}
-
-
-// [NEW] ฟังก์ชันสำหรับอัปเดตการแสดงผลเครดิต
-function updateCreditDisplay() {
-    const creditSpan = document.querySelector('#user-credits span:last-child');
-    if (creditSpan) {
-        const credits = UserService.getCredits();
-        creditSpan.textContent = Math.floor(credits).toLocaleString(); // แสดงผลแบบมี comma และปัดเศษลง
     }
 }
 
@@ -117,8 +107,14 @@ export function initUserProfileUI() {
 
     initThemeSwitcher();
     
-    stateManager.bus.subscribe('user:profileLoaded', updateUserProfileDisplay);
-    stateManager.bus.subscribe('user:profileUpdated', updateUserProfileDisplay);
+    // [FIX] Subscribe to the correct events published by user.service.js
+    stateManager.bus.subscribe('user:settingsLoaded', updateUserProfileDisplay);
+    stateManager.bus.subscribe('user:settingsUpdated', updateUserProfileDisplay);
+
+    // [DEFINITIVE FIX] Immediately update the UI with the data that has already been loaded.
+    // This solves the issue where the UI shows '0' on refresh because the 'user:settingsLoaded'
+    // event was published before this UI module had a chance to subscribe to it.
+    updateUserProfileDisplay();
 
     console.log("✅ User Profile UI Initialized.");
 }

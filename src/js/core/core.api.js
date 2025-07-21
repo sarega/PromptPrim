@@ -5,6 +5,9 @@
 
 import { stateManager } from './core.state.js';
 import * as UserService from '../modules/user/user.service.js'; // <-- ตรวจสอบว่ามี import นี้
+import { estimateTokens } from '../modules/chat/chat.handlers.js';
+
+// import { recommendedModelIds } from './core.state.js';
 
 const modelCapabilities = {
     // Perplexity ไม่ต้องการ params ส่วนใหญ่และไม่รู้จัก tools parameter
@@ -47,25 +50,21 @@ async function fetchOpenRouterModels(apiKey) {
         headers: { 'Authorization': `Bearer ${apiKey}` } 
     });
     if (!response.ok) throw new Error('Could not fetch models from OpenRouter');
-    
     const data = await response.json();
-    
-    // [FIX] แก้ไขการ map ข้อมูลให้เก็บรายละเอียดทั้งหมดที่จำเป็น
     return data.data.map(m => ({ 
         id: m.id, 
         name: m.name || m.id, 
         provider: 'openrouter',
-        // --- เพิ่มข้อมูลส่วนนี้เข้ามา ---
         description: m.description,
         context_length: m.context_length,
         pricing: {
             prompt: m.pricing?.prompt || '0',
             completion: m.pricing?.completion || '0'
         },
-        // -----------------------------
         supports_tools: m.architecture?.tool_use === true 
     }));
 }
+
 async function fetchOllamaModels(baseUrl) {
     try {
         const response = await fetch(`${baseUrl}/api/tags`);
