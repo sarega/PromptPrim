@@ -4,6 +4,7 @@
 // ===============================================
 
 import { stateManager } from './core.state.js';
+import * as SettingsUI from '../modules/settings/settings.ui.js';
 
 
 /**
@@ -47,7 +48,15 @@ export function createDropdown(options) {
 }
 
 // --- Exported UI Functions ---
-export function toggleSettingsPanel() { document.getElementById('settings-panel').classList.toggle('open'); }
+export function showSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+export function hideSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) modal.style.display = 'none';
+}
 
 export function showSaveProjectModal() {
     const project = stateManager.getProject();
@@ -175,23 +184,22 @@ export function initCoreUI() {
     stateManager.bus.subscribe('ui:applyFontSettings', applyFontSettings);
     stateManager.bus.subscribe('status:update', updateStatus);
 
-    // Core Event Listeners
-    document.querySelector('#settings-btn').addEventListener('click', toggleSettingsPanel);
-    document.querySelector('.close-settings-btn').addEventListener('click', toggleSettingsPanel);
-    // document.getElementById('collapse-sidebar-btn').addEventListener('click', toggleSidebarCollapse);
-    
-    // Mobile UI Listeners
+    // [FIX] Update event listeners to call the correct function
+    // The main settings button in the sidebar now calls renderAndShowSettings
+    document.querySelector('#settings-btn').addEventListener('click', SettingsUI.renderAndShowSettings);
 
+    // Mobile UI Listeners
     const mobileOverlay = document.getElementById('mobile-overlay');
     if (mobileOverlay) {
         mobileOverlay.addEventListener('click', toggleMobileSidebar);
     }
-    
+
     // Modal Close Buttons
     const alertCloseBtn = document.querySelector('#alert-modal .btn');
     if(alertCloseBtn) {
         alertCloseBtn.addEventListener('click', hideCustomAlert);
     }
+
     const unsavedModal = document.getElementById('unsaved-changes-modal');
     if (unsavedModal) {
         const saveBtn = unsavedModal.querySelector('.btn:not(.btn-secondary):not(.btn-danger)');
@@ -203,11 +211,9 @@ export function initCoreUI() {
         const cancelBtn = unsavedModal.querySelector('.btn-secondary');
         if(cancelBtn) cancelBtn.addEventListener('click', () => stateManager.bus.publish('project:unsavedChangesChoice', 'cancel'));
     }
-    
-    
+
     console.log("Core UI Initialized and Listeners Attached.");
 }
-
 /**
  * Creates and displays a custom context menu at the specified coordinates.
  * @param {Array<object>} options - Array of menu item objects. e.g., [{ label: 'Copy', action: () => {} }]
@@ -289,42 +295,23 @@ export function showContextMenu(options, event) {
  * @param {string} initialModelId - The ID of the model that should be selected initially.
  * @param {function(string):void} onSelect - The callback function to run when a model is selected. It receives the model ID.
  */
-export function createSearchableModelSelector(wrapperId, initialModelId) {
+export function createSearchableModelSelector(wrapperId, initialModelId, modelsToShow) {
     const wrapper = document.getElementById(wrapperId);
-    if (!wrapper) {
-        console.error(`Searchable selector wrapper with ID "${wrapperId}" not found.`);
-        return;
-    }
+    if (!wrapper) return;
 
-    // ใช้ dataset เพื่อป้องกันการผูก listener ซ้ำซ้อน
-    if (wrapper.dataset.initialized === 'true') {
-        // ถ้าเคยสร้างแล้ว ให้อัปเดตค่าเริ่มต้นพอ
-        const searchInput = wrapper.querySelector('input[type="text"]');
-        const valueInput = wrapper.querySelector('input[type="hidden"]');
-        const allModels = stateManager.getState().allProviderModels || [];
-        const currentModel = allModels.find(m => m.id === initialModelId);
-
-        if (currentModel) {
-            searchInput.value = currentModel.name;
-            valueInput.value = currentModel.id;
-        } else {
-            searchInput.value = '';
-            valueInput.value = '';
-        }
-        return;
-    }
+    // [FIX] ใช้ modelsToShow (ลิสต์ที่กรองแล้ว) ที่รับเข้ามาเป็นแหล่งข้อมูลหลัก
+    // ถ้าไม่ได้รับมา (เป็น undefined) ให้ใช้ allProviderModels จาก State เป็น Fallback
+    const allModels = modelsToShow !== undefined ? modelsToShow : (stateManager.getState().allProviderModels || []);
 
     const searchInput = wrapper.querySelector('input[type="text"]');
     const valueInput = wrapper.querySelector('input[type="hidden"]');
     const optionsContainer = wrapper.querySelector('.searchable-select-options');
     if (!searchInput || !valueInput || !optionsContainer) return;
-
-    const allModels = stateManager.getState().allProviderModels || [];
-
+    
     const renderOptions = (modelsToRender) => {
         optionsContainer.innerHTML = '';
         if (modelsToRender.length === 0) {
-            optionsContainer.innerHTML = `<div class="searchable-option-item">No models found.</div>`;
+            optionsContainer.innerHTML = `<div class="searchable-option-item">No models found for this preset.</div>`;
             return;
         }
         modelsToRender.forEach(model => {
@@ -334,18 +321,21 @@ export function createSearchableModelSelector(wrapperId, initialModelId) {
             item.innerHTML = `${model.name} <small>${model.id}</small>`;
             item.addEventListener('click', () => {
                 searchInput.value = model.name;
-                valueInput.value = model.id; // Component อัปเดตค่าของตัวเอง
+                valueInput.value = model.id;
                 optionsContainer.classList.add('hidden');
+                // ส่ง 'change' event เพื่อให้ handler ของ settings บันทึกค่าได้
+                valueInput.dispatchEvent(new Event('change', { bubbles: true }));
             });
             optionsContainer.appendChild(item);
         });
     };
 
+    // --- Event Listeners and Initial Setup (Logic remains the same but uses the correct `allModels` list) ---
+
     searchInput.addEventListener('input', () => {
         const searchTerm = searchInput.value.toLowerCase();
         const filtered = allModels.filter(m => m.name.toLowerCase().includes(searchTerm) || m.id.toLowerCase().includes(searchTerm));
         renderOptions(filtered);
-        if (searchTerm === '') renderOptions(allModels);
     });
 
     searchInput.addEventListener('focus', () => {
@@ -361,6 +351,9 @@ export function createSearchableModelSelector(wrapperId, initialModelId) {
         searchInput.value = '';
         valueInput.value = '';
     }
-
-    wrapper.dataset.initialized = 'true';
+    
+    // ตั้งค่า listener เพียงครั้งเดียว
+    if (!wrapper.dataset.initialized) {
+        wrapper.dataset.initialized = 'true';
+    }
 }

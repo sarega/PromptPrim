@@ -1,9 +1,10 @@
 // สร้างไฟล์ใหม่ที่: src/js/modules/user/user.ui.js
 
 import { stateManager } from '../../core/core.state.js';
-import { toggleSettingsPanel } from '../../core/core.ui.js';
 import { toggleDropdown } from '../../core/core.ui.js';
 import * as SettingsUI from '../settings/settings.ui.js';
+import * as UserService from './user.service.js';
+import * as UserHandlers from './user.handlers.js';
 
 function applyTheme(theme) {
     document.body.classList.remove('dark-mode', 'light-mode');
@@ -45,30 +46,79 @@ function initThemeSwitcher() {
     });
 }
 
+// [NEW] ฟังก์ชันสำหรับอัปเดตข้อมูล Profile ทั้งหมด
+function updateUserProfileDisplay() {
+    const profile = UserService.getCurrentUserProfile();
+    if (!profile) return;
+
+    const nameSpan = document.querySelector('.user-profile-menu .user-name');
+    const planSpan = document.querySelector('.user-profile-menu .user-plan');
+    const creditSpan = document.querySelector('#user-credits span:last-child');
+    const avatarSpan = document.querySelector('#user-profile-btn span');
+
+    if (nameSpan) {
+        nameSpan.textContent = profile.userName || 'User';
+    }
+    if (planSpan) {
+        // ทำให้ตัวอักษรแรกเป็นตัวพิมพ์ใหญ่
+        planSpan.textContent = profile.plan ? `${profile.plan.charAt(0).toUpperCase()}${profile.plan.slice(1)} Plan` : 'Free Plan';
+    }
+    if (creditSpan) {
+        creditSpan.textContent = Math.floor(profile.userCredits).toLocaleString();
+    }
+    if (avatarSpan && profile.userName) {
+        avatarSpan.textContent = profile.userName.charAt(0).toUpperCase();
+    }
+}
+
+
+// [NEW] ฟังก์ชันสำหรับอัปเดตการแสดงผลเครดิต
+function updateCreditDisplay() {
+    const creditSpan = document.querySelector('#user-credits span:last-child');
+    if (creditSpan) {
+        const credits = UserService.getCredits();
+        creditSpan.textContent = Math.floor(credits).toLocaleString(); // แสดงผลแบบมี comma และปัดเศษลง
+    }
+}
+
 export function initUserProfileUI() {
     const profileContainer = document.querySelector('.user-profile-container');
     if (!profileContainer) return;
 
     profileContainer.addEventListener('click', (e) => {
-        const target = e.target;
-        const actionTarget = target.closest('[data-action]');
-
+        const actionTarget = e.target.closest('[data-action]');
         if (actionTarget) {
             const action = actionTarget.dataset.action;
-            switch(action) {
+            
+            // หยุดการทำงานของ Event สำหรับรายการเมนู เพื่อไม่ให้หน้าเว็บเลื่อน
+            if (action !== 'toggle-menu') {
+                e.preventDefault();
+            }
+
+            switch (action) {
                 case 'toggle-menu':
-                    toggleDropdown(e);
+                    toggleDropdown(e); // << ใช้งานถูกต้องสำหรับปุ่มเปิด/ปิด
                     break;
                 case 'user:settings':
-                    // [แก้ไข] เปลี่ยนมาเรียกใช้ฟังก์ชันใหม่จาก SettingsUI
                     SettingsUI.renderAndShowSettings();
-                    profileContainer.classList.remove('open');
+                    profileContainer.classList.remove('open'); // << [FIX] ใช้วิธีนี้ปิดเมนู
                     break;
-                // ...
+                case 'user:exportSettings':
+                    UserHandlers.exportUserSettings();
+                    profileContainer.classList.remove('open'); // << [FIX] ใช้วิธีนี้ปิดเมนู
+                    break;
+                case 'user:importSettings':
+                    UserHandlers.importUserSettings();
+                    profileContainer.classList.remove('open'); // << [FIX] ใช้วิธีนี้ปิดเมนู
+                    break;
             }
         }
     });
 
     initThemeSwitcher();
+    
+    stateManager.bus.subscribe('user:profileLoaded', updateUserProfileDisplay);
+    stateManager.bus.subscribe('user:profileUpdated', updateUserProfileDisplay);
+
     console.log("✅ User Profile UI Initialized.");
 }

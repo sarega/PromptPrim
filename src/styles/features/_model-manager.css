@@ -1,0 +1,182 @@
+/* ===============================================
+   FILE: src/styles/features/_model-manager.css
+   DESCRIPTION: Styles for the Model Manager interface.
+   =============================================== */
+
+/* 1. ทำให้ Tab Content ของ Model Manager เป็น Flex Container แนวตั้ง */
+.tab-content[data-tab-content="models"] {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+/* 2. ทำให้ Layout 2 คอลัมน์ขยายเต็มพื้นที่ที่เหลือ */
+.model-manager-layout {
+    display: flex;
+    gap: 25px;
+    flex-grow: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.model-manager-column { display: flex; flex-direction: column; gap: 15px; flex-grow: 1; flex-shrink: 1; }
+#model-manager-list-container { flex-basis: 400px; min-width: 300px; }
+#model-preset-editor { flex-basis: 280px; min-width: 250px; background-color: rgba(0,0,0,0.03); padding: 15px; border-radius: 8px; display: flex; flex-direction: column; }
+.item-list-scrollable { flex-grow: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; min-height: 200px; }
+
+
+/* --- Styles for the Info Bar --- */
+
+
+#model-preset-editor .form-group:has(#preset-included-list) {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* เทคนิคแก้ปัญหา scroll ใน flexbox */
+}
+
+#preset-included-list {
+    flex-grow: 1;
+}
+
+
+.model-manager-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 6px;
+}
+
+
+.model-manager-item label {
+    flex-grow: 1;
+    margin-bottom: 0;
+    font-weight: normal;
+}
+.model-manager-item small {
+    color: #64748b;
+}
+body.dark-mode .model-manager-item small {
+    color: #94a3b8;
+}
+
+#preset-included-list .model-manager-item {
+    padding: 4px 8px;
+    font-size: 0.9rem;
+}
+
+
+.selection-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: -5px; /* ดึงให้ชิดกับช่องค้นหา */
+    margin-bottom: -5px;
+}
+
+.btn.btn-link {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0;
+}
+body.dark-mode .btn.btn-link {
+    color: #90caf9;
+}
+
+.selection-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center; /* จัดให้ปุ่มกับสวิตช์อยู่กึ่งกลางแนวตั้ง */
+}
+
+.filter-selected-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: normal;
+    cursor: pointer;
+    color: #64748b;
+    margin-left: auto; /* ดันสวิตช์ไปอยู่ด้านขวา */
+}
+body.dark-mode .filter-selected-label {
+    color: #94a3b8;
+}
+
+/* --- [NEW] Styles for Model Info Popover --- */
+
+.model-info-icon {
+    margin-left: auto; /* ดันไอคอนไปอยู่ด้านขวาสุด */
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+body.dark-mode .model-info-icon {
+    color: #64748b;
+}
+
+body.dark-mode #model-preset-editor {
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* 3. [REVISED] สไตล์สำหรับ Info Bar ให้อยู่ด้านล่าง */
+#model-info-bar {
+    flex-shrink: 0; /* ไม่ให้ bar หดตัว */
+    margin-top: 15px;
+    padding: 12px 20px;
+    background-color: #e2e8f0;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 15px;
+}
+
+#model-info-bar.hidden {
+    display: none;
+}
+
+
+.info-bar-content {
+    flex-grow: 1;
+    min-width: 0;
+}
+.info-bar-content h5 {
+    margin-top: 0;
+    margin-bottom: 6px;
+    font-size: 0.95rem;
+    
+    white-space: normal; 
+    word-wrap: break-word; 
+}
+.info-bar-content p {
+    margin: 0 0 10px 0;
+    font-size: 0.8rem;
+    opacity: 0.8;
+    line-height: 1.6;
+}
+.info-bar-details { display: flex; flex-wrap: wrap; gap: 10px 20px; font-size: 0.75rem; opacity: 0.9; }
+#info-bar-close-btn { align-self: flex-start; }
+
+
+/* --- Dark Mode Overrides (ยังคงเหมือนเดิม) --- */
+body.dark-mode #model-preset-editor { background-color: rgba(255,255,255,0.05); }
+body.dark-mode #model-info-bar { background-color: #1e293b; border-top-color: #4a5568; }
+
+/* Model Count Display */
+.included-models-count {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #64748b;
+    padding: 0 8px 8px; /* เพิ่มระยะห่างเล็กน้อย */
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 8px;
+}
+
+body.dark-mode .included-models-count {
+    color: #94a3b8;
+}

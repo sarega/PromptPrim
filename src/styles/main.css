@@ -42,6 +42,12 @@
 /* 7. Themes - Theming styles (e.g., dark mode). */
 @import './themes/_dark-mode.css';
 
+/* 8. Setting Panel styles. */
+@import './features/_settings-panel.css';
+@import './features/_model-manager.css'; /* <-- เพิ่มบรรทัดนี้ */
+@import './features/_editors.css';
+
+
 .streaming-code-preview {
     display: block;
     white-space: pre-wrap;

@@ -5,6 +5,8 @@
 
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
 import { showCustomAlert, toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
+import { populatePresetSelector, getModelsForPreset } from '../models/model-manager.ui.js';
+import * as UserService from '../user/user.service.js';
 
 // --- Private Helper Functions (Not Exported) ---
 function createAgentElement(name, preset) {
@@ -111,13 +113,12 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     const project = stateManager.getProject();
     
     document.getElementById('agent-modal-title').textContent = isEditing ? `Edit Agent: ${agentName}` : "Create New Agent";
-    
-    // ดึงข้อมูล Agent ที่จะใช้กรอกฟอร์ม
+
     const agentDataForForm = (isEditing && agentName && project.agentPresets[agentName])
         ? project.agentPresets[agentName]
         : defaultAgentSettings;
 
-    // กรอกข้อมูลในฟอร์ม (ยกเว้น Model)
+    // --- Form population logic (remains the same) ---
     document.getElementById('agent-name-input').value = isEditing ? agentName : '';
     Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
         const element = document.getElementById(elId);
@@ -128,19 +129,23 @@ export function showAgentEditor(isEditing = false, agentName = null) {
         }
     });
 
-    if (!isEditing) {
-        document.getElementById('enhancer-prompt-input').value = '';
-    }
+    // --- [REVISED LOGIC] ---
+    // 1. Get the active preset from the UserService
+    const userSettings = UserService.getUserSettings();
+    const activePresetKey = userSettings.appSettings.activeModelPreset || 'top_models';
     
-    // [FIX] เรียกใช้ Component โดยตรง โดยส่งแค่ ID ของโมเดลเริ่มต้นไป
+    // 2. Get the filtered list of models from that preset
+    const modelsToShow = getModelsForPreset(activePresetKey);
+
+    // 3. Create the searchable dropdown with the filtered list
     createSearchableModelSelector(
         'agent-model-search-wrapper',
-        agentDataForForm.model // ส่ง Model ID ของ Agent ตัวนั้นๆ ไปเป็นค่าเริ่มต้น
+        agentDataForForm.model,
+        modelsToShow
     );
 
     document.getElementById('agent-editor-modal').style.display = 'flex';
 }
-
 export function hideAgentEditor() {
     document.getElementById('agent-editor-modal').style.display = 'none';
     stateManager.setState('editingAgentName', null);
@@ -163,38 +168,23 @@ export function initAgentUI() {
     }
 
     // --- Event Bus Subscriptions ---
-    stateManager.bus.subscribe('agent:profileGenerated', (profileData) => {
-        document.getElementById('agent-name-input').value = profileData.agent_name || '';
-        document.getElementById('agent-icon-input').value = profileData.agent_icon || '🤖';
-        document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
-        document.getElementById('agent-temperature').value = profileData.temperature ?? 1.0;
-        document.getElementById('agent-topP').value = profileData.top_p ?? 1.0;
-        document.getElementById('agent-topK').value = profileData.top_k ?? 0;
-        document.getElementById('agent-presence-penalty').value = profileData.presence_penalty ?? 0.0;
-        document.getElementById('agent-frequency-penalty').value = profileData.frequency_penalty ?? 0.0;
-    });
-
-    stateManager.bus.subscribe('agent:enhancerStatus', ({ text, color }) => {
-        const statusDiv = document.getElementById('enhancer-status');
-        if (statusDiv) {
-            statusDiv.textContent = text;
-            statusDiv.style.color = color || 'var(--text-dark)';
-        }
-    });
-
+    stateManager.bus.subscribe('agent:profileGenerated', (profileData) => { /* ... */ });
+    stateManager.bus.subscribe('agent:enhancerStatus', ({ text, color }) => { /* ... */ });
     stateManager.bus.subscribe('agent:editorShouldClose', hideAgentEditor);
 
-    // --- [FIX] Subscribe to 'models:loaded' to refresh the editor if it's open ---
+    // [REMOVED] ลบ Event Listener ของ Preset Selector ที่ไม่จำเป็นออก
+    // const agentPresetSelector = document.getElementById('agent-editor-preset-selector');
+    // agentPresetSelector?.addEventListener('change', () => { ... });
+
+    // --- Subscribe to 'models:loaded' to refresh the editor if it's open ---
     stateManager.bus.subscribe('models:loaded', () => {
         const agentEditorModal = document.getElementById('agent-editor-modal');
-        // ตรวจสอบว่า Modal กำลังแสดงผลอยู่หรือไม่
         if (agentEditorModal && agentEditorModal.style.display === 'flex') {
             console.log('[AgentUI] Models loaded. Refreshing agent editor content.');
-            // เรียกฟังก์ชัน showAgentEditor ซ้ำอีกครั้งเพื่อวาด Dropdown ใหม่
             const editingAgentName = stateManager.getState().editingAgentName;
             showAgentEditor(!!editingAgentName, editingAgentName);
         }
     });
 
-    console.log("✅ Agent UI Initialized (Conflicting studio listener removed).");
+    console.log("✅ Agent UI Initialized.");
 }

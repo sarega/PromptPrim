@@ -3,6 +3,8 @@
 import { stateManager, defaultSummarizationPresets } from '../../core/core.state.js';
 import { toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
 import * as SummaryHandlers from './summary.handlers.js';
+import { getModelsForPreset } from '../models/model-manager.ui.js'; // <-- Single, correct import
+import * as UserService from '../user/user.service.js'; // <-- Required for presets
 
 let activeLogId = null;
 
@@ -211,26 +213,25 @@ export function showSummarizationCenter() {
     renderLogList();
     
     renderSummarizationPresetSelector();
-    
     SummaryHandlers.handleSummarizationPresetChange();
-
     updateModalActionsVisibility();
 
-    // --- [KEY CHANGE] เรียกใช้ Searchable Model Selector ตัวใหม่ ---
+    // --- [DEFINITIVE FIX for Filtering] ---
+    // 1. ดึงชื่อ Preset ที่ Active อยู่จาก UserService
+    const userSettings = UserService.getUserSettings();
+    const activePresetKey = userSettings.appSettings.activeModelPreset || 'top_models';
+
+    // 2. ดึงลิสต์ Model จาก Preset นั้น
+    const modelsToShow = getModelsForPreset(activePresetKey);
+
+    // 3. สร้าง Searchable Dropdown โดยใช้ลิสต์ที่กรองแล้ว
     const project = stateManager.getProject();
     const initialModelId = document.getElementById('summary-model-value')?.value || project.globalSettings.systemUtilityAgent?.model;
     
-    // เราจะเรียกใช้ Component นี้เฉพาะในส่วนของ Tab Settings
     createSearchableModelSelector(
-        'summary-model-wrapper', // <--- ใช้ ID ใหม่
-        initialModelId,                 // ID ของโมเดลที่ถูกเลือกไว้ตอนแรก
-        (selectedModelId) => {          // Callback ที่จะทำงานเมื่อผู้ใช้เลือกโมเดลใหม่
-            // บันทึก Model ที่เลือกลงใน State ของ System Agent โดยตรง
-            const valueInput = document.getElementById('summary-model-value');
-            if (valueInput) {
-                valueInput.value = selectedModelId;
-            }
-        }
+        'summary-model-wrapper',
+        initialModelId,
+        modelsToShow
     );
 
     modal.style.display = 'flex';
@@ -391,6 +392,14 @@ export function initSummaryUI() {
     // Subscribe to events that should trigger a re-render of the preset selector
     stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
     stateManager.bus.subscribe('ui:updateSummaryActionButtons', updateActionMenu);
+
+    // Subscribe กับ Event กลางเพื่ออัปเดตตัวเอง
+    stateManager.bus.subscribe('app:settingsChanged', () => {
+        if (modal && modal.style.display === 'flex') {
+            showSummarizationCenter();
+        }
+    });
+
 
     console.log("✅ Summarization Center UI Initialized.");
 }

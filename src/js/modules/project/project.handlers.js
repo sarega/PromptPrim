@@ -19,6 +19,7 @@ import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
 import { scrollToLinkedEntity } from './project.ui.js';
 import { createNewChatSession, loadChatSession, saveAllSessions, saveActiveSession } from '../session/session.handlers.js';
+import * as UserService from '../user/user.service.js'; // <-- เพิ่ม Import นี้เข้ามา
 
 
 /**
@@ -130,14 +131,12 @@ async function initializeFirstProject() {
 export async function proceedWithCreatingNewProject() {
     console.log("Proceeding with creating a new project...");
     try {
-        // 1. ลบโปรเจกต์เก่าที่ค้างอยู่ออกจาก DB (ถ้ามี)
         const lastProjectId = localStorage.getItem('lastActiveProjectId');
         if (lastProjectId) {
             await deleteDb(lastProjectId);
             localStorage.removeItem('lastActiveProjectId');
         }
 
-        // 2. [KEY FIX] Fetch ไฟล์แม่แบบโปรเจกต์
         const response = await fetch(`${import.meta.env.BASE_URL}default-project.prim`);
         if (!response.ok) {
             throw new Error(`Could not fetch default project file. Status: ${response.status}`);
@@ -145,12 +144,21 @@ export async function proceedWithCreatingNewProject() {
         
         const projectTemplate = await response.json();
         
-        // 3. กำหนด ID ใหม่ที่ไม่ซ้ำใครให้กับโปรเจกต์
+        // --- [DEFINITIVE FIX] ---
+        // 1. ดึง User Settings ที่สมบูรณ์ออกมา
+        const userSettings = UserService.getUserSettings();
+
+        // 2. นำค่าเริ่มต้นของ System Agent จาก User Settings ไปใส่ในโปรเจกต์ใหม่
+        if (userSettings && userSettings.systemAgentDefaults) {
+            projectTemplate.globalSettings.systemUtilityAgent = userSettings.systemAgentDefaults.utilityAgent;
+            projectTemplate.globalSettings.summarizationPromptPresets = userSettings.systemAgentDefaults.summarizationPresets;
+        }
+        // -------------------------
+        
         projectTemplate.id = `proj_${Date.now()}`;
         
-        // 4. เปิด DB ใหม่ และโหลดข้อมูลจากแม่แบบเข้าไป
         await openDb(projectTemplate.id);
-        await loadProjectData(projectTemplate, true); // true = โหลดจากไฟล์/สถานะใหม่
+        await loadProjectData(projectTemplate, true);
 
     } catch (error) {
         console.error("Failed to proceed with creating a new project:", error);
@@ -453,21 +461,6 @@ export function handleFontChange(font) {
     stateManager.bus.publish('ui:applyFontSettings');
 }
 
-export function handleApiKeyChange(key) {
-    const project = stateManager.getProject();
-    project.globalSettings.apiKey = key;
-    stateManager.setProject(project);
-    stateManager.updateAndPersistState();
-    stateManager.bus.publish('api:loadModels');
-
-}
-
-export function handleOllamaUrlChanged(url) {
-    const project = stateManager.getProject();
-    project.globalSettings.ollamaBaseUrl = url;
-    stateManager.setProject(project);
-    stateManager.updateAndPersistState(); // <-- บรรทัดนี้สำคัญที่สุด
-}
 
 export function saveSystemUtilityAgentSettings() {
     const project = stateManager.getProject();

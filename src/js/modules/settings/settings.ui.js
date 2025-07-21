@@ -4,23 +4,32 @@
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
-import { toggleSettingsPanel } from '../../core/core.ui.js'; 
-import { createSearchableModelSelector } from '../../core/core.ui.js'; 
+import { createSearchableModelSelector, showSettingsModal, hideSettingsModal } from '../../core/core.ui.js';
 import { debounce } from '../../core/core.utils.js'; // <-- 1. Import debounce เข้ามา
+import * as UserService from '../user/user.service.js';
+import { populatePresetSelector, getModelsForPreset } from '../models/model-manager.ui.js';
 
 function initTabs() {
-    const settingsPanel = document.getElementById('settings-panel');
-    if (!settingsPanel) return;
-    const tabButtons = settingsPanel.querySelector('.tab-buttons');
-    const tabContents = settingsPanel.querySelectorAll('.tab-content');
+    // [FIX] Search from the top-level modal overlay ID, not the inner panel
+    const settingsModal = document.getElementById('settings-modal'); 
+    if (!settingsModal) return;
+
+    const tabButtons = settingsModal.querySelector('.tab-buttons');
+    const tabContents = settingsModal.querySelectorAll('.tab-content');
+
+    // Ensure tabButtons is found before adding a listener
+    if (!tabButtons) return; 
+
     tabButtons.addEventListener('click', (e) => {
         if (e.target.matches('.tab-btn')) {
             const tabName = e.target.dataset.tab;
-            tabButtons.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-            tabContents.forEach(content => {
-                content.classList.toggle('active', content.dataset.tabContent === tabName);
-            });
+            if (tabButtons && tabContents) {
+                tabButtons.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                tabContents.forEach(content => {
+                    content.classList.toggle('active', content.dataset.tabContent === tabName);
+                });
+            }
         }
     });
 }
@@ -92,84 +101,79 @@ function initSearchableModelSelector() {
 }
 
 function renderSettingsPanel() {
+    const userSettings = UserService.getUserSettings();
     const project = stateManager.getProject();
-    if (!project || !project.globalSettings) return;
+    if (!project || !userSettings) return;
 
-    const gs = project.globalSettings;
-        console.log("UI sees these globalSettings:", gs);
+    // --- [DEFINITIVE FIX for System Agent Defaults] ---
+    // 1. ดึงค่าเริ่มต้นของ System Agent มาจาก User Settings ก่อน
+    const systemAgentDefaults = userSettings.systemAgentDefaults?.utilityAgent || {};
 
-    const sysAgent = gs.systemUtilityAgent || {};
+    // 2. พยายามดึงค่าจากโปรเจกต์ปัจจุบัน, ถ้าไม่เจอก็ใช้ค่าเริ่มต้นที่ดึงมา
+    const sysAgent = project.globalSettings?.systemUtilityAgent || systemAgentDefaults;
+    
+    // --- API Settings (อ่านจาก User Settings) ---
+    document.getElementById('apiKey').value = userSettings.appSettings.apiKeys.openrouter || "";
+    document.getElementById('ollamaBaseUrl').value = userSettings.appSettings.apiKeys.ollamaBaseUrl || "";
 
-    // API Settings
-    document.getElementById('apiKey').value = gs.apiKey || "";
-    document.getElementById('ollamaBaseUrl').value = gs.ollamaBaseUrl || "";
-
-    // System Utility Agent Fields
+    // --- System Utility Agent (ใช้ค่าที่ถูกต้องแล้ว) ---
     document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
     document.getElementById('system-utility-temperature').value = sysAgent.temperature ?? 1.0;
     document.getElementById('system-utility-topP').value = sysAgent.topP ?? 1.0;
 
-    // Call the searchable dropdown component
+    // --- Logic การกรอง Model (ยังคงเหมือนเดิม) ---
+    const activePresetKey = userSettings.appSettings.activeModelPreset || 'top_models';
+    const modelsToShow = getModelsForPreset(activePresetKey);
+    
     createSearchableModelSelector(
         'settings-system-model-wrapper',
-        sysAgent.model,
-        (selectedModelId) => {
-            const proj = stateManager.getProject();
-            if (proj.globalSettings.systemUtilityAgent) {
-                proj.globalSettings.systemUtilityAgent.model = selectedModelId;
-            }
-            stateManager.bus.publish('settings:systemAgentChanged');
-        }
+        sysAgent.model, // <-- ใช้ Model ID จาก sysAgent ที่ถูกต้อง
+        modelsToShow 
     );
 }
+
 export function renderAndShowSettings() {
     renderSettingsPanel(); // 1. วาดข้อมูลล่าสุดก่อน
-    toggleSettingsPanel(); // 2. แล้วค่อยเปิด Panel
+    showSettingsModal(); // <-- แก้ไขตรงนี้
 }
 
 export function initSettingsUI() {
-    console.log("🚀 Initializing Settings UI...");
     initTabs();
     
     const bus = stateManager.bus;
 
-    // --- Event Listeners for inputs ---
-    const apiKeyInput = document.getElementById('apiKey');
-    if (apiKeyInput) {
-        apiKeyInput.addEventListener('input', debounce((e) => {
-            bus.publish('settings:apiKeyChanged', e.target.value);
-        }, 500));
-    }
-
-    const ollamaUrlInput = document.getElementById('ollamaBaseUrl');
-    if (ollamaUrlInput) {
-        ollamaUrlInput.addEventListener('input', debounce((e) => {
-            bus.publish('settings:ollamaUrlChanged', e.target.value);
-        }, 500));
-    }
-
-    const loadModelsBtn = document.getElementById('load-models-btn');
-    if (loadModelsBtn) {
-        loadModelsBtn.addEventListener('click', () => bus.publish('api:loadModels'));
-    }
-
+    // --- Event Listeners ---
+    document.getElementById('apiKey')?.addEventListener('input', debounce((e) => bus.publish('settings:apiKeyChanged', e.target.value), 500));
+    document.getElementById('ollamaBaseUrl')?.addEventListener('input', debounce((e) => bus.publish('settings:ollamaUrlChanged', e.target.value), 500));
+    document.getElementById('load-models-btn')?.addEventListener('click', () => bus.publish('api:loadModels'));
+    
     const systemSettingsFields = ['system-utility-prompt', 'system-utility-temperature', 'system-utility-topP'];
     systemSettingsFields.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('change', () => bus.publish('settings:systemAgentChanged'));
-        }
+        document.getElementById(id)?.addEventListener('change', () => bus.publish('settings:systemAgentChanged'));
     });
 
-    // --- [FIX] Subscribe to 'models:loaded' to refresh the panel if it's open ---
+    // [REMOVED] ลบ Event Listener ของ Preset Selector ที่ไม่จำเป็นออก
+    // const systemPresetSelector = document.getElementById('system-agent-preset-selector');
+    // systemPresetSelector?.addEventListener('change', renderSettingsPanel);
+
+    // Listener สำหรับปุ่มปิด Modal
+    document.querySelector('#settings-panel .modal-close-btn')?.addEventListener('click', hideSettingsModal);
+    
+    // Subscribe เพื่อวาด Panel ใหม่เมื่อ Model โหลดเสร็จ (เผื่อกรณีที่เปิดค้างไว้)
     stateManager.bus.subscribe('models:loaded', () => {
-        const settingsPanel = document.getElementById('settings-panel');
-        // สั่งให้วาดข้อมูลใน Panel ใหม่ เฉพาะในกรณีที่ Panel กำลังเปิดอยู่เท่านั้น
-        if (settingsPanel && settingsPanel.classList.contains('open')) {
-            console.log('[SettingsUI] Models loaded. Refreshing settings panel content.');
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal && settingsModal.style.display === 'flex') {
+            renderSettingsPanel();
+        }
+    });
+    // [ADD THIS] Subscribe to the central settings change event
+    stateManager.bus.subscribe('app:settingsChanged', () => {
+        const settingsModal = document.getElementById('settings-modal');
+        // ถ้าหน้า Settings กำลังเปิดอยู่ ให้วาดข้อมูลใหม่ทันที
+        if (settingsModal && settingsModal.style.display === 'flex') {
             renderSettingsPanel();
         }
     });
 
-    console.log("✅ Settings UI and all its listeners are correctly initialized.");
+    console.log("✅ Settings UI Initialized.");
 }

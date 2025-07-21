@@ -4,6 +4,7 @@
 // ===============================================
 
 import { stateManager } from './core.state.js';
+import * as UserService from '../modules/user/user.service.js'; // <-- ตรวจสอบว่ามี import นี้
 
 const modelCapabilities = {
     // Perplexity ไม่ต้องการ params ส่วนใหญ่และไม่รู้จัก tools parameter
@@ -42,17 +43,29 @@ function getCapability(modelData, capability) {
 
 // --- Helper sub-functions (not exported, private to this module) ---
 async function fetchOpenRouterModels(apiKey) {
-    const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { 'Authorization': `Bearer ${apiKey}` } });
+    const response = await fetch('https://openrouter.ai/api/v1/models', { 
+        headers: { 'Authorization': `Bearer ${apiKey}` } 
+    });
     if (!response.ok) throw new Error('Could not fetch models from OpenRouter');
+    
     const data = await response.json();
+    
+    // [FIX] แก้ไขการ map ข้อมูลให้เก็บรายละเอียดทั้งหมดที่จำเป็น
     return data.data.map(m => ({ 
         id: m.id, 
         name: m.name || m.id, 
         provider: 'openrouter',
+        // --- เพิ่มข้อมูลส่วนนี้เข้ามา ---
+        description: m.description,
+        context_length: m.context_length,
+        pricing: {
+            prompt: m.pricing?.prompt || '0',
+            completion: m.pricing?.completion || '0'
+        },
+        // -----------------------------
         supports_tools: m.architecture?.tool_use === true 
     }));
 }
-
 async function fetchOllamaModels(baseUrl) {
     try {
         const response = await fetch(`${baseUrl}/api/tags`);
@@ -76,29 +89,14 @@ async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
 }
 
 // --- Main Exported Functions ---
+// [REVISED & COMPLETE] src/js/core/core.api.js
 
 export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-    const project = stateManager.getProject(); // ดึงข้อมูลโปรเจกต์จาก State มาเป็นฐาน
-    if (!project?.globalSettings) return;
 
-    let apiKey = '';
-    let baseUrl = '';
-
-    // [SMART FIX] ตรวจสอบว่า Settings Panel เปิดอยู่หรือไม่ เพื่อเลือกแหล่งข้อมูลที่ถูกต้อง
-    const settingsPanel = document.getElementById('settings-panel');
-    if (settingsPanel && settingsPanel.classList.contains('open')) {
-        // กรณีที่ 1: Panel เปิดอยู่ (ผู้ใช้กด Refresh เอง) -> ให้ดึงค่าล่าสุดจากหน้าจอโดยตรง
-        console.log("[API] Settings panel is open. Reading values directly from input fields.");
-        apiKey = document.getElementById('apiKey')?.value.trim() || '';
-        baseUrl = document.getElementById('ollamaBaseUrl')?.value.trim() || '';
-    } else {
-        // กรณีที่ 2: Panel ปิดอยู่ (เช่น ตอนเริ่มโหลดแอป) -> ให้ใช้ค่าที่บันทึกไว้ใน State
-        console.log("[API] Settings panel is closed. Using persisted values from state manager.");
-        apiKey = project.globalSettings.apiKey?.trim() || '';
-        baseUrl = project.globalSettings.ollamaBaseUrl?.trim() || '';
-    }
-
+    const apiKey = UserService.getApiKey();
+    const baseUrl = UserService.getOllamaUrl();
+    
     let allModels = [];
     try {
         const fetchPromises = [];
@@ -114,11 +112,20 @@ export async function loadAllProviderModels() {
         stateManager.bus.publish('status:update', { message: `Error loading models: ${error.message}`, state: 'error' });
         return;
     }
+    
+    // [FIX START] แก้ไข Logic การอัปเดต State
+    
+    // 1. บันทึกรายชื่อ Model ทั้งหมดที่โหลดมาลง State ก่อน
+    stateManager.setAllModels(allModels);
 
+    // 2. ดึงข้อมูลโปรเจกต์เวอร์ชันล่าสุด (ที่มี Model ทั้งหมดแล้ว) ออกมาทำงาน
+    const project = stateManager.getProject();
     let projectWasChanged = false;
-    if (allModels.length > 0) {
+
+    if (allModels.length > 0 && project) {
         const systemAgent = project.globalSettings.systemUtilityAgent;
         const defaultAgent = project.agentPresets['Default Agent'];
+        
         if (systemAgent && (!systemAgent.model || !allModels.some(m => m.id === systemAgent.model))) {
             const preferredDefaults = ['google/gemma-3-27b-it', 'openai/gpt-4o-mini'];
             const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
@@ -130,16 +137,16 @@ export async function loadAllProviderModels() {
         }
     }
     
-    stateManager.setAllModels(allModels);
-    
-    // [FIX] ถ้ามีการเปลี่ยนแปลง ให้แค่ setProject แต่ไม่สั่ง save
-    // การ save จะถูกจัดการโดยฟังก์ชันที่เรียกใช้ (loadProjectData)
+    // 3. ถ้ามีการเปลี่ยนแปลง ให้บันทึกโปรเจกต์ที่อัปเดตแล้วกลับไป
     if (projectWasChanged) {
         stateManager.setProject(project);
     }
     
-    const statusMessage = allModels.length > 0 ? `Loaded ${allModels.length} models.` : 'No models found.';
+    // 4. สร้างข้อความ Status จากข้อมูลใน State ที่ถูกต้องและสมบูรณ์แล้ว
+    const finalModelList = stateManager.getState().allProviderModels || [];
+    const statusMessage = finalModelList.length > 0 ? `Loaded ${finalModelList.length} models.` : 'No models found.';
     stateManager.bus.publish('status:update', { message: statusMessage, state: 'connected' });
+    // [FIX END]
 }
 export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
@@ -290,7 +297,7 @@ function constructApiCall(agent, messages, stream = false) {
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 
-            'Authorization': `Bearer ${project.globalSettings.apiKey}`, 
+            'Authorization': `Bearer ${UserService.getApiKey()}`, // <-- แก้ไข
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
@@ -326,7 +333,7 @@ function constructApiCall(agent, messages, stream = false) {
         }
 
     } else { // ollama
-        url = `${project.globalSettings.ollamaBaseUrl}/api/chat`;
+        url = `${UserService.getOllamaUrl()}/api/chat`; // <-- แก้ไข
         headers = { 'Content-Type': 'application/json' };
         
         const ollamaOptions = {
@@ -353,8 +360,10 @@ export async function streamLLMResponse(agent, messages, onChunk) {
     const { url, headers, body, provider } = constructApiCall(agent, messages, true);
     try {
         stateManager.bus.publish('status:update', { message: `Responding with ${agent.model}...`, state: 'loading' });
-        console.log('[OLLAMA CALL]', { url, headers, body });
+        
+        const startTime = performance.now();
         const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body), signal: stateManager.getState().abortController?.signal });
+        
         if (!response.ok) { throw new Error(`API Error: ${response.status} ${response.statusText}`); }
         
         const reader = response.body.getReader();
@@ -366,7 +375,7 @@ export async function streamLLMResponse(agent, messages, onChunk) {
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop();
+            buffer = lines.pop(); 
             for (const line of lines) {
                 if (line.trim() === '' || line.startsWith(':')) continue;
                 let token = '';
@@ -389,7 +398,23 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                 }
             }
         }
-        return fullResponseText;
+        
+        const endTime = performance.now();
+        const duration = (endTime - startTime) / 1000; // Duration in seconds
+
+        let usage = { prompt_tokens: 0, completion_tokens: 0 };
+        if (provider === 'openrouter' && response.headers.has('x-openrouter-usage')) {
+            try {
+                usage = JSON.parse(response.headers.get('x-openrouter-usage'));
+            } catch(e) { console.error("Could not parse usage header:", e); }
+        } else {
+            // Fallback for Ollama or if header is missing
+            usage.prompt_tokens = estimateTokens(JSON.stringify(messages));
+            usage.completion_tokens = estimateTokens(fullResponseText);
+        }
+        
+        return { content: fullResponseText, usage, duration };
+
     } catch (error) {
         if (error.name !== 'AbortError') {
              console.error("Streaming failed:", error);
@@ -402,13 +427,28 @@ export async function streamLLMResponse(agent, messages, onChunk) {
 export async function callLLM(agent, messages) {
     const { url, headers, body, provider } = constructApiCall(agent, messages, false);
     try {
-        console.log('[OLLAMA CALL]', { url, headers, body });
+        console.log('[API CALL]', { url, headers, body });
         const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
-        if (!response.ok) { const errorText = await response.text(); throw new Error(`API Error: ${response.status} ${errorText}`); }
+        if (!response.ok) { 
+            const errorText = await response.text(); 
+            throw new Error(`API Error: ${response.status} ${errorText}`); 
+        }
+        
         const data = await response.json();
-        if (provider === 'openrouter' && data.choices?.length > 0) return data.choices[0].message.content;
-        if (provider === 'ollama' && data.message) return data.message.content;
-        throw new Error("Invalid API response structure.");
+        const content = (provider === 'openrouter' && data.choices?.length > 0) 
+            ? data.choices[0].message.content 
+            : data.message?.content;
+
+        if (content === undefined) {
+            throw new Error("Invalid API response structure.");
+        }
+
+        // คืนค่าเป็น object ที่มีทั้ง content และ usage
+        return {
+            content: content,
+            usage: data.usage || { prompt_tokens: 0, completion_tokens: 0 }
+        };
+
     } catch (error) {
         console.error("callLLM failed:", error);
         throw error;

@@ -10,6 +10,7 @@ import { showCustomAlert, showContextMenu } from '../../core/core.ui.js';
 import { LiveMarkdownRenderer } from '../../core/core.utils.js';
 import * as ChatUI from './chat.ui.js';
 import * as GroupChat from './chat.group.js'; // <-- import แบบ Namespace
+import * as UserService from '../user/user.service.js'; // <-- เพิ่ม import
 
 export let attachedFiles = [];
 
@@ -229,9 +230,15 @@ async function sendSingleAgentMessage() {
     const agentName = project.activeEntity.name;
     const agent = project.agentPresets[agentName];
 
+    // [CREDIT CHECK] ตรวจสอบเครดิตก่อนส่ง
+    const profile = UserService.getCurrentUserProfile();
+    if (profile.userCredits <= 0) {
+        showCustomAlert("Your credits have run out. Please upgrade to a Pro plan to continue.", "Credits Depleted");
+        return;
+    }
+
     stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
 
-    // 1. สร้าง Placeholder Message และ Renderer
     const placeholderMessage = { role: 'assistant', content: '', speaker: agentName, isLoading: true };
     const assistantMsgIndex = session.history.length;
     session.history.push(placeholderMessage);
@@ -249,24 +256,29 @@ async function sendSingleAgentMessage() {
     }
 
     try {
-        // 2. เรียก LLM และส่ง chunk ไปให้ renderer จัดการ
-        const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName, session);
-        await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
-
-        // 3. เมื่อ stream จบ, อัปเดต message history ด้วยเนื้อหาฉบับสมบูรณ์
-        const finalResponseText = renderer.getFinalContent();
+        const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName);
+        
+        // รับ response object กลับมา
+        const response = await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
+        
+        // [BURN CREDITS] หักเครดิตหลังใช้งานสำเร็จ
+        UserService.burnCreditsForUsage(response.usage, agent.model);
+        
+        const finalResponseText = response.content;
         const assistantMessage = { 
             role: 'assistant', 
             content: finalResponseText,
             speaker: agentName, 
             isLoading: false,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            // [STATS] บันทึกสถิติลงในข้อความ
+            stats: {
+                ...response.usage,
+                duration: response.duration,
+                speed: response.usage.completion_tokens / response.duration
+            }
         };
-        console.log('[DEBUG 1.2] Assistant message created:', assistantMessage); // << เพิ่ม Log
-
         session.history[assistantMsgIndex] = assistantMessage;
-
-        // console.log("🟢 Assistant final content:", JSON.stringify(finalResponseText));
 
     } catch (error) {
         // 4. จัดการ Error (รวมถึง Abort)
@@ -776,26 +788,26 @@ async function triggerAutoNameGeneration(session) {
 
     try {
         const project = stateManager.getProject();
-        // ใช้ System Utility Agent เพื่อความเร็วและประหยัด
         const utilityAgent = project.globalSettings.systemUtilityAgent;
         if (!utilityAgent || !utilityAgent.model) {
             console.warn("Auto-naming skipped: System Utility Agent not configured.");
             return;
         }
 
-        // ดึงข้อความแรกของผู้ใช้ออกมา
         const firstUserMessage = session.history.find(m => m.role === 'user');
         const userContent = Array.isArray(firstUserMessage.content)
             ? firstUserMessage.content.find(p => p.type === 'text')?.text
             : firstUserMessage.content;
         
-        if (!userContent) return; // ถ้าไม่มีข้อความ ก็ไม่ต้องทำอะไร
+        if (!userContent) return;
 
-        // สร้าง Prompt ที่จะส่งไปให้ LLM
         const titlePrompt = `Based on the user's initial query, create a concise title (3-5 words) and a single relevant emoji. Respond ONLY with a JSON object like {"title": "your title", "emoji": "👍"}.\n\nUser's Query: "${userContent}"`;
 
-        const responseText = await callLLM({ ...utilityAgent, temperature: 0.1 }, [{ role: 'user', content: titlePrompt }]);
+        // เรียก API และรับ response object กลับมา
+        const response = await callLLM({ ...utilityAgent, temperature: 0.1 }, [{ role: 'user', content: titlePrompt }]);
         
+        // หักเครดิต
+        UserService.burnCreditsForUsage(response.usage, utilityAgent.model);        
         // Parse ผลลัพธ์ที่ได้
         let newTitleData = {};
         try {
@@ -807,12 +819,8 @@ async function triggerAutoNameGeneration(session) {
         }
         
         const newName = `${newTitleData.emoji || '💬'} ${newTitleData.title || 'New Chat'}`;
+        stateManager.bus.publish('session:autoRename', { sessionId: session.id, newName: newName });
 
-        // ส่ง Event ไปบอก UI ให้เปลี่ยนชื่อ Session
-        stateManager.bus.publish('session:autoRename', { 
-            sessionId: session.id, 
-            newName: newName 
-        });
 
     } catch (e) {
         console.error("Auto-rename process failed:", e);

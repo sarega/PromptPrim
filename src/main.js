@@ -38,7 +38,9 @@ import * as ComposerHandlers from './js/modules/composer/composer.handlers.js'; 
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
 import * as SummaryHandlers from './js/modules/summary/summary.handlers.js';
 import * as UserUI from './js/modules/user/user.ui.js';
-
+import * as UserService from './js/modules/user/user.service.js';
+import * as UserHandlers from './js/modules/user/user.handlers.js';
+import * as ModelManagerUI from './js/modules/models/model-manager.ui.js';
 
 // --- State for Lazy Initialization ---
 let isStudioInitialized = false;
@@ -194,8 +196,8 @@ function setupEventSubscriptions() {
     bus.subscribe('upload-file', () => { document.getElementById('file-input')?.click();});
     // [FIX] Settings Actions
     bus.subscribe('api:loadModels', loadAllProviderModels);
-    bus.subscribe('settings:apiKeyChanged', ProjectHandlers.handleApiKeyChange);
-    bus.subscribe('settings:ollamaUrlChanged', ProjectHandlers.handleOllamaUrlChanged);
+    bus.subscribe('settings:apiKeyChanged', UserHandlers.handleApiKeyChange); // <-- แก้ไข
+    bus.subscribe('settings:ollamaUrlChanged', UserHandlers.handleOllamaUrlChange); // <-- แก้ไข
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
     
@@ -220,9 +222,12 @@ function initializeUI() {
     AgentUI.initAgentUI();
     GroupUI.initGroupUI();
     MemoryUI.initMemoryUI();
+    ModelManagerUI.initModelManagerUI(); // <-- เพิ่มบรรทัดนี้
     SummaryUI.initSummaryUI();
     ChatHandlers.initMessageInteractions();
     UserUI.initUserProfileUI(); // << เพิ่มอันนี้เข้ามาแทน
+    document.getElementById('import-settings-input')?.addEventListener('change', UserHandlers.handleSettingsFileSelect);
+
 
     console.log("✅ All UI modules initialized.");
 }
@@ -233,6 +238,7 @@ function initializeUI() {
 document.addEventListener('DOMContentLoaded', async () => {
     const loadingOverlay = document.getElementById('loading-overlay');
     try {
+        await UserService.initUserSettings(); // <-- แก้ไขชื่อฟังก์ชัน
         console.log("🚀 Application starting...");
 
         // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---
