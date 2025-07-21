@@ -39,8 +39,6 @@
   "summaryLogs": [],
   "globalSettings": {
     "fontFamilySelect": "'Sarabun', sans-serif",
-    "apiKey": "",
-    "ollamaBaseUrl": "http://localhost:11434",
     "systemUtilityAgent": {
       "model": "Google: Gemma 3 27B",
       "systemPrompt": "You are a highly efficient assistant that processes user requests and responds in a structured JSON format when required. You are objective and precise.",
