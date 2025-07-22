@@ -66,6 +66,7 @@
 
 /* เพิ่มเข้าไปในไฟล์ CSS */
 .modal-header {
+    margin-bottom: auto;
     display: flex;
     justify-content: space-between;
     align-items: center;

@@ -367,16 +367,15 @@
                             </div>
                             <div class="form-group">
                                 <label for="preset-name-input">Preset Name</label>
-                                <input type="text" id="preset-name-input" placeholder="e.g., Free Tier, Top Models">
+                                <div class="flex-group"> <input type="text" id="preset-name-input" placeholder="e.g., Free Tier, Top Models" style="flex-grow: 1;">
+                                    <button type="button" id="save-preset-btn" class="btn btn-small">Save</button>
+                                    <button type="button" id="delete-preset-btn" class="btn btn-danger btn-small">Delete</button>
+                                </div>
                             </div>
                             <div class="form-group">
                                 <label>Included Models</label>
                                 <div id="preset-included-list" class="item-list-scrollable included-models">
                                     </div>
-                            </div>
-                            <div class="modal-actions" style="justify-content: space-between;">
-                                <button type="button" id="delete-preset-btn" class="btn btn-danger btn-small">Delete</button>
-                                <button type="button" id="save-preset-btn" class="btn btn-small">Save Preset</button>
                             </div>
                         </div>
                             

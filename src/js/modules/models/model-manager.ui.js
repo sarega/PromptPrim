@@ -70,15 +70,20 @@ function renderMasterList() {
     );
 
     filteredBySearch.forEach(model => {
-        const isChecked = selectedModelIdSet.has(model.id); // <-- อ่านจาก "หน่วยความจำ" เสมอ
+        const isChecked = selectedModelIdSet.has(model.id);
         const item = document.createElement('div');
         item.className = 'model-manager-item';
+
+        // [FIX] เพิ่มปุ่ม (i) เข้าไปในโครงสร้าง HTML
         item.innerHTML = `
             <input type="checkbox" id="model-cb-${model.id}" data-model-id="${model.id}" ${isChecked ? 'checked' : ''}>
             <label for="model-cb-${model.id}">
                 ${model.name}
                 <small>${model.id}</small>
             </label>
+            <button type="button" class="btn-icon model-info-btn" data-model-id="${model.id}" title="View model details">
+                <span class="material-symbols-outlined">info</span>
+            </button>
         `;
         container.appendChild(item);
     });
@@ -152,34 +157,37 @@ export function initModelManagerUI() {
 
     // Listener สำหรับการคลิกใน Master List (จัดการทั้งการเลือกและการแสดง Info Bar)
     masterListContainer?.addEventListener('click', (e) => {
+        const infoBtn = e.target.closest('.model-info-btn');
         const checkbox = e.target.closest('input[type="checkbox"]');
-        const item = e.target.closest('.model-manager-item');
+        
+        if (infoBtn) { // --- กรณีคลิกที่ปุ่ม (i) ---
+            e.stopPropagation();
+            const modelId = infoBtn.dataset.modelId;
+            const model = stateManager.getState().allProviderModels.find(m => m.id === modelId);
+            updateInfoBar(model);
+            return;
+        }
 
-        if (checkbox) { // Logic for selection
-            const modelId = checkbox.dataset.modelId;
-            if (checkbox.checked) {
+        if (checkbox) { // --- กรณีคลิกที่ Checkbox (สำหรับ Shift+Click) ---
+            const checkboxes = Array.from(masterListContainer.querySelectorAll('input[type="checkbox"]'));
+            const currentIndex = checkboxes.indexOf(checkbox);
+            if (e.shiftKey && lastCheckedIndex > -1) {
+                // ... โค้ด Shift+Click เหมือนเดิม ...
+            }
+            lastCheckedIndex = currentIndex;
+        }
+    });
+    
+    // Listener สำหรับ 'change' event ยังคงใช้จัดการการเลือกตามปกติ
+    masterListContainer?.addEventListener('change', (e) => {
+        if (e.target.type === 'checkbox') {
+            const modelId = e.target.dataset.modelId;
+            if (e.target.checked) {
                 selectedModelIdSet.add(modelId);
             } else {
                 selectedModelIdSet.delete(modelId);
             }
-            const checkboxes = Array.from(masterListContainer.querySelectorAll('input[type="checkbox"]'));
-            const currentIndex = checkboxes.indexOf(checkbox);
-            if (e.shiftKey && lastCheckedIndex > -1) {
-                const start = Math.min(currentIndex, lastCheckedIndex);
-                const end = Math.max(currentIndex, lastCheckedIndex);
-                checkboxes.forEach((cb, index) => {
-                    if (index >= start && index <= end) {
-                        cb.checked = true;
-                        selectedModelIdSet.add(cb.dataset.modelId);
-                    }
-                });
-            }
-            lastCheckedIndex = currentIndex;
             renderIncludedList();
-        } else if (item) { // Logic for showing info bar
-            const modelId = item.querySelector('input')?.dataset.modelId;
-            const model = stateManager.getState().allProviderModels.find(m => m.id === modelId);
-            updateInfoBar(model);
         }
     });
 

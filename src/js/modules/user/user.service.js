@@ -33,7 +33,7 @@ const defaultUserSettings = {
     },
     'top_models': {
         name: "Top Models",
-        modelIds: ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemma-3-27b-it"]
+        modelIds: ["openai/gpt-4o", "anthropic/claude-4-sonnet", "google/gemma-3-27b-it"]
     }
   },
   systemAgentDefaults: {

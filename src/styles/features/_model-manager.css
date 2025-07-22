@@ -20,16 +20,43 @@
     overflow: hidden;
 }
 
-.model-manager-column { display: flex; flex-direction: column; gap: 15px; flex-grow: 1; flex-shrink: 1; }
+.model-manager-column { display: flex; 
+    margin-top: -2px;
+    flex-direction: column; 
+    gap: 15px; 
+    flex-grow: 1; 
+    flex-shrink: 1; 
+}
 #model-manager-list-container { flex-basis: 400px; min-width: 300px; }
 #model-preset-editor { flex-basis: 280px; min-width: 250px; background-color: rgba(0,0,0,0.03); padding: 15px; border-radius: 8px; display: flex; flex-direction: column; }
-.item-list-scrollable { flex-grow: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; min-height: 200px; }
+.item-list-scrollable { 
+    margin-top: -5px;
+    flex-grow: 1; 
+    overflow-y: auto; 
+    border: 1px solid var(--border-color); 
+    border-radius: 8px; 
+    padding: 8px; 
+    min-height: 200px; }
 
 
 /* --- Styles for the Info Bar --- */
-
+#model-preset-editor .form-group {
+    margin-top: -10px; /* เพิ่มระยะห่างระหว่างฟอร์ม */
+    margin-bottom: 5px; /* เพิ่มระยะห่างด้านล่าง */
+    display: flex;
+    flex-direction: column;
+}
+#preset-included-list {
+    margin-top: 2px; /* เพิ่มระยะห่างด้านบน */
+    flex-grow: 1; /* ทำให้รายการขยายเต็มพื้นที่ */
+    overflow-y: auto; /* ให้ scroll เมื่อมีรายการมาก */
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+}
 
 #model-preset-editor .form-group:has(#preset-included-list) {
+    margin-top: -10px;
     flex-grow: 1;
     display: flex;
     flex-direction: column;
@@ -39,7 +66,6 @@
 #preset-included-list {
     flex-grow: 1;
 }
-
 
 .model-manager-item {
     display: flex;
@@ -71,8 +97,10 @@ body.dark-mode .model-manager-item small {
 .selection-actions {
     display: flex;
     gap: 15px;
-    margin-top: -5px; /* ดึงให้ชิดกับช่องค้นหา */
+    margin-top: -10px; /* ดึงให้ชิดกับช่องค้นหา */
     margin-bottom: -5px;
+    align-items: center; /* จัดให้ปุ่มกับสวิตช์อยู่กึ่งกลางแนวตั้ง */
+
 }
 
 .btn.btn-link {
@@ -87,13 +115,8 @@ body.dark-mode .btn.btn-link {
     color: #90caf9;
 }
 
-.selection-actions {
-    display: flex;
-    gap: 15px;
-    align-items: center; /* จัดให้ปุ่มกับสวิตช์อยู่กึ่งกลางแนวตั้ง */
-}
-
 .filter-selected-label {
+    margin-top: 5px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -129,7 +152,7 @@ body.dark-mode #model-preset-editor {
 #model-info-bar {
     flex-shrink: 0; /* ไม่ให้ bar หดตัว */
     margin-top: 15px;
-    padding: 12px 20px;
+    padding: 5px 20px;
     background-color: #e2e8f0;
     border-top: 1px solid var(--border-color);
     display: flex;
@@ -140,7 +163,6 @@ body.dark-mode #model-preset-editor {
     display: none;
 }
 
-
 .info-bar-content {
     flex-grow: 1;
     min-width: 0;
@@ -148,20 +170,26 @@ body.dark-mode #model-preset-editor {
 .info-bar-content h5 {
     margin-top: 0;
     margin-bottom: 6px;
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     
     white-space: normal; 
     word-wrap: break-word; 
 }
 .info-bar-content p {
     margin: 0 0 10px 0;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     opacity: 0.8;
     line-height: 1.6;
 }
-.info-bar-details { display: flex; flex-wrap: wrap; gap: 10px 20px; font-size: 0.75rem; opacity: 0.9; }
-#info-bar-close-btn { align-self: flex-start; }
+.info-bar-details { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 10px 20px; 
+    font-size: 0.7rem; 
+    opacity: 0.9; 
+}
 
+#info-bar-close-btn { align-self: flex-start; }
 
 /* --- Dark Mode Overrides (ยังคงเหมือนเดิม) --- */
 body.dark-mode #model-preset-editor { background-color: rgba(255,255,255,0.05); }
@@ -179,4 +207,24 @@ body.dark-mode #model-info-bar { background-color: #1e293b; border-top-color: #4
 
 body.dark-mode .included-models-count {
     color: #94a3b8;
+}
+
+.model-info-btn {
+    margin-left: auto; /* ดันปุ่มไปอยู่ขวาสุด */
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    color: #94a3b8;
+}
+
+.model-info-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+body.dark-mode .model-info-btn {
+    color: #64748b;
+}
+
+body.dark-mode .model-info-btn:hover {
+    color: var(--text-dark);
 }

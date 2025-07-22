@@ -5,11 +5,20 @@
 
 /* [REVISED] Styles for the Settings Modal */
 
+/* --- 1. Main Modal Box --- */
 #settings-panel.modal-box {
-    max-width: 850px;
-    width: 90%;
-    height: 90vh;      /* <-- เพิ่มความสูงของ Modal */
-    max-height: 800px; /* <-- เพิ่มความสูงสูงสุด */
+    max-width: 900px;
+    width: 95vw;
+    height: 90vh;
+    max-height: 850px;
+}
+
+/* --- 2. Modal Body Flex Layout --- */
+#settings-panel .modal-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-top: 15px; /* Add space below header */
 }
 /* นำ padding ออกจาก tab-content เพราะ .modal-body มีอยู่แล้ว */
 #settings-panel .tab-content {
@@ -17,13 +26,12 @@
     margin-top: 15px; /* เพิ่มระยะห่างจาก Tab */
 }
 
-/* Style Tab Buttons (โค้ดเดิมที่ปรับ Layout) */
+/* --- 3. Tab Buttons --- */
 .tab-buttons {
     display: flex;
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
 }
-
 .tab-btn {
     padding: 12px 16px;
     cursor: pointer;
@@ -41,35 +49,24 @@
 .tab-btn.active {
     border-bottom-color: var(--accent-color);
     font-weight: 600;
-    color: var(--text-dark);
 }
-
 .tab-btn .material-symbols-outlined {
     pointer-events: none;
 }
 
 
-/* 1. ทำให้ Body ของ Settings Modal เป็น Flex Container หลัก */
-#settings-panel .modal-body {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden; /* ป้องกันไม่ให้ Body scroll เอง */
-}
-
-/* 2. ทำให้ Tab Content ที่กำลังแสดงผลอยู่ (active) ขยายเต็มพื้นที่ที่เหลือ */
 #settings-panel .tab-content {
     display: none;
+    margin-top: 20px;
 }
-
-/* ทำให้ Tab ที่ active เท่านั้นที่จะแสดงผลเป็น flex */
 #settings-panel .tab-content.active {
-    display: flex;
+    display: flex;      /* <-- Use flex for active tabs */
     flex-direction: column;
-    flex-grow: 1;
-    min-height: 0;
+    flex-grow: 1;       /* <-- Allow tab content to grow */
+    min-height: 0;      /* Important for scrolling children */
 }
 
-/* Dark Mode Styles */
+/* --- 5. Dark Mode Adjustments --- */
 body.dark-mode .tab-btn {
     color: #94a3b8;
 }
