@@ -270,20 +270,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loadingOverlay = document.getElementById('loading-overlay');
     try {
         await UserService.initUserSettings();
+        // --- [CRITICAL FIX] ---
+        const currentUser = UserService.getCurrentUserProfile();
+        const systemSettings = UserService.getSystemApiSettings();
 
-        // const systemApiKey = UserService.getSystemApiSettings().openrouterKey;
-        // if (systemApiKey) {
-        //     // Load system models using the admin key
-        //     await loadAllProviderModels({ apiKey: systemApiKey, isUserKey: false });
-        // } else {
-        //     console.warn("No SYSTEM API key available. Skipping initial model load for Free/Pro users.");
-        // }
-       const systemSettings = UserService.getSystemApiSettings();
+        // 1. โหลดโมเดลของระบบ (สำหรับ Free/Pro tiers)
         await loadAllProviderModels({ 
             apiKey: systemSettings.openrouterKey, 
             ollamaBaseUrl: systemSettings.ollamaBaseUrl,
             isUserKey: false 
         });
+
+        // 2. [FIX] โหลดโมเดลของผู้ใช้ (ถ้าเป็น Master Plan) จากทุกแหล่ง
+        if (currentUser && currentUser.plan === 'master') {
+            await loadAllProviderModels({ 
+                apiKey: currentUser.apiSettings?.openrouterKey,
+                ollamaBaseUrl: currentUser.apiSettings?.ollamaBaseUrl,
+                isUserKey: true 
+            });
+        }
         console.log("🚀 Application starting...");
 
         // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---

@@ -228,7 +228,7 @@ function createMessageElement(message, index, session) {
                 try {
                     if (role === 'assistant') {
                         streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
-                        addCopyToCodeBlocks(streamingContentSpan);
+                        enhanceCodeBlocks(streamingContentSpan);
                     } else if (role === 'user') {
                         if (Array.isArray(content)) {
                             content.forEach(part => {
