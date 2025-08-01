@@ -314,7 +314,10 @@
     font-size: 0.9rem;
 }
 
-
+#memory-editor-modal .modal-actions .btn {
+    font-size: 1rem;
+    flex-grow: 0; /* ป้องกันไม่ให้ปุ่มขยายตัว */
+}
 /* --- New Styles for Summarization Modal Layout --- */
 .summary-log-layout {
     display: flex;

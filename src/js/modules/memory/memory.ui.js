@@ -1,16 +1,12 @@
 // ===============================================
-// FILE: src/js/modules/memory/memory.ui.js 
-// DESCRIPTION: แก้ไขการจัดการ Event Listener
+// FILE: src/js/modules/memory/memory.ui.js (Definitive Final Version)
 // ===============================================
-
-// [DEFINITIVE & COMPLETE] src/js/modules/memory/memory.ui.js
 
 import { stateManager } from '../../core/core.state.js';
 import { createDropdown } from '../../core/core.ui.js';
 
 let memorySortable = null;
 
-// --- Private Helper: สร้าง Element ของ Memory หนึ่งรายการ ---
 function createMemoryElement(memory, isActive, originalIndex) {
     const itemDiv = document.createElement('div');
     itemDiv.className = `item memory-item ${isActive ? '' : 'inactive'}`;
@@ -27,7 +23,6 @@ function createMemoryElement(memory, isActive, originalIndex) {
     toggle.className = `memory-toggle ${isActive ? 'active' : ''}`;
     toggle.title = `Click to ${isActive ? 'deactivate' : 'activate'}`;
     
-    // [DEFINITIVE FIX] ผูก Event onclick โดยตรงที่นี่
     toggle.onclick = (e) => {
         e.stopPropagation();
         stateManager.bus.publish('memory:toggle', { name: memory.name });
@@ -46,11 +41,6 @@ function createMemoryElement(memory, isActive, originalIndex) {
     return itemDiv;
 }
 
-// --- Main UI Functions ---
-
-/**
- * วาดเนื้อหาของ Memory ทั้งหมดลงใน Sidebar
- */
 export function loadAndRenderMemories(assetsContainer) {
     if (!assetsContainer) return;
     const project = stateManager.getProject();
@@ -110,27 +100,58 @@ export function loadAndRenderMemories(assetsContainer) {
     
     assetsContainer.appendChild(memorySection);
 }
-// export function initMemoryUI() {
-//     // รอรับคำสั่งให้ปิด Modal (หลังจากบันทึกสำเร็จ)
-//     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
 
-//     const memoryModal = document.getElementById('memory-editor-modal');
-//     if (memoryModal) {
-//         memoryModal.addEventListener('click', (e) => {
-//             const target = e.target;
-            
-//             // ถ้าคลิกที่ปุ่ม "บันทึก"
-//             if (target.matches('.modal-actions .btn:not(.btn-secondary)')) {
-//                 stateManager.bus.publish('memory:save');
-//             }
-//                         if (target.matches('.btn-secondary') || target.closest('.modal-close-btn') || target === memoryModal) {
-//                 hideMemoryEditor();
-//             }
-//         });
+// export function showMemoryEditor(index = null) {
+//     const project = stateManager.getProject();
+//     const modal = document.getElementById('memory-editor-modal');
+//     if (!modal) return;
+    
+//     const memories = project.memories || [];
+    
+//     if(index !== null && memories[index]){
+//         const memory = memories[index];
+//         modal.querySelector('#memory-modal-title').textContent = 'Edit Memory';
+//         modal.querySelector('#memory-name-input').value = memory.name;
+//         modal.querySelector('#memory-content-input').value = memory.content;
+//         modal.querySelector('#memory-edit-index').value = index;
+//     } else {
+//         modal.querySelector('#memory-modal-title').textContent = 'Create New Memory';
+//         modal.querySelector('#memory-name-input').value = '';
+//         modal.querySelector('#memory-content-input').value = '';
+//         modal.querySelector('#memory-edit-index').value = '';
 //     }
-
-//     console.log("✅ Memory UI Initialized with correct modal listeners.");
+//     modal.style.display='flex';
 // }
+
+export function showMemoryEditor(index = null) {
+    const project = stateManager.getProject();
+    const modal = document.getElementById('memory-editor-modal');
+    if (!modal) return;
+    
+    // [CRITICAL FIX] ตรวจสอบให้แน่ใจว่าเราเข้าถึง memories array ที่ถูกต้อง
+    const memories = project.memories || [];
+    
+    if(index !== null && memories[index]){
+        const memory = memories[index];
+        console.log("Editing memory at", index, memory);
+        modal.querySelector('#memory-modal-title').textContent = 'Edit Memory';
+        modal.querySelector('#memory-name-input').value = memory.name;
+        modal.querySelector('#memory-content-input').value = memory.content;
+        modal.querySelector('#memory-edit-index').value = index;
+    } else {
+        console.log("Create new memory", index, memories);
+        modal.querySelector('#memory-modal-title').textContent = 'Create New Memory';
+        modal.querySelector('#memory-name-input').value = '';
+        modal.querySelector('#memory-content-input').value = '';
+        modal.querySelector('#memory-edit-index').value = '';
+    }
+    modal.style.display='flex';
+}
+
+
+export function hideMemoryEditor() {
+    document.getElementById('memory-editor-modal').style.display = 'none';
+}
 
 export function initMemoryUI() {
     stateManager.bus.subscribe('memory:editorShouldClose', hideMemoryEditor);
@@ -147,30 +168,4 @@ export function initMemoryUI() {
             }
         });
     }
-
-    console.log("✅ Memory UI Initialized (Studio listener removed).");
-}
-
-// --- ฟังก์ชัน show/hide Modal ของคุณ (ยังคงไว้) ---
-export function showMemoryEditor(index = null) {
-    const project = stateManager.getProject();
-    const modal = document.getElementById('memory-editor-modal');
-    if (!modal) return;
-    
-    if(index !== null && project.memories[index]){
-        const memory = project.memories[index];
-        modal.querySelector('#memory-modal-title').textContent = 'Edit Memory';
-        modal.querySelector('#memory-name-input').value = memory.name;
-        modal.querySelector('#memory-content-input').value = memory.content;
-        modal.querySelector('#memory-edit-index').value = index;
-    } else {
-        modal.querySelector('#memory-modal-title').textContent = 'Create New Memory';
-        modal.querySelector('#memory-name-input').value = '';
-        modal.querySelector('#memory-content-input').value = '';
-        modal.querySelector('#memory-edit-index').value = '';
-    }
-    modal.style.display='flex';
-}
-export function hideMemoryEditor() {
-    document.getElementById('memory-editor-modal').style.display = 'none';
 }

@@ -50,20 +50,22 @@ export function initStudioUI() {
             
             const action = actionTarget.dataset.action;
             const itemContext = target.closest('.item');
+            
+            // สร้าง Payload เริ่มต้นจาก item หลัก (ถ้ามี)
             let eventPayload = { ...itemContext?.dataset };
+
+            // [KEY FIX] นำข้อมูล index จาก data-data ของปุ่มมาใส่ใน Payload
+            if (actionTarget.dataset.data) {
+                try {
+                    const jsonData = JSON.parse(actionTarget.dataset.data);
+                    Object.assign(eventPayload, jsonData);
+                } catch (err) { console.error("Failed to parse data attribute JSON", err); }
+            }
 
             if (action === 'toggle-menu') {
                 toggleDropdown(e);
             } else {
-                // Handle new Import/Export actions
-                if (action === 'agent:import') {
-                    document.getElementById('import-agents-input')?.click();
-                } else if (action === 'agent:exportAll') {
-                    StudioHandlers.exportAllAgents();
-                } else {
-                    // Handle all other original actions
-                    stateManager.bus.publish(action, eventPayload);
-                }
+                stateManager.bus.publish(action, eventPayload);
                 actionTarget.closest('.dropdown.open')?.classList.remove('open');
             }
             return;

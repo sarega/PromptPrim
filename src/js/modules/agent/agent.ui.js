@@ -194,31 +194,33 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     if (!agentEditorModal) return;
 
     stateManager.setState('editingAgentName', isEditing ? agentName : null);
-    
+
+    const project = stateManager.getProject();
+    const agentData = (isEditing && project.agentPresets[agentName]) 
+        ? project.agentPresets[agentName] 
+        : defaultAgentSettings;
+
     // 1. รีเซ็ต Tab กลับไปหน้าแรกเสมอ
     agentEditorModal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
     agentEditorModal.querySelector('.tab-btn[data-tab="config"]')?.classList.add('active');
     agentEditorModal.querySelector('.tab-content[data-tab-content="config"]')?.classList.add('active');
 
-    // 2. วาด UI ทั้งหมดในครั้งเดียว
-    const project = stateManager.getProject();
-    const agentData = (isEditing && project.agentPresets[agentName]) 
-        ? project.agentPresets[agentName] 
-        : defaultAgentSettings; // <-- กลับมาใช้ defaultAgentSettings ที่เรียบง่าย
-        // [ADD THIS] แสดงรูปโปรไฟล์
+    const systemTabContent = agentEditorModal.querySelector('.tab-content[data-tab-content="system"]');
+    if (systemTabContent) systemTabContent.dataset.rendered = 'false'; // Reset render flag
+
+    // Populate profile picture with a fallback to the default icon
     const profilePicturePreview = document.getElementById('agent-profile-picture-preview');
     if (profilePicturePreview) {
-        // ถ้ามีรูปที่บันทึกไว้ให้ใช้รูปนั้น, ถ้าไม่มีให้ใช้รูป Default
-        profilePicturePreview.src = agentData.profilePicture || '/icon.png';
+        const basePath = import.meta.env.BASE_URL || '/';
+        profilePicturePreview.src = agentData.profilePicture || `${import.meta.env.BASE_URL}icon.png`;
     }
-    
+
     // --- Populate Tab 1: Configuration ---
     document.getElementById('agent-name-input').value = isEditing ? agentName : "New Agent";
     document.getElementById('agent-icon-button').textContent = agentData.icon || '🤖';
-    document.getElementById('agent-id-display').value = agentData.id;
+    document.getElementById('agent-id-display').value = agentData.id || `agent_${Date.now()}`;
     document.getElementById('agent-description').value = agentData.description || '';
-    renderAgentTags(agentData.tags);
-    
+
     // --- Populate System & Model section (now in Tab 1) ---
     createSearchableModelSelector('agent-model-search-wrapper', agentData.model, UserService.getAllowedModelsForCurrentUser());
     document.getElementById('agent-system-prompt').value = agentData.systemPrompt;
@@ -247,8 +249,8 @@ export function showAgentEditor(isEditing = false, agentName = null) {
 
 
     // --- Populate Tab 2: Memories ---
+    renderAgentTags(agentData.tags);
     renderAgentMemoryList(agentData.activeMemories);
-
     // --- Other UI updates ---
     setEditorLockState(agentData.type === 'third-party');
     updateEnhancerModelName();

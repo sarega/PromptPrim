@@ -68,11 +68,12 @@ async function fetchOpenRouterModels(apiKey) {
 
 async function fetchOllamaModels(baseUrl) {
     try {
-        const response = await fetch(`${baseUrl}/api/tags`);
+        const response = await fetch('/ollama-api/tags');
         if (!response.ok) throw new Error(`Ollama connection failed (HTTP ${response.status})`);
         const data = await response.json();
         return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama', supports_tools: false }));
     } catch (error) {
+        // [MODIFIED] Re-throw a more specific error
         throw new Error('Could not connect to Ollama. Check URL and CORS settings.');
     }
 }
@@ -142,7 +143,7 @@ export async function loadAllSystemModels() {
             allModels.push(...ollamaModels);
         } catch (error) {
             console.error("Failed to fetch Ollama models:", error);
-            showCustomAlert("Could not connect to Ollama. Check the Base URL and ensure Ollama is running.", "Warning");
+            showCustomAlert(error.message, "Warning");
         }
     }
     
@@ -281,7 +282,7 @@ export async function generateAndRenameSession(history){
 function constructApiCall(agent, messages, stream = false) {
     const project = stateManager.getProject();
     
-    // [CRITICAL FIX] Check if this is a system-level call
+    // [CRITICAL FIX] ตรวจสอบว่าเป็น System Agent หรือไม่
     const isSystemAgentCall = (agent === project.globalSettings.systemUtilityAgent);
 
     // If it's a system call, use the full list of system models for the check.
