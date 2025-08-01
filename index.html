@@ -14,6 +14,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&family=IBM+Plex+Sans+Thai:wght@400;700&family=Mitr:wght@400;700&family=Noto+Sans+Thai:wght@400;700&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+    <meta name="apple-mobile-web-app-capable" content="yes">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     
@@ -30,11 +33,18 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/index-kdNmrEXV.js"></script>
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/index-CWU7aeuj.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/main-BGhQ9tX5.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-DWHjUbRI.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-CjnZBNEv.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-zXP_oT3j.css">
 </head>
-<body>
-
+<body class="admin-page">
+    <div id="dropzone-overlay" class="dropzone-overlay">
+        <div class="dropzone-message">
+            <span class="material-symbols-outlined">upload_file</span>
+            <h2>Drop files to attach</h2>
+        </div>
+    </div>
     <!-- ===== LOADING OVERLAY ===== -->
     <div id="loading-overlay" class="loading-overlay active">
         <div class="spinner"></div>
@@ -43,7 +53,6 @@
 
     <div class="app-wrapper">
         <!-- ===== SETTINGS PANEL ===== -->
-        
 
         <!-- ================================================================== -->
         <!-- =================== CHAT & COMPOSE WORKSPACE =================== -->
@@ -247,6 +256,35 @@
                     <div class="studio-header">
                         <h1>Agent & Asset Studio</h1>
                     </div>
+                    <div class="studio-toolbar">
+                        <div class="search-wrapper">
+                            <span class="material-symbols-outlined">search</span>
+                            <input type="text" id="asset-search-input" placeholder="Search Agents...">
+                        </div>
+                        <button type="button" id="asset-filter-btn" class="btn-icon" title="Advanced Filters">
+                            <span class="material-symbols-outlined">filter_list</span>
+                        </button>
+                        <div class="sort-wrapper">
+                            <!-- <label for="asset-sort-select">Sort by:</label> -->
+                            <select id="asset-sort-select">
+                                <option value="modified-desc">Modified Date (Newest)</option>
+                                <option value="modified-asc">Modified Date (Oldest)</option>
+                                <option value="created-desc">Created Date (Newest)</option>
+                                <option value="created-asc">Created Date (Oldest)</option>
+                                <option value="name-asc">Name (A-Z)</option>
+                                <option value="name-desc">Name (Z-A)</option>
+                            </select>
+                        </div>
+                        <div class="dropdown align-right">
+                            <button class="btn-icon" data-action="toggle-menu" title="More Actions">
+                                <span class="material-symbols-outlined">more_vert</span>
+                            </button>
+                            <div class="dropdown-content">
+                                <a href="#" data-action="agent:import">Import Agent(s)...</a>
+                                <a href="#" data-action="agent:exportAll">Export All Agents...</a>
+                            </div>
+                        </div>
+                    </div>
                     <div class="studio-content">
                         <div class="studio-assets-container"></div>
                     </div>
@@ -258,7 +296,8 @@
             <div id="status-panel">
                 <div class="status-left">
                     <div class="status-dot" id="statusDot"></div>
-                    <span id="statusText" class="status-text-content">Disconnected</span>
+                    <span id="model-count-status"></span>
+                    <span id="statusText" class="status-text-content"></span>
                 </div>
                 <div class="status-right">
                     <span id="active-agent-status"></span> &nbsp;
@@ -270,7 +309,6 @@
         </div>
     </div>
     
-
     <!-- ===== OVERLAYS & MODALS (Remains unchanged) ===== -->
     <div id="mobile-overlay" class="mobile-overlay"></div>
     <div id="settings-modal" class="modal-overlay">
@@ -301,15 +339,20 @@
                 <div class="tab-content active" data-tab-content="services">
                     <div class="section-box">
                         <h3>API Settings</h3>
-                        <div class="form-group">
+                        
+                        <div class="form-group" id="api-key-group">
                             <label for="apiKey">OpenRouter API Key</label>
                             <input type="password" id="apiKey" autocomplete="off">
+                            <p class="modal-warning">This setting is only available for the Master Plan.</p>
                         </div>
-                        <div class="form-group">
+                        
+                        <div class="form-group" id="ollama-url-group">
                             <label for="ollamaBaseUrl">Ollama Base URL</label>
                             <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434" autocomplete="url">
                         </div>
-                    <button type="button" id="load-models-btn" class="btn btn-small">Load/Refresh Model List</button>                    </div>
+                        
+                        <button type="button" id="load-models-btn" class="btn btn-small">Load/Refresh Model List</button>
+                    </div>
                 </div>
 
                 <!-- Tab Content: System Agents -->
@@ -319,7 +362,7 @@
                         <div class="form-group">
                             <label for="system-model-search-input">System Utility Model</label>
                                 <div class="searchable-select-wrapper" id="settings-system-model-wrapper">      
-                                <input type="text" id="system-model-search-input" placeholder="Search models..." autocomplete="off">
+                                <input type="text" id="system-model-search-input" placeholder="Search models..." autocomplete="off" spellcheck="false">
                                 <input type="hidden" id="system-utility-model-select">
                                 <div id="system-model-options-container" class="searchable-select-options hidden"></div>
                             </div>
@@ -332,8 +375,14 @@
                         <details>
                             <summary>Advanced Parameters</summary>
                             <div>
-                                <div class="form-group"><label for="system-utility-temperature">Temperature</label><input type="number" id="system-utility-temperature" step="0.1" min="0" max="2"></div>
-                                <div class="form-group"><label for="system-utility-topP">Top P</label><input type="number" id="system-utility-topP" step="0.1" min="0" max="1"></div>
+                                <div class="form-group">
+                                    <label for="system-utility-temperature">Temperature</label>
+                                    <input type="number" id="system-utility-temperature" step="0.1" min="0" max="2">
+                                </div>
+                                <div class="form-group">
+                                    <label for="system-utility-topP">Top P</label>
+                                    <input type="number" id="system-utility-topP" step="0.1" min="0" max="1">
+                                </div>
                             </div>
                         </details>
                     </div>
@@ -342,7 +391,7 @@
                     <div class="model-manager-layout">
                         <div class="model-manager-column" id="model-manager-list-container">
                             <h4>All Available Models</h4>
-                            <input type="text" id="model-search-input" placeholder="Filter models...">
+                            <input type="text" id="model-search-input" placeholder="Filter models..." autocomplete="off" spellcheck="false">
 
                             <div class="selection-actions">
                                 <button type="button" id="select-all-btn" class="btn btn-link">Select All</button>
@@ -446,6 +495,13 @@
     </div>
     <div id="summarization-modal" class="modal-overlay">
         <div class="modal-box is-resizable" style="max-width: 950px; width: 90vw;">
+            <div class="modal-loading-overlay">
+                <div class="spinner"></div>
+                <p>Summarizing...</p>
+            </div>
+
+            <div class="modal-actions">
+                </div>
             <div class="modal-header">
                 <h3>Conversation Summary Center</h3>
                 <button class="modal-close-btn">&times;</button>
@@ -483,7 +539,7 @@
                         <label for="summary-model-search-input">Summarization Model</label>
                         <!-- [NEW] Searchable Select Component -->
                             <div class="searchable-select-wrapper" id="summary-model-wrapper">                            
-                            <input type="text" id="summary-model-search-input" placeholder="Search models..." autocomplete="off">
+                            <input type="text" id="summary-model-search-input" placeholder="Search models..." autocomplete="off" spellcheck="false">
                             <input type="hidden" id="summary-model-value"> <!-- ใช้เก็บค่าที่เลือก -->
                             <div id="summary-model-options-container" class="searchable-select-options hidden">
                                 <!-- รายการ Model ที่กรองแล้วจะแสดงที่นี่ -->
@@ -519,45 +575,162 @@
     </div>
     <div id="agent-editor-modal" class="modal-overlay">
         <div class="modal-box">
-            <h3 id="agent-modal-title">Create/Edit Agent</h3>
+            <div class="modal-loading-overlay">
+                <div class="spinner"></div>
+                <p>Generating Profile...</p>
+            </div>
+
+            <div class="modal-actions">
+                </div>
+            <div class="modal-header">
+                <h3 id="agent-modal-title">Create/Edit Agent</h3>
+                </div>
+
+            <!-- Modal Body ของ Agent Editor -->    
             <div class="modal-body">
-                <div class="agent-editor-column">
-                    <div class="form-group"><label for="agent-name-input">Agent Name</label><input type="text" id="agent-name-input" placeholder="e.g., Python Expert"></div>
-                    <div class="form-group"><label for="agent-icon-input">Agent Icon (Emoji)</label><input type="text" id="agent-icon-input" placeholder="🧑‍💻"></div>
-                    <div class="searchable-select-wrapper" id="agent-model-search-wrapper">
-                        <input type="text" id="agent-model-search-input" placeholder="Search models..." autocomplete="off">
-                        <input type="hidden" id="agent-model-select"> <div id="agent-model-options-container" class="searchable-select-options hidden"></div>
-                    </div>                    <hr>
-                    <div class="section-box">
-                        <h4>📝 System Prompt &amp; Parameters</h4>
-                        <div class="form-group"><label for="agent-system-prompt">คำสั่งเริ่มต้นของระบบ</label><textarea id="agent-system-prompt" rows="5"></textarea></div>
-                        <div class="form-group"><label class="flex-group"><input type="checkbox" id="agent-use-markdown">ใช้ Markdown สำหรับการตอบกลับ</label></div>
-                        <details><summary>ตั้งค่าขั้นสูง</summary>
-                            <div>
-                                <div class="form-group"><label for="agent-temperature">Temperature</label><input type="number" id="agent-temperature" step="0.1" min="0" max="2"></div>
-                                <div class="form-group"><label for="agent-topP">Top P</label><input type="number" id="agent-topP" step="0.1" min="0" max="1"></div>
-                                <div class="form-group"><label for="agent-topK">Top K</label><input type="number" id="agent-topK" step="1" min="0"></div>
-                                <div class="form-group"><label for="agent-presence-penalty">Presence Penalty</label><input type="number" id="agent-presence-penalty" step="0.1" min="-2" max="2"></div>
-                                <div class="form-group"><label for="agent-frequency-penalty">Frequency Penalty</label><input type="number" id="agent-frequency-penalty" step="0.1" min="-2" max="2"></div>
-                                <div class="form-group"><label for="agent-max-tokens">Max Tokens</label><input type="number" id="agent-max-tokens" step="1" min="1"></div>
-                                <div class="form-group"><label for="agent-seed">Seed</label><input type="number" id="agent-seed" step="1" placeholder="ใส่ -1 เพื่อสุ่ม"></div>
-                                <div class="form-group"><label for="agent-stop-sequences">Stop Sequences (คั่นด้วย ,)</label><input type="text" id="agent-stop-sequences"></div>
+                <div class="tab-buttons">
+                    <button type="button" class="tab-btn active" data-tab="config">
+                        <span class="material-symbols-outlined">badge</span> Agent Details
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="memories">
+                        <span class="material-symbols-outlined">memory</span> Memories
+                    </button>                    
+                    <button type="button" class="tab-btn" data-tab="actions">
+                        <span class="material-symbols-outlined">hub</span> Actions & APIs
+                    </button>
+                </div>
+                <div class="tab-content active" data-tab-content="config">                 
+                    <div class="details-grid">
+                        <div class="profile-picture-column">
+                            <div class="profile-picture-wrapper">
+                                <img id="agent-profile-picture-preview" src="/PromptPrim/icon.png" alt="Agent Profile Picture">
+                                <label for="agent-profile-picture-upload" class="upload-overlay">
+                                    <span class="material-symbols-outlined">photo_camera</span>
+                                </label>
+                                <input type="file" id="agent-profile-picture-upload" class="hidden" accept="image/*">                      
                             </div>
-                        </details>
+                            <div id="agent-metadata-display" class="agent-metadata">
+                                <div class="metadata-item">
+                                    <span class="label">Created by:</span>
+                                    <input type="text" id="agent-created-by-input" class="metadata-input">
+                                </div>
+                                <div class="metadata-item">
+                                    <span class="label">Created:</span>
+                                    <span id="agent-created-date"></span>
+                                </div>
+                                <div class="metadata-item">
+                                    <span class="label">Modified:</span>
+                                    <span id="agent-modified-date"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-fields-column">
+                            <div class="form-group">
+                                <label for="agent-name-input">Agent Name</label>
+                                <input type="text" id="agent-name-input" placeholder="e.g., Web Explorer">
+                            </div>
+                            <div class="form-group-inline icon-id-row">
+                                
+                                <div class="form-group">
+                                    <label>Agent Icon</label>
+                                    <div class="emoji-picker-wrapper">
+                                        <button type="button" id="agent-icon-button" class="emoji-picker-button">🌐</button>
+                                        <emoji-picker id="agent-emoji-picker" class="light hidden"></emoji-picker>
+                                    </div>
+                                </div>
+
+                                <div class="form-group form-group-stretch">
+                                    <label>Agent ID</label>
+                                    <div class="input-with-button">
+                                        <input type="text" id="agent-id-display" readonly>
+                                        <button id="agent-id-copy-btn" class="btn-icon" title="Copy ID">
+                                            <span class="material-symbols-outlined">content_copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+                            <div class="form-group">
+                                <label for="agent-description">Description</label>
+                                <textarea id="agent-description" rows="3" placeholder="What this agent is for..."></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Tags</label>
+                                <div id="agent-tags-container" class="tags-input-container">
+                                    <input type="text" id="agent-tags-input" placeholder="Add a tag and press Enter...">
+                                </div>
+                            </div>
+                            <!-- Agent Model Select & Enhance Prompt -->
+                            <div class="locked-overlay">
+                                <span class="material-symbols-outlined">lock</span>
+                                <p>These settings are locked for Third-Party Agents.</p>
+                            </div>
+
+                            <div id="agent-model-warning" class="banner-warning hidden">
+                                <span class="material-symbols-outlined">warning</span>
+                                <div id="agent-model-warning-text"></div>
+                            </div>
+
+                            <div class="searchable-select-wrapper" id="agent-model-search-wrapper">
+                                <label>Model</label>
+                                <input type="text" id="agent-model-search-input" placeholder="Search models..." autocomplete="off" spellcheck="false">
+                                <input type="hidden" id="agent-model-select">
+                                <div id="agent-model-options-container" class="searchable-select-options hidden"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="agent-system-prompt">System Prompt</label>
+                                <textarea id="agent-system-prompt" rows="8"></textarea>
+                            </div>
+
+                            <div class="form-group-inline">
+                                <label class="flex-group"><input type="checkbox" id="agent-use-markdown">Use Markdown</label>
+                                <label class="flex-group"><input type="checkbox" id="agent-enable-web-search">Enable Web Search</label>
+                            </div>
+                            <div class="system-tab-content-grid">
+                                
+                                <div class="left-column">
+                                    <details open>
+                                        <summary>Advanced Parameters</summary>
+                                        <div id="agent-params-container" class="params-container">
+                                            </div>
+                                    </details>
+                                </div>
+
+                                <div class="right-column">
+                                    <details>
+                                        <summary>✨ Agent Profile AI Tools</summary>
+                                        <div class="agent-enhancer-column" style="margin-top: 15px;">
+                                            <h4>Agent Profile Generator / Enhancer</h4>
+                                            <p class="modal-warning">Powered by: <span id="enhancer-model-name">N/A</span></p>
+                                            <div class="form-group">
+                                                <label for="enhancer-prompt-input">Describe the agent you want:</label>
+                                                <textarea id="enhancer-prompt-input" rows="4" placeholder="e.g., 'An expert storyteller...'"></textarea>
+                                            </div>
+                                            <button class="btn" id="generate-agent-profile-btn">Generate / Enhance</button>
+                                            <div id="enhancer-status" class="enhancer-status-box"></div>
+                                        </div>
+                                    </details>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>        
+                <div class="tab-content" data-tab-content="memories">
+                    <div class="form-group scrollable-list-group">
+                        <label>Active Memories</label>
+                        <div id="agent-memory-list" class="item-list-scrollable compact">
+                            <p class="no-items-message">No memories available.</p>
+                        </div>
                     </div>
                 </div>
-                <div class="agent-enhancer-column">
-                    <h4>✨ Agent Profile Generator</h4>
-                    <p class="modal-warning">Powered by: <span id="enhancer-model-name">N/A</span></p>
-                    <div class="form-group">
-                        <label for="enhancer-prompt-input">อธิบาย Agent ที่คุณต้องการ:</label>
-                        <textarea id="enhancer-prompt-input" rows="4" placeholder="เช่น 'สร้าง Agent ผู้เชี่ยวชาญการเขียนนิยายสืบสวนสอบสวน'"></textarea>
-                    </div>
-                    <button class="btn" id="generate-agent-profile-btn">Generate Profile</button>
-                    <div id="enhancer-status" class="enhancer-status-box"></div>
+                <div class="tab-content" data-tab-content="actions">
+                    <p class="no-items-message">Feature coming soon: Connect to external APIs and tools.</p>
                 </div>
             </div>
-            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Agent</button></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Agent</button></div>
+            </div>
         </div>
     </div>
     <div id="alert-modal" class="modal-overlay">
@@ -610,9 +783,24 @@
         </div>
     </div>
     <div id="right-sidebar-overlay"></div>
+    <div id="account-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>My Account</h3>
+                <button type="button" class="modal-close-btn" title="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="account-modal-body">
+                <p>Loading account details...</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-close-btn">Close</button>
+            </div>
+        </div>
+    </div>
     
     <!-- ===== HIDDEN INPUTS ===== -->
     <input type="file" id="load-project-input" class="hidden" accept=".prim,.json">
+    <input type="file" id="import-agents-input" class="hidden" accept=".json,.prim">
     <input type="file" id="load-memory-package-input" class="hidden" accept=".json">
     <input type="file" id="file-input" class="hidden" multiple>
     <input type="file" id="import-settings-input" class="hidden" accept=".json">
