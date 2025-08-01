@@ -1,8 +1,17 @@
+import { resolve } from 'path'
 import { defineConfig } from 'vite';
 import packageJson from './package.json';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        admin: resolve(__dirname, 'admin.html'),
+      },
+    },
+  },
   // Set the base path for GitHub Pages deployment.
   base: '/PromptPrim/',
 

@@ -35,7 +35,7 @@
 /* --- Agent Editor Modal Responsive Layout --- */
 @media (min-width: 768px) {
     #agent-editor-modal .modal-body {
-        flex-direction: row;
+        flex-direction: column;
     }
     .agent-editor-column {
         flex: 2;

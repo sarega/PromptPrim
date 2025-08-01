@@ -24,26 +24,37 @@ export function debounce(func, wait) {
 // ในไฟล์: src/js/core/core.utils.js
 
 /**
- * Converts a numeric timestamp into a readable "YYYY-MM-DD HH:MM:SS" format.
+ * [THE FIX] This function is now renamed and modified to always return a full,
+ * detailed timestamp in the format "YYYY-MM-DD HH:MM:SS".
  * @param {number} timestamp - The timestamp (e.g., from Date.now()).
  * @returns {string} The formatted date and time string.
  */
 export function formatTimestamp(timestamp) {
     if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
 
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const now = new Date();
+    const messageDate = new Date(timestamp);
+    
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
 
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
+    // [THE FIX] Change the locale from 'en-GB' to 'th-TH'
+    const timeFormat = { hour: '2-digit', minute: '2-digit', hour12: false };
+    const timeString = messageDate.toLocaleTimeString('th-TH', timeFormat);
 
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    if (messageDate >= startOfToday) {
+        // If the message is from today, show "Today" and the time.
+        return `Today ${timeString}`;
+    } else if (messageDate >= startOfYesterday) {
+        // If the message is from yesterday, show "Yesterday" and the time.
+        return `Yesterday ${timeString}`;
+    } else {
+        // For older messages, show the full date and time.
+        const dateFormat = { day: '2-digit', month: '2-digit', year: 'numeric' };
+        const dateString = messageDate.toLocaleDateString('th-TH', dateFormat);
+        return `${dateString} ${timeString}`;
+    }
 }
-
-
 /**
  * [FINAL VERSION] คลาสสำหรับจัดการการแสดงผล Markdown แบบสดๆ จาก Stream
  * เวอร์ชันนี้จะไม่มีการเรียกใช้ ChatUI หรือโมดูลภายนอกอื่นใดๆ

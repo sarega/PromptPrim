@@ -6,15 +6,22 @@
 import { stateManager, SESSIONS_STORE_NAME, defaultSystemUtilityAgent } from '../../core/core.state.js';
 import { dbRequest } from '../../core/core.db.js';
 import { callLLM, streamLLMResponse, buildPayloadMessages, getFullSystemPrompt, generateAndRenameSession } from '../../core/core.api.js';
-import { showCustomAlert, showContextMenu } from '../../core/core.ui.js';
+import { showCustomAlert, showContextMenu, updateAppStatus } from '../../core/core.ui.js';
 import { LiveMarkdownRenderer } from '../../core/core.utils.js';
 import * as ChatUI from './chat.ui.js';
-import * as GroupChat from './chat.group.js'; // <-- import แบบ Namespace
-import * as UserService from '../user/user.service.js'; // <-- เพิ่ม import
+import * as GroupChat from './chat.group.js';
+import * as UserService from '../user/user.service.js'; 
+import { calculateCost } from '../../core/core.api.js';
 
 export let attachedFiles = [];
+let turndownService = null; // [FIX 1] Declare here, but don't assign yet.
 
 export function initMessageInteractions() {
+    // [FIX] Initialize TurndownService here, after the page has loaded.
+    const turndownService = new TurndownService({
+        headingStyle: 'atx',
+        codeBlockStyle: 'fenced'
+    });
      const messagesContainer = document.getElementById('chatMessages');
     if (!messagesContainer) return;
 
@@ -146,82 +153,117 @@ export function getContextData() {
 // --- Core Chat Logic ---
 
 export async function sendMessage() {
-    // --- 1. Validation First ---
+    // 1. All initial validations are preserved
     if (stateManager.isLoading()) return;
     stateManager.newAbortController();
 
     const project = stateManager.getProject();
     const input = document.getElementById('chatInput');
-    const textContent = input.value.trim();
+    let textContent = input.value.trim(); // Use let to allow modification
     if (!textContent && attachedFiles.length === 0) return;
-    
+
+    // 2. User status and credit checks are preserved
+    const profile = UserService.getCurrentUserProfile();
+    if (profile.planStatus === 'expired') {
+        showCustomAlert("Your account is suspended. Please refill your credits to continue.", "Account Suspended");
+        return;
+    }
+    if (profile.credits.current <= 0 && (profile.plan === 'free' || (profile.plan === 'pro' && profile.planStatus === 'active'))) {
+        if (profile.plan === 'pro') {
+            UserService.downgradeToGracePeriod();
+            return;
+        } else {
+            showCustomAlert("Your trial credits have run out.", "Credits Depleted");
+            return;
+        }
+    }
+
     if (!project.activeEntity?.name) {
         showCustomAlert("Please select an Agent or Group.", "Error");
         return;
     }
     
-    let agentToValidate;
-    if (project.activeEntity.type === 'agent') {
-        agentToValidate = project.agentPresets[project.activeEntity.name];
-    } else {
-        const group = project.agentGroups[project.activeEntity.name];
-        agentToValidate = project.agentPresets[group?.moderatorAgent];
-    }
-    if (!agentToValidate || !agentToValidate.model) {
-        showCustomAlert("The selected Agent/Moderator has no model configured.", "Error");
-        return;
-    }
-
-    // --- 2. Assemble Content & Update State ---
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) return;
-    
-    let userMessageContent = [];
-    if (textContent) {
-        userMessageContent.push({ type: 'text', text: textContent });
-    }
 
-    if (attachedFiles.length > 0) {
-        attachedFiles.forEach(file => {
-            userMessageContent.push({ type: 'image_url', url: file.data });
+    // --- [FIXED LOGIC STARTS HERE] ---
+    // แสดงสถานะกำลังโหลดทันที
+    stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
+    stateManager.bus.publish('status:update', { message: 'Processing images...', state: 'loading' });
+
+    try {
+        const userMessageContent = [];
+        const urlRegex = /(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|bmp))/gi;
+        const imageUrls = textContent.match(urlRegex) || [];
+        
+        const plainText = textContent.replace(urlRegex, '').trim();
+        if (plainText) {
+            userMessageContent.push({ type: 'text', text: plainText });
+        }
+
+        // [FIX] แปลง URL ทั้งหมด และถ้ามี Error จะเข้าไปที่ catch block ทันที
+        const base64Urls = await Promise.all(
+            imageUrls.map(url => convertImageUrlToBase64(encodeURI(url)))
+        );
+
+        base64Urls.forEach(b64url => {
+            userMessageContent.push({ type: 'image_url', url: b64url });
         });
-    }
-    const userMessage = { 
-        role: 'user', 
-        content: userMessageContent,
-        speaker: 'You',
-        timestamp: Date.now()
-    };
-    console.log('[DEBUG 1.1] User message created:', userMessage); // << เพิ่ม Log
+        
+        if (attachedFiles.length > 0) {
+            attachedFiles.forEach(file => {
+                userMessageContent.push({ type: 'image_url', url: file.data });
+            });
+        }
+        
+        const hasImage = userMessageContent.some(p => p.type === 'image_url');
+        const hasText = userMessageContent.some(p => p.type === 'text');
+        if (hasImage && !hasText) {
+            userMessageContent.unshift({ type: 'text', text: "" });
+        }
+        
+        const userMessage = {
+            role: 'user', content: userMessageContent,
+            speaker: 'You', timestamp: Date.now()
+        };
 
-    session.history.push(userMessage);
+        session.history.push(userMessage);
 
-    
-    // [NEW] ตรวจสอบเงื่อนไขเพื่อเริ่มการตั้งชื่ออัตโนมัติ
-    // ทำงานเมื่อเป็น Session ใหม่ และนี่คือข้อความแรก
-    if (session.name === 'New Chat' && session.history.length === 1) {
-        triggerAutoNameGeneration(session); // เรียกใช้ฟังก์ชันใหม่แบบ "fire-and-forget"
-    }
-    
-    // --- 3. Clear Inputs & Update UI ---
-    input.value = '';
-    input.style.height = 'auto'; // คืนค่าความสูง Textarea
-    attachedFiles = [];
-    stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
-    stateManager.bus.publish('ui:renderMessages');
-    
-    // บันทึก State ลง DB
-    stateManager.updateAndPersistState();
+        if (session.name === 'New Chat' && session.history.length === 1) {
+            triggerAutoNameGeneration(session);
+        }
 
-    // --- 4. Execute AI Turn ---
-    if (project.activeEntity.type === 'agent') {
-        await sendSingleAgentMessage();
-    } else {
-        const group = project.agentGroups[project.activeEntity.name];
-        await GroupChat.handleGroupChatTurn(project, session, group);
+        input.value = '';
+        input.style.height = 'auto';
+        attachedFiles = [];
+        stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
+        stateManager.bus.publish('ui:renderMessages');
+        stateManager.updateAndPersistState();
+
+        if (project.activeEntity.type === 'agent') {
+            await sendSingleAgentMessage();
+        } else {
+            const group = project.agentGroups[project.activeEntity.name];
+            await GroupChat.handleGroupChatTurn(project, session, group);
+        }
+
+    } catch (error) {
+        // [CRITICAL] เมื่อการแปลง URL ล้มเหลว โค้ดจะมาทำงานที่นี่
+        console.error("Error during sendMessage (Image Processing):", error);
+        // [FIX] สร้างข้อความแจ้งเตือนแบบมีโครงสร้างและเป็นมิตรกับผู้ใช้มากขึ้น
+        const title = "Image Could Not Be Processed";
+        const recommendation = "For best results, please save the image to your device and use the '+' button to upload it directly.";
+        const technicalDetails = `Details: ${error.message}`;
+
+        // รวมข้อความทั้งหมดเข้าด้วยกัน โดยเน้นคำแนะนำเป็นหลัก
+        const fullMessage = `${recommendation}\n\n---\n${technicalDetails}`;
+
+        showCustomAlert(fullMessage, title); // ส่ง Title และ Message ที่สร้างใหม่เข้าไป
+
+        stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
+        stateManager.bus.publish('status:update', { message: 'Image processing failed', state: 'error' });
     }
 }
-
 
 async function sendSingleAgentMessage() {
     const project = stateManager.getProject();
@@ -230,76 +272,106 @@ async function sendSingleAgentMessage() {
 
     const agentName = project.activeEntity.name;
     const agent = project.agentPresets[agentName];
+    console.log("[CHAT-HANDLER] START of sendSingleAgentMessage. Publishing 'loading' status...");
 
-    // [CREDIT CHECK] ตรวจสอบเครดิตก่อนส่ง
-    const profile = UserService.getCurrentUserProfile();
-    if (profile.userCredits <= 0) {
-        showCustomAlert("Your userCredits have run out. Please upgrade to a Pro plan to continue.", "Credits Depleted");
-        return;
-    }
+    stateManager.bus.publish('status:update', { 
+        message: `Responding with ${agent.model}...`, 
+        state: 'loading' // 'loading' state will make the dot orange
+    });
 
     stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
 
+    // Create a placeholder message in the session history
     const placeholderMessage = { role: 'assistant', content: '', speaker: agentName, isLoading: true };
     const assistantMsgIndex = session.history.length;
     session.history.push(placeholderMessage);
-    const placeholderElement = ChatUI.addMessageToUI(placeholderMessage, assistantMsgIndex);
     
+    // Immediately render the messages to show the placeholder
+    ChatUI.renderMessages(); 
+    
+    // Find the newly created placeholder element in the DOM
+    const placeholderElement = document.querySelector(`.message-turn-wrapper[data-index='${assistantMsgIndex}']`);
     let renderer;
+
+    if (!placeholderElement) {
+        console.error("Could not find placeholderElement in the DOM immediately after render.");
+        stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
+        return;
+    }
+
     try {
         renderer = new LiveMarkdownRenderer(placeholderElement);
     } catch (error) {
-        console.error("UI Error:", error.message);
+        console.error("UI Error creating LiveMarkdownRenderer:", error.message);
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
-        stateManager.bus.publish('status:update', { message: 'UI Error', state: 'error' });
-        session.history.pop(); // เอา placeholder ที่สร้างไว้ออก
+        session.history.pop(); 
         return;
     }
 
     try {
         const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName);
-        
-        // รับ response object กลับมา
         const response = await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
+        const calculatedCost = calculateCost(agent.model, response.usage);
+
+        const currentUser = UserService.getCurrentUserProfile();
+        if (currentUser && currentUser.plan !== 'master') {
+            const logEntry = {
+                timestamp: Date.now(),
+                model: agent.model,
+                promptTokens: response.usage.prompt_tokens || 0,
+                completionTokens: response.usage.completion_tokens || 0,
+                costUSD: calculatedCost,
+                duration: response.duration || 0,
+                // [ADD THIS] Save the estimation status to the log
+                usageIsEstimated: response.usageIsEstimated 
+            };
+            UserService.logUserActivity(currentUser.userId, logEntry);
+        }
         
-        // [BURN CREDITS] หักเครดิตหลังใช้งานสำเร็จ
-        UserService.burnCreditsForUsage(response.usage, agent.model);
+        UserService.logSystemApiCost(calculatedCost);
+        UserService.burnCreditsForUsage(response.usage, agent.model, calculatedCost);
         
-        const finalResponseText = response.content;
+        const finalResponseText = renderer.getFinalContent();
         const assistantMessage = { 
             role: 'assistant', 
             content: finalResponseText,
             speaker: agentName, 
             isLoading: false,
             timestamp: Date.now(),
-            // [STATS] บันทึกสถิติลงในข้อความ
             stats: {
                 ...response.usage,
                 duration: response.duration,
-                speed: response.usage.completion_tokens / response.duration
+                speed: response.usage.completion_tokens / (response.duration || 1)
             }
         };
         session.history[assistantMsgIndex] = assistantMessage;
 
     } catch (error) {
-        // 4. จัดการ Error (รวมถึง Abort)
+        // [DEFINITIVE FIX] This block now properly handles any error.
         if (error.name !== 'AbortError') {
             const errorMessage = `Error: ${error.message}`;
-            session.history[assistantMsgIndex].content = errorMessage;
             console.error("LLM Stream Error:", error);
+            // Replace the placeholder with a proper error message object
+            session.history[assistantMsgIndex] = { 
+                ...placeholderMessage, 
+                content: errorMessage, 
+                isLoading: false, 
+                isError: true 
+            };
             stateManager.bus.publish('status:update', { message: 'An error occurred.', state: 'error' });
         } else {
-            // ถ้าผู้ใช้กดยกเลิก ให้ลบ placeholder message ทิ้งไปเลย
+            // If the user aborted, just remove the placeholder
             session.history.splice(assistantMsgIndex, 1);
             console.log("Stream aborted by user.");
         }
     } finally {
-        // 5. Cleanup: ปิด loading, render UI ใหม่ทั้งหมด, และบันทึก session
+        // This 'finally' block ensures the UI is always cleaned up and updated.
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
-        ChatUI.renderMessages(); // Render UI ใหม่ทั้งหมดเพื่อให้แสดงผลสมบูรณ์ 100%
+        ChatUI.renderMessages(); // Re-render the entire chat to show the final message or the error.
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
 
         if (!stateManager.getState().abortController?.signal.aborted) {
+            console.log("[CHAT-HANDLER] END of sendSingleAgentMessage. Publishing 'connected' status...");
             stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
         }
     }
@@ -324,11 +396,16 @@ export function removeAttachedFile({ index }) {
     }
 }
 
-export function handleFileUpload(event) {
-    const files = event.target.files;
+export function handleFileUpload(files) {
     if (!files) return;
 
     for (const file of files) {
+        // จำกัดเฉพาะไฟล์รูปภาพเพื่อความปลอดภัยเบื้องต้น (คุณสามารถขยายประเภทไฟล์ได้ในอนาคต)
+        if (!file.type.startsWith('image/')) {
+            showCustomAlert(`File type not supported: ${file.type}. Please upload images only.`, "Unsupported File");
+            continue; // ข้ามไปยังไฟล์ถัดไป
+        }
+
         const fileId = `file_${Date.now()}_${Math.random()}`; 
         const newFile = { id: fileId, name: file.name, type: file.type, data: null };
         attachedFiles.push(newFile);
@@ -337,15 +414,12 @@ export function handleFileUpload(event) {
         reader.onload = e => {
             const fileIndex = attachedFiles.findIndex(f => f.id === fileId);
             if (fileIndex !== -1) {
-                // [CRITICAL FIX] เพิ่มข้อมูล base64 ที่อ่านได้เข้าไปใน object
                 attachedFiles[fileIndex].data = e.target.result;
-                // จากนั้นค่อยส่ง Event ไปบอก UI ให้วาด
                 stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
             }
         };
         reader.readAsDataURL(file);
     }
-    event.target.value = '';
 }
 
 // --- Summarization Handlers ---
@@ -579,10 +653,6 @@ export async function copyMessageToClipboard({ index, event }) {
     }
 }
 
-const turndownService = new TurndownService({
-    headingStyle: 'atx',
-    codeBlockStyle: 'fenced'
-});
 
 export async function editMessage({ index, event }) {
     if (event) event.stopPropagation();
@@ -675,6 +745,7 @@ export async function editMessage({ index, event }) {
                 const group = project.agentGroups[project.activeEntity.name];
                 await GroupChat.handleGroupChatTurn(project, session, group);
             }
+            updateAppStatus(); // [ADD THIS] เรียกอัปเดต Status Panel
         });
 
         cancelButton.addEventListener('click', (e) => { e.stopPropagation(); cleanup(); });
@@ -777,6 +848,8 @@ export function deleteMessage({ index }) {
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
     stateManager.bus.publish('ui:renderMessages');
+
+    updateAppStatus(); // [ADD THIS] เรียกอัปเดต Status Panel
 }
 
 /**
@@ -850,3 +923,29 @@ export function clearSummaryContext({ index }) {
     stateManager.bus.publish('ui:renderMessages');
     showCustomAlert("Marker/Context has been removed from this chat.", "Info");
 }
+
+async function convertImageUrlToBase64(url) {
+    try {
+        // เราจะลองใช้ Proxy ต่อไป แต่ถ้าไม่สำเร็จจะจัดการ Error อย่างถูกต้อง
+        const corsProxy = 'https://cors-anywhere.herokuapp.com/'; 
+        const response = await fetch(corsProxy + url);
+
+        if (!response.ok) {
+            // โยน Error ที่มีข้อมูลชัดเจนออกไป
+            throw new Error(`Server responded with status ${response.status} (${response.statusText})`);
+        }
+
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error(`Could not convert image URL "${url}" to Base64:`, error.message);
+        // [CRITICAL] โยน Error ต่อเพื่อให้ฟังก์ชัน sendMessage รู้ว่าการแปลงล้มเหลว
+        throw new Error(`Failed to process image from URL: ${url}. It might be protected (403 Forbidden).`);
+    }
+}
+

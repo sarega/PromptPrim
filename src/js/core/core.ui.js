@@ -5,7 +5,63 @@
 
 import { stateManager } from './core.state.js';
 import * as SettingsUI from '../modules/settings/settings.ui.js';
+import * as UserService from '../modules/user/user.service.js';
+import { getContextData } from '../modules/chat/chat.handlers.js';
 
+export function updateAppStatus(statusUpdate = {}) {
+    const { message, state } = statusUpdate;
+
+    // --- Part 1: Update Left Side (Dot, Model Count, Text) ---
+    const statusTextEl = document.getElementById('statusText');
+    const statusDotEl = document.getElementById('statusDot');
+    const modelStatusSpan = document.getElementById('model-count-status');
+    
+    if (statusTextEl && statusDotEl && modelStatusSpan) {
+        // Update dot and text
+        statusTextEl.textContent = message || 'Ready';
+        statusDotEl.className = 'status-dot'; // Reset class
+        
+        const currentState = state || 'connected';
+        if (currentState === 'connected') {
+            statusDotEl.classList.add('connected');
+        } else if (currentState === 'error') {
+            statusDotEl.classList.add('error');
+        } else if (currentState === 'loading') {
+            statusDotEl.classList.add('warning');
+        }
+
+        // Update model count
+        const allowedModels = UserService.getAllowedModelsForCurrentUser();
+        modelStatusSpan.textContent = `${allowedModels.length} Models`;
+    }
+
+    // --- Part 2: Update Right Side (Agent, Tokens) ---
+    const { totalTokens, agent, agentNameForDisplay } = getContextData();
+    const agentStatusSpan = document.getElementById('active-agent-status');
+    const tokenStatusSpan = document.getElementById('token-count-status');
+
+    if (agentStatusSpan) agentStatusSpan.textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
+    if (tokenStatusSpan) tokenStatusSpan.textContent = `~${totalTokens.toLocaleString()} Tokens`;
+}
+
+export function updateStatus({ message, state }) {
+    const statusTextEl = document.getElementById('statusText');
+    const statusDotEl = document.getElementById('statusDot');
+
+    if (statusTextEl && statusDotEl) {
+        statusTextEl.textContent = message || 'Ready';
+        statusDotEl.className = 'status-dot'; // Reset class
+        
+        const currentState = state || 'connected';
+        if (currentState === 'connected') {
+            statusDotEl.classList.add('connected');
+        } else if (currentState === 'error') {
+            statusDotEl.classList.add('error');
+        } else if (currentState === 'loading') {
+            statusDotEl.classList.add('warning');
+        }
+    }
+}
 
 /**
  * Creates a reusable dropdown menu component.
@@ -155,46 +211,37 @@ export function applyFontSettings() {
     }
 }
 
-export function updateStatus({ message, state }) {
-    const statusText = document.getElementById('statusText');
-    const dot = document.getElementById('statusDot');
-    if (!statusText || !dot) return;
-
-    statusText.textContent = message || 'Ready';
-    dot.className = 'status-dot'; // รีเซ็ตคลาสสีทั้งหมด
-
-    if (state === 'connected') {
-        dot.classList.add('connected'); // สีเขียว
-    } else if (state === 'error') {
-        dot.classList.add('error'); // สีแดง
-    } else if (state === 'loading') {
-        // [FIX] เพิ่ม state 'loading' เพื่อแสดงผลเป็นสีส้ม
-        dot.classList.add('warning');
-    }
-}
-
 export function initCoreUI() {
-    // Display the app version from environment variables provided by Vite.
     const versionSpan = document.getElementById('app-version');
     if (versionSpan) {
         versionSpan.textContent = import.meta.env.VITE_APP_VERSION || 'N/A';
     }
 
-    // Subscriptions
     stateManager.bus.subscribe('ui:applyFontSettings', applyFontSettings);
+    // [FIX] All status-related events are now subscribed here to the single update function.
+    // stateManager.bus.subscribe('status:update', (data) => updateAppStatus(data));
+    stateManager.bus.subscribe('session:loaded', () => updateAppStatus());
+    stateManager.bus.subscribe('entity:selected', () => updateAppStatus());
+    stateManager.bus.subscribe('user:settingsUpdated', () => updateAppStatus());
+    stateManager.bus.subscribe('user:modelsLoaded', () => updateAppStatus());
     stateManager.bus.subscribe('status:update', updateStatus);
+    updateStatus({});
 
-    // [FIX] Update event listeners to call the correct function
-    // The main settings button in the sidebar now calls renderAndShowSettings
-    document.querySelector('#settings-btn').addEventListener('click', SettingsUI.renderAndShowSettings);
+    const settingsBtn = document.querySelector('#settings-btn');
+    if (settingsBtn) {
+        // [FIX] Force a re-render every time the settings button is clicked
+        settingsBtn.addEventListener('click', () => {
+            console.log("Settings button clicked. Re-rendering panel before showing.");
+            // This ensures the settings panel always has the latest user data and model lists.
+            SettingsUI.renderAndShowSettings();
+        });
+    }
 
-    // Mobile UI Listeners
     const mobileOverlay = document.getElementById('mobile-overlay');
     if (mobileOverlay) {
         mobileOverlay.addEventListener('click', toggleMobileSidebar);
     }
 
-    // Modal Close Buttons
     const alertCloseBtn = document.querySelector('#alert-modal .btn');
     if(alertCloseBtn) {
         alertCloseBtn.addEventListener('click', hideCustomAlert);
@@ -214,6 +261,7 @@ export function initCoreUI() {
 
     console.log("Core UI Initialized and Listeners Attached.");
 }
+
 /**
  * Creates and displays a custom context menu at the specified coordinates.
  * @param {Array<object>} options - Array of menu item objects. e.g., [{ label: 'Copy', action: () => {} }]
@@ -318,7 +366,7 @@ export function createSearchableModelSelector(wrapperId, initialModelId, modelsT
             const item = document.createElement('div');
             item.className = 'searchable-option-item';
             item.dataset.value = model.id;
-            item.innerHTML = `${model.name} <small>${model.id}</small>`;
+            item.innerHTML = `${model.name} &nbsp;•&nbsp; <small>${model.id}</small>`;
             item.addEventListener('click', () => {
                 searchInput.value = model.name;
                 valueInput.value = model.id;

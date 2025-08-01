@@ -1,0 +1,28 @@
+{
+  "free_tier": {
+    "name": "Free Tier",
+    "modelIds": [
+      "perplexity/sonar-small-online",
+      "google/gemma-2-9b-it"
+    ]
+  },
+  "pro_tier": {
+    "name": "Pro Tier",
+    "modelIds": [
+      "anthropic/claude-3-haiku",
+      "perplexity/sonar-small-online",
+      "google/gemma-2-9b-it",
+      "google/gemma-3-27b-it",
+      "mistralai/mistral-7b-instruct",
+      "openai/chatgpt-4o-latest"
+    ]
+  },
+  "master_tier": {
+    "name": "Master Tier",
+    "modelIds": []
+  },
+  "blocked_tier": {
+    "name": "Blocked",
+    "modelIds": []
+  }
+}

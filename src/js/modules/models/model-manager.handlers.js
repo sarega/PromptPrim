@@ -1,16 +1,21 @@
 import { stateManager } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
-import { renderModelManager } from './model-manager.ui.js';
 import * as UserService from '../user/user.service.js';
 
+/**
+ * Publishes an event to signal that the user preset selection in the UI has changed.
+ */
 export function handlePresetSelectionChange() {
-    renderModelManager(); // สั่งวาด UI ใหม่ทั้งหมดเมื่อมีการเลือก Preset
+    stateManager.bus.publish('user:presetSelectionChanged');
 }
 
-export function saveModelPreset(selectedModelIdSet) {
+/**
+ * Saves a user's custom model preset.
+ * @param {Set<string>} selectedModelIdSet - A set of model IDs selected by the user.
+ */
+export function saveUserModelPreset(selectedModelIdSet) {
     const presetSelector = document.getElementById('preset-selector');
     const presetNameInput = document.getElementById('preset-name-input');
-    
     const presetKey = presetSelector.value;
     const presetName = presetNameInput.value.trim();
 
@@ -18,32 +23,32 @@ export function saveModelPreset(selectedModelIdSet) {
         showCustomAlert('Preset name cannot be empty.', 'Error');
         return;
     }
-
     if (selectedModelIdSet.size === 0) {
         showCustomAlert('Please select at least one model for the preset.', 'Error');
         return;
     }
 
     const newPresetKey = presetName.toLowerCase().replace(/\s+/g, '_');
-    
-    const allPresets = UserService.getModelPresets();
-    
+    const allUserPresets = UserService.getUserModelPresets();
+
     if (presetKey !== '--new--' && presetKey !== newPresetKey) {
-        delete allPresets[presetKey];
+        delete allUserPresets[presetKey];
     }
     
-    allPresets[newPresetKey] = {
+    allUserPresets[newPresetKey] = {
         name: presetName,
-        modelIds: Array.from(selectedModelIdSet) // <-- แปลง Set เป็น Array ตอนบันทึก
+        modelIds: Array.from(selectedModelIdSet)
     };
     
-    UserService.saveModelPresets(allPresets);
-    
-    showCustomAlert(`Preset "${presetName}" saved successfully!`, 'Success');
-    renderModelManager();
+    UserService.saveUserModelPresets(allUserPresets);
+    showCustomAlert(`User Preset "${presetName}" saved successfully!`, 'Success');
+    stateManager.bus.publish('user:presetsChanged');
 }
 
-export function deleteModelPreset() {
+/**
+ * Deletes a user's custom model preset.
+ */
+export function deleteUserModelPreset() {
     const presetSelector = document.getElementById('preset-selector');
     const presetKey = presetSelector.value;
 
@@ -52,17 +57,12 @@ export function deleteModelPreset() {
         return;
     }
 
-    if (confirm(`Are you sure you want to delete the "${presetSelector.options[presetSelector.selectedIndex].text}" preset?`)) {
-        // [FIX 4] อ่าน Presets ทั้งหมดมาจาก UserService
-        const allPresets = UserService.getModelPresets();
-        
-        // [FIX 5] ลบ Preset ที่ต้องการ
-        delete allPresets[presetKey];
-        
-        // [FIX 6] บันทึก Presets ที่อัปเดตแล้วกลับไป
-        UserService.saveModelPresets(allPresets);
+    if (confirm(`Are you sure you want to delete your preset "${presetSelector.options[presetSelector.selectedIndex].text}"?`)) {
+        const allUserPresets = UserService.getUserModelPresets();
+        delete allUserPresets[presetKey];
+        UserService.saveUserModelPresets(allUserPresets);
 
-        showCustomAlert('Preset deleted.', 'Success');
-        renderModelManager();
+        showCustomAlert('User Preset deleted.', 'Success');
+        stateManager.bus.publish('user:presetsChanged');
     }
 }

@@ -5,72 +5,60 @@ import { toggleDropdown } from '../../core/core.ui.js';
 import * as SettingsUI from '../settings/settings.ui.js';
 import * as UserService from './user.service.js';
 import * as UserHandlers from './user.handlers.js';
+// [FIX] Import ฟังก์ชันจัดการ Theme จากไฟล์กลาง
+import { initThemeSwitcher } from '../../core/core.theme.js';
 
-function applyTheme(theme) {
-    document.body.classList.remove('dark-mode', 'light-mode');
-    const lightThemeSheet = document.getElementById('hljs-light-theme');
-    const darkThemeSheet = document.getElementById('hljs-dark-theme');
-    
-    let isDark = theme === 'dark';
-    if (theme === 'system') {
-        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-
-    document.body.classList.add(isDark ? 'dark-mode' : 'light-mode');
-    if (lightThemeSheet) lightThemeSheet.disabled = isDark;
-    if (darkThemeSheet) darkThemeSheet.disabled = !isDark;
-}
-
-function initThemeSwitcher() {
-    const themeSwitcher = document.getElementById('theme-switcher-dropdown');
-    if (!themeSwitcher) return;
-
-    const themeRadios = themeSwitcher.querySelectorAll('input[type="radio"]');
-    const savedTheme = localStorage.getItem('theme') || 'system';
-    
-    themeRadios.forEach(radio => {
-        if (radio.value === savedTheme) radio.checked = true;
-        radio.addEventListener('change', (event) => {
-            const selectedTheme = event.target.value;
-            localStorage.setItem('theme', selectedTheme);
-            applyTheme(selectedTheme);
-        });
-    });
-
-    applyTheme(savedTheme); // Apply initial theme
-
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if ((localStorage.getItem('theme') || 'system') === 'system') {
-            applyTheme('system');
-        }
-    });
-}
-
-// [NEW] ฟังก์ชันสำหรับอัปเดตข้อมูล Profile ทั้งหมด
 function updateUserProfileDisplay() {
     const profile = UserService.getCurrentUserProfile();
     if (!profile) return;
 
-    const nameSpan = document.querySelector('.user-profile-menu .user-name');
-    const planSpan = document.querySelector('.user-profile-menu .user-plan');
-    const creditSpan = document.querySelector('#user-userCredits span:last-child');
+    const nameSpan = document.querySelector('#user-profile-menu .user-name');
+    const planSpan = document.querySelector('#user-profile-menu .user-plan');
+    const creditItem = document.getElementById('user-userCredits');
+    const creditSpan = creditItem?.querySelector('span:last-child');
     const avatarSpan = document.querySelector('#user-profile-btn span');
 
-    if (nameSpan) {
-        nameSpan.textContent = profile.userName || 'User';
-    }
+    if (avatarSpan && profile.userName) avatarSpan.textContent = profile.userName.charAt(0).toUpperCase();
+    if (nameSpan) nameSpan.textContent = profile.userName || 'User';
+
     if (planSpan) {
-        // ทำให้ตัวอักษรแรกเป็นตัวพิมพ์ใหญ่
-        planSpan.textContent = profile.plan ? `${profile.plan.charAt(0).toUpperCase()}${profile.plan.slice(1)} Plan` : 'Free Plan';
+        let statusText = 'Unknown';
+        let statusClass = 'status-blocked';
+
+        if (profile.plan === 'master') {
+            statusText = (profile.planStatus === 'active') ? 'Master Plan' : 'Subscription Expired';
+            statusClass = (profile.planStatus === 'active') ? 'status-master' : 'status-blocked';
+        } else if (profile.plan === 'pro') {
+            if (profile.planStatus === 'active' && profile.credits.current > 0) {
+                statusText = 'Pro Plan';
+                statusClass = 'status-active';
+            } else if (profile.planStatus === 'grace_period') {
+                statusText = 'Pro (Grace Period)';
+                statusClass = 'status-grace';
+            } else {
+                statusText = 'Account Blocked';
+                statusClass = 'status-blocked';
+            }
+        } else if (profile.plan === 'free') {
+            statusText = (profile.credits.current > 0) ? 'Free Plan' : 'Credits Depleted';
+            statusClass = (profile.credits.current > 0) ? 'status-free' : 'status-blocked';
+        }
+        
+        planSpan.textContent = statusText;
+        planSpan.className = `user-plan ${statusClass}`;
     }
-    if (creditSpan) {
-        creditSpan.textContent = Math.floor(profile.userCredits).toLocaleString();
-    }
-    if (avatarSpan && profile.userName) {
-        avatarSpan.textContent = profile.userName.charAt(0).toUpperCase();
+
+    if (creditItem && creditSpan) {
+        if (profile.plan === 'master') {
+            creditItem.style.display = 'none';
+        } else {
+            creditItem.style.display = 'flex';
+            // Call the function via the imported UserService
+            const balanceUSD = UserService.convertCreditsToUSD(profile.credits?.current ?? 0);
+            creditSpan.textContent = `$${balanceUSD.toFixed(2)}`;
+        }
     }
 }
-
 export function initUserProfileUI() {
     const profileContainer = document.querySelector('.user-profile-container');
     if (!profileContainer) return;
@@ -79,42 +67,37 @@ export function initUserProfileUI() {
         const actionTarget = e.target.closest('[data-action]');
         if (actionTarget) {
             const action = actionTarget.dataset.action;
-            
-            // หยุดการทำงานของ Event สำหรับรายการเมนู เพื่อไม่ให้หน้าเว็บเลื่อน
-            if (action !== 'toggle-menu') {
-                e.preventDefault();
-            }
+            if (action !== 'toggle-menu') e.preventDefault();
 
             switch (action) {
                 case 'toggle-menu':
-                    toggleDropdown(e); // << ใช้งานถูกต้องสำหรับปุ่มเปิด/ปิด
+                    toggleDropdown(e);
+                    break;
+                case 'user:account':
+                    stateManager.bus.publish('ui:showAccountModal');
+                    profileContainer.classList.remove('open');
                     break;
                 case 'user:settings':
                     SettingsUI.renderAndShowSettings();
-                    profileContainer.classList.remove('open'); // << [FIX] ใช้วิธีนี้ปิดเมนู
-                    break;
-                case 'user:exportSettings':
-                    UserHandlers.exportUserSettings();
-                    profileContainer.classList.remove('open'); // << [FIX] ใช้วิธีนี้ปิดเมนู
+                    profileContainer.classList.remove('open');
                     break;
                 case 'user:importSettings':
                     UserHandlers.importUserSettings();
-                    profileContainer.classList.remove('open'); // << [FIX] ใช้วิธีนี้ปิดเมนู
+                    profileContainer.classList.remove('open');
                     break;
+                case 'user:exportSettings':
+                    UserHandlers.exportUserSettings();
+                    profileContainer.classList.remove('open');
+                    break;
+                // Add other cases for Help, Log Out etc. if needed
             }
         }
     });
 
-    initThemeSwitcher();
+    initThemeSwitcher('theme-switcher-dropdown');
     
-    // [FIX] Subscribe to the correct events published by user.service.js
     stateManager.bus.subscribe('user:settingsLoaded', updateUserProfileDisplay);
     stateManager.bus.subscribe('user:settingsUpdated', updateUserProfileDisplay);
 
-    // [DEFINITIVE FIX] Immediately update the UI with the data that has already been loaded.
-    // This solves the issue where the UI shows '0' on refresh because the 'user:settingsLoaded'
-    // event was published before this UI module had a chance to subscribe to it.
     updateUserProfileDisplay();
-
-    console.log("✅ User Profile UI Initialized.");
 }

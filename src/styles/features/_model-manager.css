@@ -33,6 +33,7 @@
     margin-top: -5px;
     flex-grow: 1; 
     overflow-y: auto; 
+    overflow-x: auto;
     border: 1px solid var(--border-color); 
     border-radius: 8px; 
     padding: 8px; 
@@ -170,14 +171,14 @@ body.dark-mode #model-preset-editor {
 .info-bar-content h5 {
     margin-top: 0;
     margin-bottom: 6px;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     
     white-space: normal; 
     word-wrap: break-word; 
 }
 .info-bar-content p {
     margin: 0 0 10px 0;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     opacity: 0.8;
     line-height: 1.6;
 }
@@ -185,7 +186,7 @@ body.dark-mode #model-preset-editor {
     display: flex; 
     flex-wrap: wrap; 
     gap: 10px 20px; 
-    font-size: 0.7rem; 
+    font-size: 0.85rem; 
     opacity: 0.9; 
 }
 

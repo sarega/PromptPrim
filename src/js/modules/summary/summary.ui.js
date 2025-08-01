@@ -3,8 +3,8 @@
 import { stateManager, defaultSummarizationPresets } from '../../core/core.state.js';
 import { toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
 import * as SummaryHandlers from './summary.handlers.js';
-import { getModelsForPreset } from '../models/model-manager.ui.js'; // <-- Single, correct import
-import * as UserService from '../user/user.service.js'; // <-- Required for presets
+import { getFilteredModelsForDisplay } from '../models/model-manager.ui.js';
+import * as UserService from '../user/user.service.js';
 
 let activeLogId = null;
 
@@ -57,51 +57,50 @@ function renderSummarizationPresetSelector() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
 
-    const modal = document.getElementById('summarization-modal');
-    if (!modal) return;
-    const selector = modal.querySelector('#summary-modal-preset-select');
-    const promptTextarea = modal.querySelector('#summary-modal-prompt-textarea');
-
-    const userPresets = project.globalSettings.summarizationPromptPresets || {};
-    const currentPromptText = promptTextarea.value;
+    const selector = document.querySelector('#summarization-modal #summary-modal-preset-select');
+    if (!selector) return;
+    
+    // The project's presets now reliably contain the factory defaults.
+    const allPresets = project.globalSettings.summarizationPromptPresets || {};
     const previouslySelectedValue = selector.value;
     
-    selector.innerHTML = '';
-    let matchingPresetName = null;
+    selector.innerHTML = ''; // Clear existing options
 
+    // The logic to create optgroups is still good.
     const factoryGroup = document.createElement('optgroup');
     factoryGroup.label = 'Factory Presets';
-    for (const presetName in defaultSummarizationPresets) {
-        factoryGroup.appendChild(new Option(presetName, presetName));
-        if (defaultSummarizationPresets[presetName].trim() === currentPromptText.trim()) {
-            matchingPresetName = presetName;
-        }
-    }
     selector.appendChild(factoryGroup);
 
-    const userPresetNames = Object.keys(userPresets).filter(p => !defaultSummarizationPresets.hasOwnProperty(p));
-    if (userPresetNames.length > 0) {
-        const userGroup = document.createElement('optgroup');
-        userGroup.label = 'User Presets';
-        userPresetNames.forEach(presetName => {
-            userGroup.appendChild(new Option(presetName, presetName));
-            if (userPresets[presetName].trim() === currentPromptText.trim()) {
-                matchingPresetName = presetName;
-            }
-        });
-        selector.appendChild(userGroup);
+    const userGroup = document.createElement('optgroup');
+    userGroup.label = 'User Presets';
+    selector.appendChild(userGroup);
+
+    let userPresetsExist = false;
+    for (const presetName in allPresets) {
+        const option = new Option(presetName, presetName);
+        if (defaultSummarizationPresets.hasOwnProperty(presetName)) {
+            factoryGroup.appendChild(option);
+        } else {
+            userGroup.appendChild(option);
+            userPresetsExist = true;
+        }
+    }
+    
+    // Hide the user preset group if it's empty
+    if (!userPresetsExist) {
+        userGroup.remove();
     }
 
-    if (matchingPresetName) {
-        selector.value = matchingPresetName;
-    } else if (previouslySelectedValue && selector.querySelector(`option[value="${previouslySelectedValue}"]`)) {
+    // Restore the previous selection if it's still valid
+    if (allPresets[previouslySelectedValue]) {
         selector.value = previouslySelectedValue;
-    } else if (currentPromptText.trim() !== '') {
-        const customOption = new Option('--- Custom (Unsaved) ---', 'custom', true, true);
-        customOption.disabled = true;
-        selector.add(customOption);
-        selector.value = 'custom';
+    } else {
+        // If the old selection is gone, default to 'Standard'
+        selector.value = 'Standard';
+        // And trigger the change handler to update the textarea
+        SummaryHandlers.handleSummarizationPresetChange();
     }
+
     updateActionMenu();
 }
 
@@ -203,31 +202,26 @@ export function showSummarizationCenter() {
     const modal = document.getElementById('summarization-modal');
     if (!modal) return;
 
-    // --- ส่วนของการรีเซ็ต Tab และ UI (คงไว้เหมือนเดิม) ---
+    // --- Reset UI elements ---
     modal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
     modal.querySelector('.tab-btn[data-tab="logs"]')?.classList.add('active');
     modal.querySelector('.tab-content[data-tab-content="logs"]')?.classList.add('active');
     
-    // เคลียร์ editor, วาด list ใหม่, และอัปเดตปุ่ม action
     selectLog(null);
     renderLogList();
-    
     renderSummarizationPresetSelector();
     SummaryHandlers.handleSummarizationPresetChange();
     updateModalActionsVisibility();
 
-    // --- [DEFINITIVE FIX for Filtering] ---
-    // 1. ดึงชื่อ Preset ที่ Active อยู่จาก UserService
-    const userSettings = UserService.getUserSettings();
-    const activePresetKey = userSettings.appSettings.activeModelPreset || 'top_models';
+    // --- [THE FIX] ---
+    // 1. Get the correctly filtered list of models for the current user.
+    const modelsToShow = UserService.getAllowedModelsForCurrentUser();
 
-    // 2. ดึงลิสต์ Model จาก Preset นั้น
-    const modelsToShow = getModelsForPreset(activePresetKey);
-
-    // 3. สร้าง Searchable Dropdown โดยใช้ลิสต์ที่กรองแล้ว
+    // 2. Get the currently selected model for the system agent as a default.
     const project = stateManager.getProject();
-    const initialModelId = document.getElementById('summary-model-value')?.value || project.globalSettings.systemUtilityAgent?.model;
+    const initialModelId = project.globalSettings.systemUtilityAgent?.model;
     
+    // 3. Create the searchable dropdown using the correct, filtered list.
     createSearchableModelSelector(
         'summary-model-wrapper',
         initialModelId,
@@ -237,7 +231,6 @@ export function showSummarizationCenter() {
     modal.style.display = 'flex';
 }
 
-
 export function hideSummarizationCenter() {
     const el = document.getElementById('summarization-modal');
     if (el) el.style.display = 'none';
@@ -246,8 +239,8 @@ export function hideSummarizationCenter() {
 export function setSummaryLoading(isLoading) {
     const btn = document.getElementById('summarize-conversation-btn');
     if (btn) {
-        btn.disabled = isLoading;
-        btn.textContent = isLoading ? 'Summarizing...' : '✨ Summarize Conversation';
+        // [THE FIX] Toggle the loading class instead of the overlay
+        btn.classList.toggle('is-loading', isLoading);
     }
 }
 
@@ -385,6 +378,22 @@ export function initSummaryUI() {
                     SummaryHandlers.deleteSummarizationPreset();
                 }
                 target.closest('.dropdown.open')?.classList.remove('open');
+            }
+        });
+    }
+
+        // [ADD THIS] Add a listener for when a new summary model is selected.
+    const summaryModelValueInput = document.getElementById('summary-model-value');
+    if (summaryModelValueInput) {
+        summaryModelValueInput.addEventListener('change', (e) => {
+            const newModelId = e.target.value;
+            if (newModelId) {
+                const project = stateManager.getProject();
+                if (project && project.globalSettings.systemUtilityAgent) {
+                    project.globalSettings.systemUtilityAgent.model = newModelId;
+                    stateManager.updateAndPersistState(); // Save the change
+                    console.log(`Summary/System model updated to: ${newModelId}`);
+                }
             }
         });
     }

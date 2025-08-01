@@ -133,50 +133,6 @@ export function renderEntitySelector() {
     }
 }
 
-// export function renderSummarizationPresetSelector() {
-//     const project = stateManager.getProject();
-//     if (!project || !project.globalSettings) return;
-//     const selector = document.getElementById('summary-modal-preset-select');
-//     const userPresets = project.globalSettings.summarizationPromptPresets || {};
-//     const currentPromptText = document.getElementById('summary-modal-prompt-textarea').value;
-//     const previouslySelectedValue = selector.value;
-//     selector.innerHTML = '';
-//     let matchingPresetName = null;
-//     const factoryGroup = document.createElement('optgroup');
-//     factoryGroup.label = 'Factory Presets';
-//     for (const presetName in defaultSummarizationPresets) {
-//         factoryGroup.appendChild(new Option(presetName, presetName));
-//         if (defaultSummarizationPresets[presetName].trim() === currentPromptText.trim()) {
-//             matchingPresetName = presetName;
-//         }
-//     }
-//     selector.appendChild(factoryGroup);
-//     const userPresetNames = Object.keys(userPresets).filter(p => !defaultSummarizationPresets.hasOwnProperty(p));
-//     if (userPresetNames.length > 0) {
-//         const userGroup = document.createElement('optgroup');
-//         userGroup.label = 'User Presets';
-//         userPresetNames.forEach(presetName => {
-//             userGroup.appendChild(new Option(presetName, presetName));
-//             if (userPresets[presetName].trim() === currentPromptText.trim()) {
-//                 matchingPresetName = presetName;
-//             }
-//         });
-//         selector.appendChild(userGroup);
-//     }
-//     if (matchingPresetName) {
-//         selector.value = matchingPresetName;
-//     } else if (previouslySelectedValue && selector.querySelector(`option[value="${previouslySelectedValue}"]`)) {
-//         selector.value = previouslySelectedValue;
-//     } else if (currentPromptText.trim() !== '') {
-//         const customOption = new Option('--- Custom (Unsaved) ---', 'custom', true, true);
-//         customOption.disabled = true;
-//         selector.add(customOption);
-//         selector.value = 'custom';
-//     }
-//     updateSummarizationActionMenu();
-// }
-
-
 export function initProjectUI() {
     // --- Subscribe to Events (ส่วนนี้ของคุณถูกต้องแล้ว) ---
     stateManager.bus.subscribe('project:loaded', (eventData) => {

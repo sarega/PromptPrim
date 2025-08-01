@@ -7,7 +7,7 @@ import {
     stateManager,
     defaultAgentSettings,
     defaultMemories,
-    defaultSystemUtilityAgent,
+    defaultSystemUtilityAgent, 
     defaultSummarizationPresets,
     METADATA_KEY,
     SESSIONS_STORE_NAME,
@@ -154,7 +154,7 @@ export async function proceedWithCreatingNewProject() {
             projectTemplate.globalSettings.summarizationPromptPresets = userSettings.systemAgentDefaults.summarizationPresets;
         }
         // -------------------------
-        
+        projectTemplate.globalSettings.summarizationPromptPresets = { ...defaultSummarizationPresets };
         projectTemplate.id = `proj_${Date.now()}`;
         
         await openDb(projectTemplate.id);
@@ -362,11 +362,19 @@ export async function loadProjectData(projectData, isFromFile = false) {
     let projectToLoad = migrateProjectData(projectData);
     await openDb(projectToLoad.id);
 
-    // ถ้าโหลดจากไฟล์, ให้ถือว่าเป็นสถานะ clean เสมอ
     if (isFromFile) {
         projectToLoad.isDirtyForUser = false;
     }
 
+    // [THE FIX] This block ensures that EVERY project, old or new, has the factory presets.
+    if (projectToLoad.globalSettings) {
+        // We merge the factory defaults with any existing user presets.
+        // The user's presets will overwrite the factory ones if they have the same name, which is desired.
+        projectToLoad.globalSettings.summarizationPromptPresets = {
+            ...defaultSummarizationPresets,
+            ...(projectToLoad.globalSettings.summarizationPromptPresets || {})
+        };
+    }
     // --- [REWRITTEN LOGIC] ---
     // 1. ตั้งค่า State เริ่มต้นใน Memory
     stateManager.setProject(projectToLoad);
@@ -376,7 +384,7 @@ export async function loadProjectData(projectData, isFromFile = false) {
 
     // 3. โหลดรายชื่อ Model (ซึ่งอาจจะไปแก้ไข project state ใน memory)
     if (projectToLoad.globalSettings.apiKey || (import.meta.env.DEV && projectToLoad.globalSettings.ollamaBaseUrl)) {
-        await loadAllProviderModels();
+        await loadAllProviderModels({ apiKey: projectToLoad.globalSettings.apiKey });
     }
 
     // 4. สร้าง Chat Session แรก (ถ้ายังไม่มี)
@@ -404,6 +412,7 @@ export async function loadProjectData(projectData, isFromFile = false) {
     stateManager.setAutoSaveDirty(false); // รีเซ็ตสถานะ auto-save
     localStorage.setItem('lastActiveProjectId', finalInitializedProject.id);
 }
+
 export async function rewriteDatabaseWithProjectData(projectData) {
     await clearObjectStores([SESSIONS_STORE_NAME, METADATA_STORE_NAME]);
     await persistProjectMetadata(projectData);
@@ -465,32 +474,64 @@ export function handleFontChange(font) {
 export function saveSystemUtilityAgentSettings() {
     const project = stateManager.getProject();
     if (!project.globalSettings) return;
+
     const agentSettings = project.globalSettings.systemUtilityAgent;
 
-    // [แก้ไข] ดึงค่าจาก Element ที่ยังคงอยู่ใน Settings Panel เท่านั้น
+    // ดึงค่าจาก input ทั่วไป
     agentSettings.model = document.getElementById('system-utility-model-select').value;
     agentSettings.systemPrompt = document.getElementById('system-utility-prompt').value;
-    agentSettings.temperature = parseFloat(document.getElementById('system-utility-temperature').value);
-    agentSettings.topP = parseFloat(document.getElementById('system-utility-topP').value);
     
-    // [ลบออก] ไม่ต้องบันทึก summarizationPrompt จากที่นี่แล้ว
-    // agentSettings.summarizationPrompt = document.getElementById('summary-modal-prompt-textarea').value;
+    // ดึงค่าจาก Component
+    const editor = stateManager.getState().systemParameterEditor;
+    const advancedParams = editor ? editor.getValues() : {};
     
+    // รวมค่า Parameters เข้าไปใน object หลัก
+    Object.assign(agentSettings, advancedParams);
+
     stateManager.setProject(project);
     stateManager.updateAndPersistState();
     
-    // [ลบออก] ไม่ต้อง publish event นี้จากที่นี่แล้ว
-    // stateManager.bus.publish('ui:renderSummarizationSelector');
+    showCustomAlert("System Agent settings saved!", "Success");
 }
 
 export function migrateProjectData(projectData) {
-    // Ensure the isDirtyForUser flag exists
-    if (projectData.isDirtyForUser === undefined) {
-        projectData.isDirtyForUser = true; // Assume dirty if flag is missing
+    const currentUser = UserService.getCurrentUserProfile();
+
+    // 1. ซ่อม System Utility Agent (เหมือนเดิม)
+    projectData.globalSettings.systemUtilityAgent = Object.assign(
+        {},
+        defaultSystemUtilityAgent,
+        projectData.globalSettings.systemUtilityAgent
+    );
+
+    // 2. [CRITICAL FIX] ซ่อม Agent แต่ละตัวใน agentPresets
+    if (projectData.agentPresets) {
+        for (const agentName in projectData.agentPresets) {
+            const agent = projectData.agentPresets[agentName];
+            
+            // ใช้ Object.assign เพื่อนำค่า default ทั้งหมดมาเป็นพื้น
+            const migratedAgent = Object.assign({}, defaultAgentSettings, agent);
+
+            // ถ้ายังไม่มีข้อมูลผู้สร้าง ให้เติมชื่อผู้ใช้ปัจจุบันเข้าไป
+            if (!migratedAgent.createdBy || migratedAgent.createdBy === 'Unknown User') {
+                migratedAgent.createdBy = currentUser.userName;
+            }
+            // ถ้ายังไม่มีข้อมูลวันที่สร้าง ให้ใช้วันที่ปัจจุบัน
+            if (!migratedAgent.createdAt) {
+                migratedAgent.createdAt = Date.now();
+            }
+            if (!migratedAgent.modifiedAt) {
+                migratedAgent.modifiedAt = migratedAgent.createdAt;
+            }
+
+            projectData.agentPresets[agentName] = migratedAgent;
+        }
     }
 
-    // [FIX] Ensure all agent groups have a valid `agents` array.
-    // This handles projects saved before the `agents` property was added to groups.
+    // 3. ตรวจสอบ properties อื่นๆ ที่อาจจะเพิ่มมาในอนาคต (เหมือนเดิม)
+    if (projectData.isDirtyForUser === undefined) {
+        projectData.isDirtyForUser = true;
+    }
     if (projectData.agentGroups) {
         for (const groupName in projectData.agentGroups) {
             const group = projectData.agentGroups[groupName];
@@ -499,7 +540,8 @@ export function migrateProjectData(projectData) {
             }
         }
     }
-
+    
+    // [FIX END]
     return projectData;
 }
 

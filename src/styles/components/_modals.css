@@ -41,7 +41,6 @@
 /* 4. สไตล์ส่วนอื่นๆ ของ Modal (ไม่มีการเปลี่ยนแปลง) */
 .modal-body {
     overflow-y: auto;
-    padding-right: 15px;
     flex-grow: 1;      /* <-- เพิ่ม: ทำให้ Body ขยายเต็มพื้นที่ที่เหลือ */
     min-height: 0;     /* <-- เพิ่ม: เทคนิคแก้ปัญหา scroll ใน flexbox */
 }
@@ -72,9 +71,8 @@
     align-items: center;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
-    /* margin-bottom: 10px; */
+    /* margin-bottom: -10px; */
     flex-shrink: 0;
-    /* background-color: var(--bg-color-secondary); */
 
 }
 
@@ -92,4 +90,72 @@
 }
 body.dark-mode .modal-close-btn {
     color: var(--text-dark);
+}
+
+.modal-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    z-index: 100;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 15px;
+    border-radius: 15px; /* Match the modal's border radius */
+    backdrop-filter: blur(4px);
+}
+
+.modal-loading-overlay.active {
+    display: flex; /* Shown when active */
+}
+
+/* Spinner Animation */
+.modal-loading-overlay .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #d1d5db;
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.modal-loading-overlay p {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+/* Dark Mode Adjustments */
+body.dark-mode .modal-loading-overlay {
+    background-color: rgba(45, 55, 72, 0.7);
+}
+
+body.dark-mode .modal-loading-overlay .spinner {
+    border-color: #4b5563;
+    border-top-color: var(--accent-color);
+}
+
+/* =============================================== */
+/* == Unified Modal Interior Padding            == */
+/* =============================================== */
+
+/* 1. ลบ padding ที่ไม่สม่ำเสมอของ Settings Modal Body ออก */
+#settings-panel .modal-body {
+    padding-top: 0; /* Reset override cũ */
+}
+
+/* 2. กำหนด padding ซ้าย-ขวาที่เป็นมาตรฐานให้กับทุก Modal */
+.modal-header,
+.modal-body {
+    padding-left: 15px; /* ของเดิมเป็น 25px */
+    padding-right: 15px;
+}
+
+/* 3. กำหนด padding บน-ล่างให้สวยงาม */
+.modal-header {
+    padding-top: 0px;
+    padding-bottom: 10px;
 }

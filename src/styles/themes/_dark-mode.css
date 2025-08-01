@@ -21,6 +21,8 @@ body.dark-mode {
     --primary-color-dark: #394990; /* <--- เพิ่มบรรทัดนี้ */
     --btn-primary-bg: #2f3c4f;      /* <--- สีพื้นหลังที่คุณชอบ */
     --btn-primary-border: #4a5568;  /* <--- สีขอบที่เข้ากัน */
+    --bg-admin-page: #1e293b; /* สีพื้นหลังสำหรับหน้า Admin (Dark) */
+
 
     background: #1a202c;
     color: var(--text-dark);

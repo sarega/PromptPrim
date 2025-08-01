@@ -12,11 +12,25 @@ export const METADATA_STORE_NAME = 'projectMetadata';
 export const METADATA_KEY = 'projectInfo';
 
 export const ALL_AGENT_SETTINGS_IDS = {
-    'agent-name-input': 'name', 'agent-icon-input': 'icon', 'agent-model-select': 'model',
-    'agent-system-prompt': 'systemPrompt', 'agent-use-markdown': 'useMarkdown',
-    'agent-temperature': 'temperature', 'agent-topP': 'topP', 'agent-topK': 'topK',
-    'agent-presence-penalty': 'presence_penalty', 'agent-frequency-penalty': 'frequency_penalty',
-    'agent-max-tokens': 'max_tokens', 'agent-seed': 'seed', 'agent-stop-sequences': 'stop_sequences',
+    // Basic Info
+    'agent-icon-input': 'icon',
+    'agent-model-select': 'model',
+    'agent-description': 'description',
+    
+    // Core Settings
+    'agent-system-prompt': 'systemPrompt',
+    'agent-use-markdown': 'useMarkdown',
+    'agent-enable-web-search': 'enableWebSearch',
+    
+    // [FIX] Re-add all advanced parameters
+    'agent-temperature': 'temperature',
+    'agent-topP': 'topP',
+    'agent-topK': 'topK',
+    'agent-presence-penalty': 'presence_penalty',
+    'agent-frequency-penalty': 'frequency_penalty',
+    'agent-max-tokens': 'max_tokens',
+    'agent-seed': 'seed',
+    'agent-stop-sequences': 'stop_sequences',
 };
 
 export const defaultSummarizationPresets = {
@@ -37,7 +51,24 @@ export const defaultMemories = [
     { name: "Creative Writer", content: "You are a creative writing assistant." }
 ];
 export const defaultAgentSettings = {
-    icon: '🤖', model: '', systemPrompt: 'You are a helpful assistant.', useMarkdown: true,
+    id: `agent_${Date.now()}`,
+    createdBy: 'Unknown User',
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    type: 'custom', // 'custom' or 'third-party'
+    author: '',
+    version: '1.0.0',
+    description: '',
+    tags: [],
+    activeMemories: [],
+    actions: [],
+    // --- Core settings ---
+    icon: '🤖',
+    model: '', // Should be set to a default model
+    systemPrompt: 'You are a helpful assistant.',
+    useMarkdown: true,
+    enableWebSearch: false,
+    // --- Parameters ---
     temperature: 1.0, topP: 1.0, topK: 0,
     presence_penalty: 0.0, frequency_penalty: 0.0,
     max_tokens: 4096, seed: -1, stop_sequences: ''
@@ -46,6 +77,9 @@ export const defaultAgentSettings = {
 // --- Private State ---
 const _appState = {
     currentProject: {}, // isDirtyForUser will now live inside this object
+    systemProviderModels: [], 
+    userProviderModels: [], 
+    isLoading: false,
     allProviderModels: [],
     isLoading: false,
     isDirtyForAutoSave: false,
@@ -159,18 +193,21 @@ export const stateManager = {
         stateManager.setAutoSaveDirty(true);
     },
     
-    setAllModels: (models) => {
-        _appState.allProviderModels = models.sort((a, b) => a.name.localeCompare(b.name));
-        if (_appState.currentProject && _appState.currentProject.globalSettings) {
-            _appState.currentProject.globalSettings.allModels = _appState.allProviderModels;
-        }
-        eventBus.publish('models:loaded', _appState.allProviderModels);
+    // [ADD] New specific setters
+    setSystemModels: (models) => {
+        _appState.systemProviderModels = models.sort((a, b) => a.name.localeCompare(b.name));
+        stateManager.bus.publish('models:loaded', _appState.systemProviderModels);
     },
-
+    setUserModels: (models) => {
+        _appState.userProviderModels = models.sort((a, b) => a.name.localeCompare(b.name));
+        stateManager.bus.publish('user:modelsLoaded', _appState.userProviderModels); // Use a new event
+    },
+    
     newAbortController: () => {
         _appState.abortController = new AbortController();
         return _appState.abortController;
     },
+
     abort: () => {
         if (_appState.abortController) {
             _appState.abortController.abort();
@@ -180,3 +217,4 @@ export const stateManager = {
     
     bus: eventBus
 };
+

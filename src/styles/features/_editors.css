@@ -117,17 +117,6 @@
     cursor: grabbing;
 }
 
-/* --- Agent Editor Modal --- */
-#agent-editor-modal .modal-box {
-    max-width: 900px;
-}
-
-#agent-editor-modal .modal-body {
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-}
-
 .agent-editor-column, .agent-enhancer-column {
     display: flex;
     flex-direction: column;
@@ -224,36 +213,22 @@
     flex: 2;
 }
 .tab-buttons {
-    display: flex;
-    margin-bottom: 15px;
+    display: flex; /* <-- คำสั่งสำคัญ: จัดเรียงซ้าย-ขวา (เป็นค่าเริ่มต้น) */
+    flex-direction: row;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0; /* ป้องกันไม่ให้แถบ Tab หดตัว */
+    margin-bottom: 10px;
 }
-.tab-btn {
-    padding: 10px 15px;
-    cursor: pointer;
-    border: none;
-    background: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-}
-.tab-btn.active {
-    border-bottom-color: var(--accent-color);
-    font-weight: 600;
-}
+
+
 .tab-content {
     display: none;
     flex-grow: 1;
     overflow-y: auto;
 }
-.tab-content.active {
-    display: block;
-}
 
 /* --- New Summarization Modal Styles --- */
-.modal-body-columns {
-    display: flex; flex-grow: 1; gap: 20px;
-    overflow: hidden; min-height: 450px;
-}
+
 .modal-column {
     display: flex; flex-direction: column; min-height: 0;
 }
@@ -263,22 +238,8 @@
     padding-right: 20px;
 }
 .modal-column.right { flex: 2; }
-.tab-buttons {
-    display: flex; margin-bottom: 15px;
-    border-bottom: 1px solid var(--border-color);
-    flex-shrink: 0;
-}
-.tab-btn {
-    padding: 10px 15px; cursor: pointer; border: none; background: none;
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-    font-size: 0.9rem; color: var(--text-dark); /* เพิ่มสีตัวอักษร */
-}
-.tab-btn.active {
-    border-bottom-color: var(--accent-color);
-    font-weight: 600;
-}
-.tab-content { display: none; flex-grow: 1; overflow-y: auto; }
-.tab-content.active { display: flex; flex-direction: column; }
+
+
 #summary-log-list-modal .item { cursor: pointer; }
 #summary-editor-actions { display: flex; gap: 10px; }
 #summary-editor-actions.hidden { display: none; }
@@ -411,4 +372,769 @@
         flex-shrink: 0;
         margin-bottom: 15px;
     }
+}
+
+/* --- Tab Styles for Modals --- */
+.modal-body {
+    display: flex; /* Required for new layout */
+    flex-direction: column;
+    overflow: hidden;
+}
+
+
+.tab-btn {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--text-dark);
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    background-color: #f8fafc;
+}
+
+.tab-btn.active {
+    border-bottom-color: var(--accent-color);
+    color: var(--text-dark);
+    font-weight: 600;
+}
+.tab-content-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px;
+    position: relative;
+}
+
+/* Show only the active tab content */
+.tab-content.active {
+    display: flex; /* Use flexbox for layout within tabs */
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* --- General Form and Input Styles inside Modal --- */
+.input-with-button {
+    display: flex;
+    gap: 5px;
+}
+.input-with-button input {
+    flex-grow: 1;
+}
+
+/* --- Read-only/Locked State Styles --- */
+.tab-content.is-locked {
+    position: relative;
+}
+
+body.dark-mode .tab-btn {
+    color: #94a3b8;
+}
+body.dark-mode .tab-btn:hover {
+    background-color: #374151;
+}
+body.dark-mode .tab-btn.active {
+    color: var(--text-dark);
+}
+
+/* Read-only/Locked Styles */
+.tab-content .locked-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(248, 250, 252, 0.7); /* Light mode overlay */
+    z-index: 10;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 600;
+    color: #4a5568;
+    backdrop-filter: blur(2px);
+    border-radius: 8px;
+}
+
+.tab-content.is-locked .locked-overlay {
+    display: flex;
+}
+body.dark-mode .tab-content .locked-overlay {
+    background: rgba(26, 32, 44, 0.8); /* Dark mode overlay */
+    color: #cbd5e0;
+}
+
+
+/* --- Specific Component Styles --- */
+
+/* Tags Input */
+.tags-input-container {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.tags-input-container:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--shadow-light);
+}
+.tags-input-container input {
+    border: none;
+    outline: none;
+    box-shadow: none;
+    flex-grow: 1;
+    min-width: 150px;
+    padding: 5px;
+    background: transparent;
+}
+.tag-pill {
+    background-color: #e2e8f0;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+.tag-pill .remove-tag {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    line-height: 1;
+}
+body.dark-mode .tag-pill {
+    background-color: #4a5568;
+}
+
+/* Compact Memory List for Editor */
+.scrollable-list-group {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+}
+.item-list-scrollable.compact {
+    flex-grow: 1;
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    border-radius: 8px;
+}
+.item-list-scrollable.compact .item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+.item-list-scrollable.compact .item:last-child {
+    border-bottom: none;
+}
+
+/* Style for inline form groups */
+.form-group-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px; /* ระยะห่างระหว่าง items */
+    align-items: center;
+}
+
+
+/* Style for the grid layout in the System Tab */
+.system-tab-content-grid {
+    display: grid;
+    grid-template-columns: 0.5fr 1.5fr; /* แบ่งเป็นสองคอลัมน์ ขนาดเท่ากัน */
+    gap: 25px; /* ระยะห่างระหว่างคอลัมน์ */
+    align-items: start;
+}
+
+.tab-content.active .system-tab-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.tab-content.active .system-tab-content-grid .left-column {
+/* คุณสามารถเพิ่ม style เพิ่มเติมสำหรับคอลัมน์ซ้ายได้ */
+}
+
+.tab-content.active .system-tab-content-grid .right-column {
+/* คุณสามารถเพิ่ม style เพิ่มเติมสำหรับคอลัมน์ขวาได้ */
+}
+
+.form-fields-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* ระยะห่างระหว่าง form-group */
+    padding-right: 15px;
+}
+
+/* ทำให้ form-group ในคอลัมน์ไม่จำเป็นต้องมี margin-bottom อีก */
+.form-fields-column .form-group {
+    margin-bottom: 0;
+}
+/* =============================================== */
+/* == Definitive Styles for Agent Editor Modal  == */
+/* =============================================== */
+
+/* --- Main Modal Box Sizing & Flex Layout --- */
+#agent-editor-modal .modal-box {
+    width: 90vw;
+    max-width: 1000px;
+    height: 85vh;
+    min-height: 650px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* --- Modal Sections (Header, Body, Actions) --- */
+#agent-editor-modal .modal-header {
+    flex-shrink: 0;
+    padding: 0px 25px 15px 25px;
+    border-bottom: 1px solid var(--border-color);
+}
+#agent-editor-modal .modal-header h3 {
+    margin: 0;
+}
+
+#agent-editor-modal .modal-body {
+    flex-grow: 1; /* 2. Body: ขยายตัวให้เต็มพื้นที่ที่เหลือ */
+    min-height: 0; /* สำคัญมาก! ทำให้ scrolling ใน children ทำงานถูกต้อง */
+    display: flex;
+    flex-direction: column;
+}
+
+#agent-editor-modal .modal-actions {
+    flex-shrink: 0;
+    margin-top: auto;
+    padding: 15px 25px 5px 25px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* --- Tab Navigation --- */
+#agent-editor-modal .tab-buttons {
+    display: flex;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#agent-editor-modal .tab-btn {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #64748b;
+    transition: all 0.2s ease;
+}
+
+#agent-editor-modal .tab-btn:hover {
+    background-color: #f8fafc;
+}
+
+#agent-editor-modal .tab-btn.active {
+    border-bottom-color: var(--accent-color);
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+/* --- Tab Content --- */
+#agent-editor-modal .tab-content-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 25px;
+}
+
+#agent-editor-modal .tab-content {
+    display: none;
+}
+#agent-editor-modal .tab-content.active {
+    display: flex;
+    flex-direction: column;
+    gap: 20px; /* Increased gap for better spacing */
+}
+
+/* --- Agent Details Tab Layout --- */
+#agent-editor-modal .details-grid {
+    margin-top: 0px;
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 25px;
+    align-items: start;
+}
+
+#agent-editor-modal .profile-picture-column {
+    display: flex;
+    flex-direction: column; /* <-- [KEY] บังคับให้เรียงแนวตั้ง */
+    justify-content: center;
+    padding-top: 5px; /* Add some space from the top */
+    gap: 10px;              /* เพิ่มระยะห่างระหว่างรูปกับ metadata */
+
+}
+
+#agent-editor-modal .profile-picture-wrapper {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: var(--border-color);
+}
+
+#agent-editor-modal #agent-profile-picture-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#agent-editor-modal .profile-picture-wrapper .upload-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+#agent-editor-modal .profile-picture-wrapper:hover .upload-overlay {
+    opacity: 1;
+}
+
+#agent-editor-modal .form-fields-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#agent-editor-modal .form-fields-column .form-group {
+    margin-bottom: 0;
+}
+
+/* --- System & Model Tab Layout --- */
+#agent-editor-modal .system-tab-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+    align-items: start;
+}
+
+/* สีของ Tab ที่ไม่ Active */
+body.dark-mode #agent-editor-modal .tab-btn {
+    color: #8c9bb6; 
+}
+/* สีตอนเอาเมาส์ไปวาง (Hover) */
+body.dark-mode #agent-editor-modal .tab-btn:hover {
+    background-color: #3e4c5f;
+    color: #e2e8f0;
+}
+
+
+=============================================== */
+/* == Modal Consistency Unification Styles      == */
+/* =============================================== */
+
+/* --- 1. Unify Form Label Style --- */
+/* ทำให้ Label ในทุก Modal มีหน้าตาเหมือนกัน */
+.modal-box .form-group > label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600; /* ทำให้ตัวหนาขึ้นเล็กน้อย */
+    font-size: 0.9rem;
+    color: #4a5568;
+}
+
+body.dark-mode .modal-box .form-group > label {
+    color: #cbd5e0;
+}
+
+/* --- 2. Unify Input & Textarea Style --- */
+/* ทำให้ช่องกรอกข้อความในทุก Modal มีหน้าตาเหมือนกัน */
+.modal-box input[type="text"],
+.modal-box input[type="number"],
+.modal-box input[type="password"],
+.modal-box textarea {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+.modal-box input[type="text"]:focus,
+.modal-box input[type="number"]:focus,
+.modal-box input[type="password"]:focus,
+.modal-box textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--shadow-light);
+    background-color: #fff;
+}
+
+body.dark-mode .modal-box input[type="text"],
+body.dark-mode .modal-box input[type="number"],
+body.dark-mode .modal-box input[type="password"],
+body.dark-mode .modal-box textarea {
+    background-color: #2d3748;
+    border-color: #4a5568;
+    color: var(--text-dark);
+}
+body.dark-mode .modal-box input[type="text"]:focus,
+body.dark-mode .modal-box input[type="number"]:focus,
+body.dark-mode .modal-box input[type="password"]:focus,
+body.dark-mode .modal-box textarea:focus {
+    background-color: #1e293b;
+    border-color: var(--accent-color);
+}
+
+
+/* --- 3. Unify Tab Bar Dark Mode Style --- */
+/* ทำให้ Active Tab ใน Dark Mode ของทุก Modal มีสไตล์เดียวกัน */
+body.dark-mode .modal-box .tab-btn.active {
+    color: #ffffff;
+    background-color: #374151; /* สีพื้นหลัง Active ที่ดูสบายตา */
+    border-bottom-color: transparent;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+body.dark-mode .modal-box .tab-btn {
+    color: #94a3b8; /* สีตัวอักษรของ Tab ที่ไม่ Active */
+}
+
+body.dark-mode .modal-box .tab-btn:hover {
+    background-color: #4a5568;
+    color: #e2e8f0;
+}
+
+/* --- Emoji Picker Styles --- */
+.emoji-picker-wrapper {
+    position: relative;
+    width: fit-content;
+}
+
+.emoji-picker-button {
+    font-size: 2rem;
+    padding: 5px;
+    padding-left: 25px;
+    width: 50px;
+    height: 50px;
+    background-color: transparent; /* เปลี่ยนพื้นหลังให้โปร่งใส */
+    cursor: pointer;
+    line-height: 1;
+    border: none; /* เพิ่มบรรทัดนี้เพื่อให้แน่ใจว่าไม่มี border */
+}
+
+emoji-picker {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 2500; /* ให้อยู่เหนือ Modal อื่นๆ */
+    margin-top: 5px;
+}
+
+emoji-picker.hidden {
+    display: none;
+}
+
+/* --- Styles for Inline Icon and ID Row --- */
+.icon-id-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 20px;
+    align-items: baseline; /* [FIX] เปลี่ยนเป็น baseline */
+}
+
+.icon-id-row .form-group {
+    margin-bottom: 0; /* ลบ margin เดิมของ form-group */
+}
+
+
+/* .param-wrapper */
+.param-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #f6f8fc;  /* light blue-gray */
+  border-radius: 7px;
+  border: 1px solid #e1e7ef;
+  min-height: 36px;
+  box-sizing: border-box;
+  gap: 0.5rem;
+}
+
+/* แถว label+input+value (row เดียว) */
+.param-name {
+  color: #1c2537;
+  font-size: 0.98em;
+  font-weight: 500;
+  margin-right: 10px;
+  min-width: 120px;
+  flex: 1 1 auto;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* input, slider */
+.param-control {
+  display: flex;
+  align-items: center;
+  flex: 0 1 150px;
+  gap: 8px;
+}
+.param-control input[type="range"] {
+  width: 90px;
+  accent-color: #458fff;
+  background: transparent;
+  margin: 0;
+  height: 3px;
+}
+.param-control input[type="number"], 
+.param-control input[type="text"] {
+  width: 48px;
+  border: 1px solid #e1e7ef;
+  border-radius: 5px;
+  background: #fff;
+  color: #273052;
+  padding: 2px 6px;
+  font-size: 0.98em;
+}
+
+/* ปุ่ม reset */
+.param-reset-btn {
+  margin-left: 8px;
+  background: #e6ebf7;
+  color: #5073d7;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 0.93em;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.param-reset-btn:hover { background: #d4e1ff; color: #1946c6; }
+
+/* ค่า Default/Custom อยู่ขวาสุด */
+.param-value {
+  margin-left: 10px;
+  color: #9da8c7;
+  font-size: 0.98em;
+  min-width: 64px;
+  text-align: right;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.param-value.custom { color: #52b38a; font-weight: 600; }
+
+@media (max-width: 640px) {
+  .param-wrapper { flex-direction: column; align-items: stretch; min-height: unset; }
+  .param-value { text-align: left; margin-left: 0; margin-top: 4px;}
+}
+
+body.dark-mode .param-wrapper {
+  background: #232a37;
+  border-color: #273e52;
+}
+body.dark-mode .param-name, 
+body.dark-mode .param-control input, 
+body.dark-mode .param-value {
+  color: #e6eaff;
+}
+body.dark-mode .param-value.custom { color: #4adfb0; }
+body.dark-mode .param-reset-btn { background: #2c3a5a; color: #b5cfff; }
+body.dark-mode .param-reset-btn:hover { background: #324a74; color: #ffffff; }
+
+/* --- Agent Metadata Styles (Under Profile Picture) --- */
+.agent-metadata {
+    margin-top: 15px;
+    font-size: 0.75rem; /* 12px */
+    color: #94a3b8;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.metadata-item {
+    /* ลบ display: flex ออก เพื่อให้ element ข้างในเรียงตามแนวตั้ง */
+    margin-bottom: 8px; /* เพิ่มระยะห่างระหว่างแต่ละรายการ */
+}
+
+.metadata-item .label {
+    display: block; /* ทำให้ label เป็น block element */
+    margin-bottom: 3px; /* เพิ่มระยะห่างเล็กน้อยระหว่าง label กับค่า */
+    font-weight: 600; /* ทำให้ label หนาขึ้นเล็กน้อย */
+}
+/* ทำให้ช่อง input ของ Created by กลมกลืน */
+.metadata-input {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #cbd5e0;
+    text-align: right;
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    width: 100px; /* จำกัดความกว้าง */
+    transition: all 0.2s ease;
+}
+
+.metadata-input:hover,
+.metadata-input:focus {
+    border-color: var(--border-color);
+    background: #374151;
+}
+
+/* ใช้ Selector ที่เฉพาะเจาะจงมากขึ้น */
+#agent-editor-modal .agent-metadata {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* บังคับให้ทุกอย่างที่อยู่ข้างในมีขนาด font ที่ต้องการ */
+#agent-editor-modal .agent-metadata,
+#agent-editor-modal .agent-metadata .label,
+#agent-editor-modal .agent-metadata span,
+#agent-editor-modal .agent-metadata input {
+    font-size: 0.75rem !important; /* 12px, ใช้ !important เพื่อความแน่นอน */
+    color: #94a3b8;
+}
+
+#agent-editor-modal .metadata-input {
+    width: 100%; /* ทำให้ input กว้างเต็มคอลัมน์ */
+    text-align: left; /* จัดชิดซ้าย */
+}
+
+/* --- Studio Toolbar Styles --- */
+.studio-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* ลด gap */
+    padding: 8px 15px; /* ลด padding บนล่าง และซ้ายขวา */
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color-secondary);
+    flex-shrink: 0;
+    font-size: 0.7rem; /* ลดขนาด font */
+}
+
+.search-wrapper {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    background: var(--bg-color);
+    border-radius: 6px; /* ลดความมน */
+    padding: 0 6px; /* ลด padding */
+    border: 1px solid var(--border-color);
+    height: 28px; /* กำหนดความสูงให้แคบลง */
+}
+.search-wrapper .material-symbols-outlined {
+    color: #94a3b8;
+    font-size: 1rem; /* ลดขนาด icon */
+}
+#asset-search-input {
+    border: none;
+    background: transparent;
+    padding: 6px; /* ลด padding */
+    width: 100%;
+    font-size: 0.75rem; /* ลดขนาด font */
+}
+#asset-search-input:focus {
+    box-shadow: none;
+}
+
+.sort-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 3px; /* ลด gap */
+    font-size: 0.7rem; /* ลดขนาด font */
+    color: #64748b;
+}
+#asset-sort-select {
+    padding: 3px 6px; /* ลด padding */
+    font-size: 0.7rem; /* ลดขนาด font */
+    border-radius: 4px; /* ลดความมน */
+    height: 28px; /* กำหนดความสูง */
+}
+
+.studio-toolbar .dropdown .btn-icon {
+    height: 28px; /* กำหนดความสูง */
+    width: 28px; /* กำหนดความกว้าง */
+    line-height: 28px; /* จัด icon ให้อยู่ตรงกลางแนวตั้ง */
+    font-size: 1rem; /* ลดขนาด icon */
+}
+
+/* --- Model Not Found Warning Banner --- */
+.banner-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background-color: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    color: #b45309;
+    font-size: 0.9rem;
+}
+.banner-warning.hidden {
+    display: none;
+}
+body.dark-mode .banner-warning {
+    background-color: #422006;
+    border-color: #b45309;
+    color: #fcd34d;
+}
+
+/* Highlight for the model selector when there's a warning */
+.searchable-select-wrapper.has-warning input[type="text"] {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+/* =============================================== */
+/* == Dark Mode for Studio Toolbar              == */
+/* =============================================== */
+
+body.dark-mode .studio-toolbar {
+    background-color: #1e293b; /* สีเดียวกับพื้นหลัง Studio */
+    border-bottom-color: #374151;
+}
+
+body.dark-mode .search-wrapper {
+    background-color: #2d3748; /* สีเดียวกับ input อื่นๆ */
+    border-color: #4a5568;
+}
+
+body.dark-mode #asset-search-input::placeholder {
+    color: #94a3b8;
+}
+
+body.dark-mode .sort-wrapper {
+    color: #cbd5e0;
+}
+
+body.dark-mode #asset-sort-select {
+    background-color: #2d3748;
+    border-color: #4a5568;
+    color: var(--text-dark);
 }

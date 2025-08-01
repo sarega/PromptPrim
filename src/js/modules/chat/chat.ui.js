@@ -7,7 +7,9 @@ import { stateManager } from '../../core/core.state.js';
 import { estimateTokens, getContextData }  from '../../modules/chat/chat.handlers.js'; // <--- แก้ไขบรรทัดนี้
 import { debounce } from '../../core/core.utils.js'; 
 import { getFullSystemPrompt } from '../../core/core.api.js';
-
+import * as UserService from '../user/user.service.js'; // <-- Add this import
+import * as ChatHandlers from './chat.handlers.js';
+import { updateAppStatus } from '../../core/core.ui.js';
 
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
@@ -84,7 +86,6 @@ function lazyRenderContent(textContent, targetContainer) {
     renderNextChunk();
 }
 
-
 function formatRelativeTimestamp(timestamp) {
     if (!timestamp) return '';
     const now = new Date();
@@ -100,7 +101,6 @@ function formatRelativeTimestamp(timestamp) {
         return messageDate.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 }
-
 
 function addCopyToCodeBlocks(contentElement) {
   const codeBlocks = contentElement.querySelectorAll('pre');
@@ -122,7 +122,6 @@ function addCopyToCodeBlocks(contentElement) {
     preElement.appendChild(button);
   });
 }
-
 
 function createMessageElement(message, index, session) {
     const { role, content, speaker, isLoading, isError, isSummary } = message;
@@ -257,7 +256,20 @@ function createMessageElement(message, index, session) {
             }
         }
         
-        if (!isLoading && !isError) {
+        if (isLoading || isError) {
+            const actions = document.createElement('div');
+            actions.className = 'message-actions';
+            const iconStyle = 'style="font-size: 18px;"';
+            
+            const btnDelete = document.createElement('button');
+            btnDelete.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>delete_forever</span>`;
+            btnDelete.title = 'Delete Incomplete Message';
+            btnDelete.onclick = (event) => stateManager.bus.publish('chat:deleteMessage', { index, event });
+            
+            actions.appendChild(btnDelete);
+            msgDiv.appendChild(actions);
+        } else if (!isLoading && !isError) {
+            // This is the original logic for complete messages, which is correct.
             const actions = document.createElement('div');
             actions.className = 'message-actions';
             const iconStyle = 'style="font-size: 18px;"';
@@ -266,7 +278,6 @@ function createMessageElement(message, index, session) {
             btnEdit.title = 'Edit';
             btnEdit.onclick = (event) => stateManager.bus.publish('chat:editMessage', { index, event });
             actions.appendChild(btnEdit);
-            // [FIX] สร้างปุ่ม Copy สำหรับทุก Role ที่ไม่ใช่ System Message
             const btnCopy = document.createElement('button');
             btnCopy.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>content_copy</span>`;
             btnCopy.title = 'Copy';
@@ -491,12 +502,6 @@ export function renderFilePreviews(files) {
     });
 }
 
-export function updateContextInspector() {
-    const { totalTokens, agent, agentNameForDisplay } = getContextData();
-    document.getElementById('active-agent-status').textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
-    document.getElementById('token-count-status').textContent = `~${totalTokens.toLocaleString()} Tokens`;
-}
-
 export function showContextInspector() {
     const { finalSystemPrompt, totalTokens, agentNameForDisplay, model } = getContextData();
     document.getElementById('inspector-agent-name').textContent = agentNameForDisplay;
@@ -618,6 +623,98 @@ export async function proceedWithStreaming(streamingSpan) {
     }
 }
 
+function renderSummaryBubble(summaryText, targetContainer) {
+    const chunks = summaryText.split(/\n{2,}/);
+    let chunkIndex = 0;
+    
+    targetContainer.innerHTML = '';
+
+    function renderNextChunk() {
+        if (chunkIndex >= chunks.length) {
+            scrollToBottom(); // <-- [FIX] แก้ไขการเรียกใช้ให้ถูกต้อง
+            return;
+        }
+
+        const p = document.createElement('div');
+        p.innerHTML = marked.parse(chunks[chunkIndex], { gfm: true, breaks: false });
+        targetContainer.appendChild(p);
+        scrollToBottom(); // <-- [FIX] แก้ไขการเรียกใช้ให้ถูกต้อง
+        chunkIndex++;
+        requestAnimationFrame(renderNextChunk);
+    }
+
+    renderNextChunk();
+}
+
+function updateStatusMetrics() {
+    const { totalTokens, agent, agentNameForDisplay } = getContextData();
+    const allowedModels = UserService.getAllowedModelsForCurrentUser();
+
+    const modelStatusSpan = document.getElementById('model-count-status');
+    const agentStatusSpan = document.getElementById('active-agent-status');
+    const tokenStatusSpan = document.getElementById('token-count-status');
+
+    if (modelStatusSpan) modelStatusSpan.textContent = `${allowedModels.length} Models`;
+    if (agentStatusSpan) agentStatusSpan.textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
+    if (tokenStatusSpan) tokenStatusSpan.textContent = `~${totalTokens.toLocaleString()} Tokens`;
+}
+
+function initDragAndDrop() {
+    const dropzoneOverlay = document.getElementById('dropzone-overlay');
+    if (!dropzoneOverlay) return;
+
+    let dragCounter = 0; // ใช้นับเพื่อจัดการ dragleave ที่ซับซ้อน
+
+    // ทำให้หน้าต่างโปรแกรมทั้งหมดเป็นพื้นที่รับไฟล์
+    const dropTarget = window; 
+
+    const showDropzone = () => {
+        dropzoneOverlay.classList.add('active');
+    };
+    const hideDropzone = () => {
+        dropzoneOverlay.classList.remove('active');
+    };
+
+    dropTarget.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // แสดง Overlay เมื่อลากไฟล์เข้ามาในหน้าต่างครั้งแรก
+        if (dragCounter === 0) {
+            showDropzone();
+        }
+        dragCounter++;
+    });
+
+    dropTarget.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // สำคัญมาก: ป้องกันไม่ให้เบราว์เซอร์เปิดไฟล์เอง
+    });
+
+    dropTarget.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+        // ซ่อน Overlay เมื่อลากไฟล์ออกจากหน้าต่างโปรแกรม
+        if (dragCounter === 0) {
+            hideDropzone();
+        }
+    });
+
+    dropTarget.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // รีเซ็ตและซ่อน Overlay ทันที
+        dragCounter = 0;
+        hideDropzone();
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            // ส่ง event พร้อมกับ FileList ไปให้ handler จัดการ
+            stateManager.bus.publish('chat:filesSelected', files);
+        }
+    });
+}
 
 // --- Main UI Initialization ---
 export function initChatUI() {
@@ -632,13 +729,24 @@ export function initChatUI() {
                 stateManager.bus.publish('chat:sendMessage');
             }
         });
+        
         const debouncedUpdate = debounce(() => {
             chatInput.style.height = 'auto';
             chatInput.style.height = (chatInput.scrollHeight) + 'px';
-            updateContextInspector();
+            // This call will now work correctly because of the import above.
+            updateAppStatus(); 
         }, 500);
         chatInput.addEventListener('input', debouncedUpdate);
     }
+            // หน้าที่ของมันคือการ "ยกเลิก" พฤติกรรมพื้นฐานของเบราว์เซอร์เท่านั้น
+        chatInput.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        chatInput.addEventListener('drop', (e) => {
+            e.preventDefault(); 
+            // เราไม่ต้องเขียน Logic รับไฟล์ที่นี่ เพราะ Listener หลักที่ window จะจัดการต่อเอง
+        });
+
 
     document.getElementById('sendBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:sendMessage'));
     document.getElementById('stopBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:stopGeneration'));
@@ -647,7 +755,8 @@ export function initChatUI() {
     
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
-            stateManager.bus.publish('chat:fileUpload', e);
+            // ส่ง event ใหม่พร้อมกับ FileList
+            stateManager.bus.publish('chat:filesSelected', e.target.files);
         });
     }
 
@@ -662,8 +771,15 @@ export function initChatUI() {
     
     initChatActionMenu();
 
-    stateManager.bus.subscribe('session:loaded', () => updateContextInspector());
-    stateManager.bus.subscribe('entity:selected', () => updateContextInspector());
+    // // [REVISED] Subscribe events to the new, comprehensive update function
+    stateManager.bus.subscribe('session:loaded', updateStatusMetrics);
+    stateManager.bus.subscribe('entity:selected', updateStatusMetrics);
+    stateManager.bus.subscribe('user:settingsUpdated', updateStatusMetrics);
+    stateManager.bus.subscribe('user:modelsLoaded', updateStatusMetrics);
+
+    // Initial call to set the metrics correctly on page load.
+    updateStatusMetrics();
+
     stateManager.bus.subscribe('ui:renderMessages', renderMessages);
     stateManager.bus.subscribe('ui:renderFilePreviews', ({ files }) => renderFilePreviews(files));
     stateManager.bus.subscribe('ui:updateChatTitle', ({ title }) => updateChatTitle(title));
@@ -671,6 +787,7 @@ export function initChatUI() {
         document.getElementById('sendBtn')?.classList.toggle('hidden', isLoading);
         document.getElementById('stopBtn')?.classList.toggle('hidden', !isLoading);
     });
+    initDragAndDrop();
 
     console.log("✅ Chat UI Initialized.");
 }
@@ -713,27 +830,3 @@ export function initRightSidebarToggle() {
         }
     });
 }
-
-function renderSummaryBubble(summaryText, targetContainer) {
-    const chunks = summaryText.split(/\n{2,}/);
-    let chunkIndex = 0;
-    
-    targetContainer.innerHTML = '';
-
-    function renderNextChunk() {
-        if (chunkIndex >= chunks.length) {
-            scrollToBottom(); // <-- [FIX] แก้ไขการเรียกใช้ให้ถูกต้อง
-            return;
-        }
-
-        const p = document.createElement('div');
-        p.innerHTML = marked.parse(chunks[chunkIndex], { gfm: true, breaks: false });
-        targetContainer.appendChild(p);
-        scrollToBottom(); // <-- [FIX] แก้ไขการเรียกใช้ให้ถูกต้อง
-        chunkIndex++;
-        requestAnimationFrame(renderNextChunk);
-    }
-
-    renderNextChunk();
-}
-

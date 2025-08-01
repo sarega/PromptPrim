@@ -1,0 +1,55 @@
+/* file: src/styles/components/_user-profile.css */
+.user-plan {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.user-plan.status-master {
+    color: #8b5cf6;
+    background-color: #f5f3ff;
+}
+
+.user-plan.status-active {
+    color: #166534;
+    background-color: #dcfce7;
+}
+
+.user-plan.status-grace {
+    color: #854d0e;
+    background-color: #fef9c3;
+}
+
+.user-plan.status-free {
+    color: #0c4a6e;
+    background-color: #e0f2fe;
+}
+
+.user-plan.status-blocked {
+    color: #991b1b;
+    background-color: #fee2e2;
+}
+
+/* Dark Mode Adjustments */
+body.dark-mode .user-plan.status-master {
+    color: #c4b5fd;
+    background-color: #3730a3;
+}
+body.dark-mode .user-plan.status-active {
+    color: #a7f3d0;
+    background-color: #14532d;
+}
+body.dark-mode .user-plan.status-grace {
+    color: #fde68a;
+    background-color: #78350f;
+}
+body.dark-mode .user-plan.status-free {
+    color: #bae6fd;
+    background-color: #1e40af;
+}
+body.dark-mode .user-plan.status-blocked {
+    color: #fca5a5;
+    background-color: #7f1d1d;
+}

@@ -29,6 +29,7 @@
     --primary-color-dark: #c5caee; /* <--- เพิ่มบรรทัดนี้ (สีเข้มกว่า --primary-color) */
     --btn-primary-bg: var(--primary-color);
     --btn-primary-border: var(--primary-color-dark);
+    --bg-admin-page: #f1f5f9; /* สีพื้นหลังสำหรับหน้า Admin (Light) */
 
     /* background: #c9dbff;  */
 }

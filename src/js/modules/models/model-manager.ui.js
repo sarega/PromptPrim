@@ -5,9 +5,75 @@ import * as ModelManagerHandlers from './model-manager.handlers.js';
 import * as UserService from '../user/user.service.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 
-
 let selectedModelIdSet = new Set();
 let lastCheckedIndex = -1;
+
+export function getFilteredModelsForDisplay() {
+    const allModels = stateManager.getState().allProviderModels || [];
+    const user = UserService.getCurrentUserProfile();
+    if (!user) return [];
+
+    // On the admin page, always show all models.
+    if (document.body.classList.contains('admin-page')) {
+        return allModels;
+    }
+
+    // --- [DEBUGGING STEP] ---
+    // We are temporarily disabling the plan-based filtering.
+    // Any user that is not blocked will see ALL available models.
+    
+    // Check if user is blocked or expired.
+    const isBlocked = (user.plan === 'free' && user.credits.current <= 0) || 
+                      (user.plan === 'pro' && user.planStatus === 'expired');
+
+    if (isBlocked) {
+        // Blocked users see an empty list.
+        return [];
+    } else {
+        // For debugging, all other users (Free, Pro, Master) see the full list.
+        return allModels;
+    }
+}
+
+function renderUserAllowedModelList() {
+    const container = document.getElementById('model-master-list');
+    const searchInput = document.getElementById('model-search-input');
+    const filterToggle = document.getElementById('filter-selected-toggle');
+    if (!container || !searchInput || !filterToggle) return;
+
+    let modelsToRender = UserService.getAllowedModelsForCurrentUser();
+
+    const searchTerm = searchInput.value.toLowerCase();
+    const showSelectedOnly = filterToggle.checked;
+    
+    if (showSelectedOnly) {
+        modelsToRender = modelsToRender.filter(m => selectedModelIdSet.has(m.id));
+    }
+    if (searchTerm) {
+        modelsToRender = modelsToRender.filter(m => 
+            m.name.toLowerCase().includes(searchTerm) || 
+            m.id.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    container.innerHTML = '';
+    modelsToRender.forEach((model, index) => {
+        const isChecked = selectedModelIdSet.has(model.id);
+        const item = document.createElement('div');
+        item.className = 'model-manager-item';
+        item.innerHTML = `
+            <input type="checkbox" id="user-model-cb-${model.id}" data-model-id="${model.id}" ${isChecked ? 'checked' : ''}>
+            <label for="user-model-cb-${model.id}">
+                ${model.name} &nbsp;•&nbsp; <small>${model.id}</small>
+            </label>
+            <button class="btn-icon model-info-btn" data-model-id="${model.id}" title="Model Info">
+                <span class="material-symbols-outlined">info</span>
+            </button>
+        `;
+        container.appendChild(item);
+    });
+}
+
 
 function updateInfoBar(model = null) {
     const infoBar = document.getElementById('model-info-bar');
@@ -19,197 +85,194 @@ function updateInfoBar(model = null) {
     document.getElementById('info-bar-name').textContent = model.name;
     document.getElementById('info-bar-description').textContent = model.description || 'No description available.';
     document.getElementById('info-bar-context').textContent = `${(model.context_length || 0).toLocaleString()} tokens`;
-    document.getElementById('info-bar-prompt-price').textContent = `$${model.pricing?.prompt || 'N/A'} / 1M`;
-    document.getElementById('info-bar-completion-price').textContent = `$${model.pricing?.completion || 'N/A'} / 1M`;
+    
+    // [THE FIX] Comment out the following two lines to hide the pricing information
+    // document.getElementById('info-bar-prompt-price').textContent = `$${model.pricing?.prompt || 'N/A'} / 1M`;
+    // document.getElementById('info-bar-completion-price').textContent = `$${model.pricing?.completion || 'N/A'} / 1M`;
+    
+    // Optional: Hide the parent elements as well if they are still visible
+    const promptPriceEl = document.getElementById('info-bar-prompt-price');
+    const completionPriceEl = document.getElementById('info-bar-completion-price');
+    if (promptPriceEl) promptPriceEl.closest('span').style.display = 'none';
+    if (completionPriceEl) completionPriceEl.closest('span').style.display = 'none';
+
     infoBar.classList.remove('hidden');
 }
 
-// [REVISED] to show a count of included models
 function renderIncludedList() {
     const includedContainer = document.getElementById('preset-included-list');
     if (!includedContainer) return;
-    const allModels = stateManager.getState().allProviderModels || [];
+    
+    const allAllowedModels = UserService.getAllowedModelsForCurrentUser();
     includedContainer.innerHTML = '';
 
-    if (selectedModelIdSet.size === 0) {
-        includedContainer.innerHTML = `<p class="no-items-message">Select models from the list on the left.</p>`;
-        return;
-    }
     const countHeader = document.createElement('div');
     countHeader.className = 'included-models-count';
     countHeader.textContent = `Included: ${selectedModelIdSet.size} models`;
     includedContainer.appendChild(countHeader);
 
-    allModels.forEach(model => {
+    if (selectedModelIdSet.size === 0) {
+        includedContainer.innerHTML += `<p class="no-items-message">Select models from the list.</p>`;
+        return;
+    }
+
+    allAllowedModels.forEach(model => {
         if (selectedModelIdSet.has(model.id)) {
-            const item = document.createElement('div');
-            item.className = 'model-manager-item';
-            item.innerHTML = `<label>${model.name}<small>${model.id}</small></label>`;
-            includedContainer.appendChild(item);
+             const item = document.createElement('div');
+             item.className = 'model-manager-item';
+             item.innerHTML = `<label>${model.name} &nbsp;•&nbsp; <small>${model.id}</small></label>`;
+             includedContainer.appendChild(item);
         }
     });
 }
+
 function renderMasterList() {
     const container = document.getElementById('model-master-list');
     const searchInput = document.getElementById('model-search-input');
     const filterToggle = document.getElementById('filter-selected-toggle');
     if (!container || !searchInput || !filterToggle) return;
 
-    const allModels = stateManager.getState().allProviderModels || [];
+    // [REVISED] Use the new filtering function to get the base list of models
+    let modelsToRender = getFilteredModelsForDisplay();
+
     const searchTerm = searchInput.value.toLowerCase();
     const showSelectedOnly = filterToggle.checked;
     container.innerHTML = '';
 
-    let modelsToRender = allModels;
     if (showSelectedOnly) {
-        modelsToRender = allModels.filter(m => selectedModelIdSet.has(m.id));
+        modelsToRender = modelsToRender.filter(m => selectedModelIdSet.has(m.id));
     }
-    const filteredBySearch = modelsToRender.filter(m => 
-        m.name.toLowerCase().includes(searchTerm) || 
+
+    const filteredBySearch = modelsToRender.filter(m =>
+        m.name.toLowerCase().includes(searchTerm) ||
         m.id.toLowerCase().includes(searchTerm)
     );
 
-    filteredBySearch.forEach(model => {
+    filteredBySearch.forEach((model, index) => {
         const isChecked = selectedModelIdSet.has(model.id);
         const item = document.createElement('div');
         item.className = 'model-manager-item';
-
-        // [FIX] เพิ่มปุ่ม (i) เข้าไปในโครงสร้าง HTML
         item.innerHTML = `
-            <input type="checkbox" id="model-cb-${model.id}" data-model-id="${model.id}" ${isChecked ? 'checked' : ''}>
+            <input type="checkbox" id="model-cb-${model.id}" data-model-id="${model.id}" data-index="${index}" ${isChecked ? 'checked' : ''}>
             <label for="model-cb-${model.id}">
                 ${model.name}
                 <small>${model.id}</small>
             </label>
-            <button type="button" class="btn-icon model-info-btn" data-model-id="${model.id}" title="View model details">
-                <span class="material-symbols-outlined">info</span>
-            </button>
         `;
         container.appendChild(item);
     });
-
     renderIncludedList();
 }
+
 export function renderModelManager() {
     const presetSelector = document.getElementById('preset-selector');
     const presetNameInput = document.getElementById('preset-name-input');
-    const deleteBtn = document.getElementById('delete-preset-btn');
-    const filterToggle = document.getElementById('filter-selected-toggle');
-    if (!presetSelector || !presetNameInput || !deleteBtn || !filterToggle) return;
+    if (!presetSelector || !presetNameInput) return;
 
-    // [FIX] "จำ" ค่าที่ถูกเลือกไว้ในปัจจุบันก่อนที่จะล้าง Dropdown
+    const userPresets = UserService.getUserModelPresets();
     const previouslySelectedKey = presetSelector.value;
-
-    const presets = UserService.getModelPresets();
     
-    // ล้างและสร้างรายการ Preset ใหม่
     presetSelector.innerHTML = '<option value="--new--">-- Create New Preset --</option>';
-    for (const key in presets) {
-        presetSelector.add(new Option(presets[key].name, key));
+    for (const key in userPresets) {
+        presetSelector.add(new Option(userPresets[key].name, key));
     }
-    
-    // นำค่าที่ "จำ" ไว้กลับมาตั้งค่าใหม่
-    if (presetSelector.querySelector(`option[value="${previouslySelectedKey}"]`)) {
+
+    if (userPresets[previouslySelectedKey]) {
         presetSelector.value = previouslySelectedKey;
     }
 
     const selectedKey = presetSelector.value;
-
-    filterToggle.checked = false;
-
     if (selectedKey === '--new--') {
         presetNameInput.value = '';
-        deleteBtn.style.display = 'none';
         selectedModelIdSet.clear();
-    } else if (presets[selectedKey]) {
-        presetNameInput.value = presets[selectedKey].name;
-        deleteBtn.style.display = 'block';
-        selectedModelIdSet = new Set(presets[selectedKey].modelIds);
+    } else if (userPresets[selectedKey]) {
+        presetNameInput.value = userPresets[selectedKey].name;
+        selectedModelIdSet = new Set(userPresets[selectedKey].modelIds);
     }
-    
-    renderMasterList();
-    updateInfoBar(null);
+
+    renderUserAllowedModelList();
+    renderIncludedList();
+    updateInfoBar(null); // Hide info bar when changing presets
 }
+
 export function initModelManagerUI() {
-    const searchInput = document.getElementById('model-search-input');
-    const masterListContainer = document.getElementById('model-master-list');
+    // Get all interactive elements
+    const modelTabButton = document.querySelector('.tab-btn[data-tab="models"]');
     const presetSelector = document.getElementById('preset-selector');
-    const saveBtn = document.getElementById('save-preset-btn');
-    const deleteBtn = document.getElementById('delete-preset-btn');
+    const searchInput = document.getElementById('model-search-input');
+    const filterToggle = document.getElementById('filter-selected-toggle');
     const selectAllBtn = document.getElementById('select-all-btn');
     const deselectAllBtn = document.getElementById('deselect-all-btn');
-    const filterToggle = document.getElementById('filter-selected-toggle');
+    const savePresetBtn = document.getElementById('save-preset-btn');
+    const deletePresetBtn = document.getElementById('delete-preset-btn');
+    const modelListContainer = document.getElementById('model-master-list');
     const infoBarCloseBtn = document.getElementById('info-bar-close-btn');
-    const applyBtn = document.getElementById('apply-preset-btn');
 
-    // Listener สำหรับปุ่ม Apply Preset
-    applyBtn?.addEventListener('click', () => {
-        const selectedKey = presetSelector.value;
-        if (!selectedKey || selectedKey === '--new--') {
-            showCustomAlert("Please select a preset to apply.", "Info");
-            return;
-        }
-        
-        UserService.setActiveModelPreset(selectedKey);
-        showCustomAlert(`Preset "${presetSelector.options[presetSelector.selectedIndex].text}" is now active!`, "Success");
-        stateManager.bus.publish('app:settingsChanged');
-    });
+    // Attach main listeners
+    modelTabButton?.addEventListener('click', renderModelManager);
+    presetSelector?.addEventListener('change', renderModelManager);
+    searchInput?.addEventListener('input', renderUserAllowedModelList);
+    filterToggle?.addEventListener('change', renderUserAllowedModelList);
+    infoBarCloseBtn?.addEventListener('click', () => updateInfoBar(null));
 
-    // Listener สำหรับการคลิกใน Master List (จัดการทั้งการเลือกและการแสดง Info Bar)
-    masterListContainer?.addEventListener('click', (e) => {
-        const infoBtn = e.target.closest('.model-info-btn');
-        const checkbox = e.target.closest('input[type="checkbox"]');
-        
-        if (infoBtn) { // --- กรณีคลิกที่ปุ่ม (i) ---
-            e.stopPropagation();
-            const modelId = infoBtn.dataset.modelId;
-            const model = stateManager.getState().allProviderModels.find(m => m.id === modelId);
-            updateInfoBar(model);
-            return;
-        }
-
-        if (checkbox) { // --- กรณีคลิกที่ Checkbox (สำหรับ Shift+Click) ---
-            const checkboxes = Array.from(masterListContainer.querySelectorAll('input[type="checkbox"]'));
-            const currentIndex = checkboxes.indexOf(checkbox);
-            if (e.shiftKey && lastCheckedIndex > -1) {
-                // ... โค้ด Shift+Click เหมือนเดิม ...
+    // Button listeners
+    selectAllBtn?.addEventListener('click', () => {
+        modelListContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            if (!cb.checked) {
+                cb.checked = true;
+                selectedModelIdSet.add(cb.dataset.modelId);
             }
-            lastCheckedIndex = currentIndex;
-        }
+        });
+        renderIncludedList();
     });
     
-    // Listener สำหรับ 'change' event ยังคงใช้จัดการการเลือกตามปกติ
-    masterListContainer?.addEventListener('change', (e) => {
-        if (e.target.type === 'checkbox') {
-            const modelId = e.target.dataset.modelId;
-            if (e.target.checked) {
+    deselectAllBtn?.addEventListener('click', () => {
+        modelListContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            if (cb.checked) {
+                cb.checked = false;
+                selectedModelIdSet.delete(cb.dataset.modelId);
+            }
+        });
+        renderIncludedList();
+    });
+
+    savePresetBtn?.addEventListener('click', () => ModelManagerHandlers.saveUserModelPreset(selectedModelIdSet));
+    deletePresetBtn?.addEventListener('click', ModelManagerHandlers.deleteUserModelPreset);
+
+    // [FIX] Add back the event delegation for checkbox clicks and the info button
+    modelListContainer?.addEventListener('click', (e) => {
+        const checkbox = e.target.closest('input[type="checkbox"]');
+        const infoButton = e.target.closest('.model-info-btn');
+
+        if (checkbox) {
+            const modelId = checkbox.dataset.modelId;
+            if (checkbox.checked) {
                 selectedModelIdSet.add(modelId);
             } else {
                 selectedModelIdSet.delete(modelId);
             }
             renderIncludedList();
         }
+
+        if (infoButton) {
+            const modelId = infoButton.dataset.modelId;
+            const allModels = UserService.getAllowedModelsForCurrentUser();
+            const model = allModels.find(m => m.id === modelId);
+            if (model) {
+                updateInfoBar(model);
+            }
+        }
     });
-
-    // --- Other Listeners ---
-    searchInput?.addEventListener('input', renderMasterList);
-    filterToggle?.addEventListener('change', renderMasterList);
-    presetSelector?.addEventListener('change', renderModelManager);
-    saveBtn?.addEventListener('click', () => ModelManagerHandlers.saveModelPreset(selectedModelIdSet));
-    deleteBtn?.addEventListener('click', ModelManagerHandlers.deleteModelPreset);
-    infoBarCloseBtn?.addEventListener('click', () => updateInfoBar(null));
-    selectAllBtn?.addEventListener('click', () => { /* ... */ });
-    deselectAllBtn?.addEventListener('click', () => { /* ... */ });
-
-    const modelTabButton = document.querySelector('.tab-btn[data-tab="models"]');
-    modelTabButton?.addEventListener('click', renderModelManager);
-
-    stateManager.bus.subscribe('modelPresets:changed', renderModelManager);
+    
+    // Subscribe to events that should cause a re-render
+    stateManager.bus.subscribe('user:settingsUpdated', () => {
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal?.style.display === 'flex' && document.querySelector('.tab-btn[data-tab="models"]')?.classList.contains('active')) {
+             renderModelManager();
+        }
+    });
 }
-/**
- * [NEW] Populates a given <select> element with the available model presets.
- * @param {string} selectorId - The ID of the <select> element to populate.
- */
+
 export function populatePresetSelector(selectorId) {
     const selector = document.getElementById(selectorId);
     if (!selector) return;
@@ -220,20 +283,4 @@ export function populatePresetSelector(selectorId) {
     for (const key in presets) {
         selector.add(new Option(presets[key].name, key));
     }
-}
-
-/**
- * [NEW] Gets the list of models for a given preset key.
- * @param {string} presetKey - The key of the preset (e.g., 'top_models').
- * @returns {Array<object>} An array of full model objects.
- */
-export function getModelsForPreset(presetKey) {
-    if (!presetKey) return []; // ถ้าไม่ได้เลือก preset ให้คืนค่า array ว่าง
-
-    const allModels = stateManager.getState().allProviderModels || [];
-    const presets = UserService.getModelPresets();
-    const modelIds = presets[presetKey]?.modelIds || [];
-    const modelIdSet = new Set(modelIds);
-
-    return allModels.filter(model => modelIdSet.has(model.id));
 }

@@ -59,3 +59,31 @@
     background: var(--error-color);
     color: white;
 }
+
+.btn.is-loading {
+    position: relative;
+    color: transparent !important; /* Hide the button text */
+    pointer-events: none; /* Disable clicks while loading */
+}
+
+.btn.is-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px; /* Adjust spinner size */
+    height: 20px;
+    margin-top: -10px;
+    margin-left: -10px;
+    border: 3px solid rgba(127, 156, 245, 0.3);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Keyframes for the spinner animation */
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

@@ -4,7 +4,7 @@
 // ===============================================
 
 import { stateManager } from './core.state.js';
-import * as UserService from '../modules/user/user.service.js'; // <-- ตรวจสอบว่ามี import นี้
+import * as UserService from '../modules/user/user.service.js';
 import { estimateTokens } from '../modules/chat/chat.handlers.js';
 
 // import { recommendedModelIds } from './core.state.js';
@@ -88,65 +88,71 @@ async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
 }
 
 // --- Main Exported Functions ---
-// [REVISED & COMPLETE] src/js/core/core.api.js
+export async function loadAllProviderModels({ apiKey, isUserKey = false } = {}) {
+    if (!apiKey) {
+        console.warn("loadAllProviderModels called without an API key. Aborting.");
+        // For user keys, we can clear the list
+        if(isUserKey) stateManager.setUserModels([]);
+        return;
+    }
 
-export async function loadAllProviderModels() {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-
-    const apiKey = UserService.getApiKey();
-    const baseUrl = UserService.getOllamaUrl();
     
     let allModels = [];
     try {
-        const fetchPromises = [];
-        if (apiKey) {
-            fetchPromises.push(fetchOpenRouterModels(apiKey).catch(e => { console.error("OpenRouter fetch failed:", e); return []; }));
-        }
-        if (baseUrl) {
-            fetchPromises.push(fetchOllamaModels(baseUrl).catch(e => { console.error("Ollama fetch failed:", e); return []; }));
-        }
-        const results = await Promise.all(fetchPromises);
-        allModels = results.flat();
+        // We only support OpenRouter for this function now, Ollama is separate
+        allModels = await fetchOpenRouterModels(apiKey);
     } catch (error) {
         stateManager.bus.publish('status:update', { message: `Error loading models: ${error.message}`, state: 'error' });
-        return;
     }
     
-    // [FIX START] แก้ไข Logic การอัปเดต State
+    // [FIX] Save to the correct state based on the type of key used
+    if (isUserKey) {
+        stateManager.setUserModels(allModels);
+        console.log(`Loaded ${allModels.length} models for the User.`);
+    } else {
+        stateManager.setSystemModels(allModels);
+        console.log(`Loaded ${allModels.length} models for the System.`);
+    }
+}
+
+export async function loadAllSystemModels() {
+    stateManager.bus.publish('status:update', { message: 'Loading all system models...', state: 'loading' });
     
-    // 1. บันทึกรายชื่อ Model ทั้งหมดที่โหลดมาลง State ก่อน
-    stateManager.setAllModels(allModels);
+    const settings = UserService.getSystemApiSettings();
+    let allModels = [];
 
-    // 2. ดึงข้อมูลโปรเจกต์เวอร์ชันล่าสุด (ที่มี Model ทั้งหมดแล้ว) ออกมาทำงาน
-    const project = stateManager.getProject();
-    let projectWasChanged = false;
+    // 1. พยายามดึงโมเดลจาก OpenRouter
+    if (settings.openrouterKey) {
+        try {
+            console.log("Fetching models from OpenRouter...");
+            const openRouterModels = await fetchOpenRouterModels(settings.openrouterKey);
+            allModels.push(...openRouterModels);
+        } catch (error) {
+            console.error("Failed to fetch OpenRouter models:", error);
+            showCustomAlert("Could not fetch models from OpenRouter. Check your API key and connection.", "Warning");
+        }
+    }
 
-    if (allModels.length > 0 && project) {
-        const systemAgent = project.globalSettings.systemUtilityAgent;
-        const defaultAgent = project.agentPresets['Default Agent'];
-        
-        if (systemAgent && (!systemAgent.model || !allModels.some(m => m.id === systemAgent.model))) {
-            const preferredDefaults = ['google/gemma-3-27b-it', 'openai/gpt-4o-mini'];
-            const availableDefaultModel = preferredDefaults.find(pdm => allModels.some(am => am.id === pdm));
-            if (availableDefaultModel) {
-                systemAgent.model = availableDefaultModel;
-                if (defaultAgent) defaultAgent.model = availableDefaultModel;
-                projectWasChanged = true;
-            }
+    // 2. พยายามดึงโมเดลจาก Ollama
+    if (settings.ollamaBaseUrl) {
+        try {
+            console.log("Fetching models from Ollama...");
+            const ollamaModels = await fetchOllamaModels(settings.ollamaBaseUrl);
+            allModels.push(...ollamaModels);
+        } catch (error) {
+            console.error("Failed to fetch Ollama models:", error);
+            showCustomAlert("Could not connect to Ollama. Check the Base URL and ensure Ollama is running.", "Warning");
         }
     }
     
-    // 3. ถ้ามีการเปลี่ยนแปลง ให้บันทึกโปรเจกต์ที่อัปเดตแล้วกลับไป
-    if (projectWasChanged) {
-        stateManager.setProject(project);
-    }
+    // 3. บันทึกโมเดลทั้งหมดที่หาเจอเข้าสู่ State
+    stateManager.setSystemModels(allModels);
     
-    // 4. สร้างข้อความ Status จากข้อมูลใน State ที่ถูกต้องและสมบูรณ์แล้ว
-    const finalModelList = stateManager.getState().allProviderModels || [];
-    const statusMessage = finalModelList.length > 0 ? `Loaded ${finalModelList.length} models.` : 'No models found.';
-    stateManager.bus.publish('status:update', { message: statusMessage, state: 'connected' });
-    // [FIX END]
+    console.log(`Loaded a total of ${allModels.length} system models.`);
+    stateManager.bus.publish('status:update', { message: 'Models loaded', state: 'connected' });
 }
+
 export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
     if (!project) return "";
@@ -187,8 +193,9 @@ export function buildPayloadMessages(history, targetAgentName) {
     if (!agent) return [];
     
     // [FIX] ดึงข้อมูล modelData มาเพื่อตรวจสอบความสามารถ
+    const allowedModels = UserService.getAllowedModelsForCurrentUser();
     const allModels = stateManager.getState().allProviderModels;
-    const modelData = allModels.find(m => m.id === agent.model);
+    const modelData = allowedModels.find(m => m.id === agent.model);
     
     const messages = [];
     const finalSystemPrompt = getFullSystemPrompt(targetAgentName);
@@ -273,83 +280,79 @@ export async function generateAndRenameSession(history){
 
 function constructApiCall(agent, messages, stream = false) {
     const project = stateManager.getProject();
-    console.log("API call sees these globalSettings:", project.globalSettings);
+    
+    // [CRITICAL FIX] Check if this is a system-level call
+    const isSystemAgentCall = (agent === project.globalSettings.systemUtilityAgent);
 
-    const allModels = stateManager.getState().allProviderModels;
-    const modelData = allModels.find(m => m.id === agent.model);
-    if (!modelData) throw new Error(`Model data for agent.model ID '${agent.model}' not found.`);
+    // If it's a system call, use the full list of system models for the check.
+    // Otherwise, use the current user's allowed models.
+    const modelsToSearchFrom = isSystemAgentCall 
+        ? (stateManager.getState().systemProviderModels || [])
+        : UserService.getAllowedModelsForCurrentUser();
+
+    const modelData = modelsToSearchFrom.find(m => m.id === agent.model);
+    
+    if (!modelData) {
+        const reason = isSystemAgentCall ? "it might be missing from the system's model list" : "it's not allowed in your current plan";
+        throw new Error(`Model '${agent.model}' not found or not allowed because ${reason}.`);
+    }
 
     const provider = modelData.provider;
     let url, headers, body;
 
-    const commonParams = {
-        temperature: parseFloat(agent.temperature),
-        top_p: parseFloat(agent.topP),
-        top_k: parseInt(agent.topK, 10),
-        presence_penalty: parseFloat(agent.presence_penalty),
-        frequency_penalty: parseFloat(agent.frequency_penalty),
-        max_tokens: parseInt(agent.max_tokens, 10),
-        seed: parseInt(agent.seed, 10),
-        stop: agent.stop_sequences ? agent.stop_sequences.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-    };
+    const safeParams = {};
+    const temp = parseFloat(agent.temperature);
+    if (!isNaN(temp)) safeParams.temperature = temp;
+    const topP = parseFloat(agent.topP);
+    if (!isNaN(topP)) safeParams.top_p = topP;
+    const maxTokens = parseInt(agent.max_tokens, 10);
+    if (!isNaN(maxTokens) && maxTokens > 0) safeParams.max_tokens = maxTokens;
+
+    if (getCapability(modelData, 'top_k')) {
+        const topK = parseInt(agent.topK, 10);
+        if (!isNaN(topK) && topK > 0) safeParams.top_k = topK;
+    }
+    if (getCapability(modelData, 'penalties')) {
+        const presPenalty = parseFloat(agent.presence_penalty);
+        if (!isNaN(presPenalty)) safeParams.presence_penalty = presPenalty;
+        
+        const freqPenalty = parseFloat(agent.frequency_penalty);
+        if (!isNaN(freqPenalty)) safeParams.frequency_penalty = freqPenalty;
+    }
+    if (getCapability(modelData, 'seed')) {
+        const seed = parseInt(agent.seed, 10);
+        if (!isNaN(seed) && seed !== -1) safeParams.seed = seed;
+    }
+
+    const stopSequences = agent.stop_sequences ? agent.stop_sequences.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (stopSequences.length > 0) safeParams.stop = stopSequences;
 
     if (provider === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 
-            'Authorization': `Bearer ${UserService.getApiKey()}`, // <-- แก้ไข
+            'Authorization': `Bearer ${UserService.getApiKey()}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
             'X-Title': 'PromptPrim' 
         };
-
-        const safeParams = {
-            temperature: commonParams.temperature,
-            top_p: commonParams.top_p,
-            max_tokens: commonParams.max_tokens,
-        };
-
-        // [FIX] ส่ง modelData เข้าไปใน getCapability
-        if (getCapability(modelData, 'top_k') && commonParams.top_k > 0) {
-            safeParams.top_k = commonParams.top_k;
-        }
-        if (getCapability(modelData, 'penalties')) {
-            safeParams.presence_penalty = commonParams.presence_penalty;
-            safeParams.frequency_penalty = commonParams.frequency_penalty;
-        }
-        if (getCapability(modelData, 'seed') && commonParams.seed !== -1) {
-            safeParams.seed = commonParams.seed;
-        }
-        if (commonParams.stop) {
-            safeParams.stop = commonParams.stop;
-        }
-
         body = { model: agent.model, messages, stream, ...safeParams };
         
-        // [FIX] ส่ง modelData เข้าไปใน getCapability
-        if (getCapability(modelData, 'tools')) {
-            body.tools = [{ "type": "Google Search" }];
+        if (agent.enableWebSearch) {
+            if (agent.model.startsWith('perplexity/')) {
+            } else {
+                body.plugins = [{ id: "web", max_results: 5 }];
+            }
         }
-
-    } else { // ollama
-        url = `${UserService.getOllamaUrl()}/api/chat`; // <-- แก้ไข
-        headers = { 'Content-Type': 'application/json' };
         
-        const ollamaOptions = {
-            temperature: commonParams.temperature,
-            top_p: commonParams.top_p,
-            top_k: commonParams.top_k,
-            num_predict: commonParams.max_tokens,
-            seed: commonParams.seed,
-            stop: commonParams.stop,
-        };
-        Object.keys(ollamaOptions).forEach(key => (ollamaOptions[key] == null || Number.isNaN(ollamaOptions[key])) && delete ollamaOptions[key]);
-        body = { model: agent.model, messages, stream, options: ollamaOptions };
+    } else { // ollama
+        url = `${UserService.getOllamaUrl()}/api/chat`;
+        headers = { 'Content-Type': 'application/json' };
+        body = { model: agent.model, messages, stream, options: safeParams };
     }
 
     return { url, headers, body, provider };
 }
-
 
 // =========================================================================
 // == MAIN EXPORTED API FUNCTIONS (Unchanged, they use the new constructor)
@@ -402,17 +405,29 @@ export async function streamLLMResponse(agent, messages, onChunk) {
         const duration = (endTime - startTime) / 1000; // Duration in seconds
 
         let usage = { prompt_tokens: 0, completion_tokens: 0 };
-        if (provider === 'openrouter' && response.headers.has('x-openrouter-usage')) {
+        let cost = 0;
+        let usageIsEstimated = true; // Default to true
+
+        if (provider === 'openrouter' && response.headers.get('x-openrouter-usage')) {
             try {
-                usage = JSON.parse(response.headers.get('x-openrouter-usage'));
+                const parsedUsage = JSON.parse(response.headers.get('x-openrouter-usage'));
+                usage = {
+                    prompt_tokens: parsedUsage.prompt_tokens || 0,
+                    completion_tokens: parsedUsage.completion_tokens || 0
+                };
+                cost = parsedUsage.cost || 0;
+                usageIsEstimated = false; // It's an exact count from the header
             } catch(e) { console.error("Could not parse usage header:", e); }
-        } else {
+        }
+        
+        if (usageIsEstimated) {
             // Fallback for Ollama or if header is missing
             usage.prompt_tokens = estimateTokens(JSON.stringify(messages));
             usage.completion_tokens = estimateTokens(fullResponseText);
         }
         
-        return { content: fullResponseText, usage, duration };
+        // Return the new flag along with other data
+        return { content: fullResponseText, usage, duration, cost, usageIsEstimated };
 
     } catch (error) {
         if (error.name !== 'AbortError') {
@@ -424,9 +439,10 @@ export async function streamLLMResponse(agent, messages, onChunk) {
 }
 
 export async function callLLM(agent, messages) {
+    console.log("📡 [callLLM] received:", { agent, messages });
     const { url, headers, body, provider } = constructApiCall(agent, messages, false);
+
     try {
-        console.log('[API CALL]', { url, headers, body });
         const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
         if (!response.ok) { 
             const errorText = await response.text(); 
@@ -442,14 +458,57 @@ export async function callLLM(agent, messages) {
             throw new Error("Invalid API response structure.");
         }
 
-        // คืนค่าเป็น object ที่มีทั้ง content และ usage
-        return {
-            content: content,
-            usage: data.usage || { prompt_tokens: 0, completion_tokens: 0 }
-        };
+        // [FIX] Extract usage and cost from headers for consistency
+        let cost = 0;
+        let usage = data.usage || { prompt_tokens: 0, completion_tokens: 0 };
+        let usageIsEstimated = true; // Default to true
+
+        if (provider === 'openrouter' && response.headers.get('x-openrouter-usage')) {
+             try {
+                const parsedHeader = JSON.parse(response.headers.get('x-openrouter-usage'));
+                cost = parsedHeader.cost || 0;
+                usage.prompt_tokens = parsedHeader.prompt_tokens || usage.prompt_tokens;
+                usage.completion_tokens = parsedHeader.completion_tokens || usage.completion_tokens;
+                usageIsEstimated = false; // Exact count from header
+             } catch(e) { console.error("Could not parse usage header in callLLM:", e); }
+        }
+
+        // Return the new flag
+        return { content, usage, cost, usageIsEstimated };
 
     } catch (error) {
         console.error("callLLM failed:", error);
         throw error;
     }
+}
+
+/**
+ * [NEW] Calculates the cost of an API call based on token usage and model pricing.
+ * This is more reliable than reading the response header.
+ * @param {string} modelId The ID of the model used.
+ * @param {object} usage The usage object with { prompt_tokens, completion_tokens }.
+ * @returns {number} The calculated cost in USD.
+ */
+export function calculateCost(modelId, usage) {
+    // We check both system and user models to find the price data
+    const allKnownModels = [
+        ...(stateManager.getState().systemProviderModels || []),
+        ...(stateManager.getState().userProviderModels || [])
+    ];
+    
+    const modelData = allKnownModels.find(m => m.id === modelId);
+
+    if (!modelData || !modelData.pricing) {
+        console.warn(`Could not find pricing data for model: ${modelId}`);
+        return 0;
+    }
+
+    const promptCost = (usage.prompt_tokens || 0) * parseFloat(modelData.pricing.prompt);
+    const completionCost = (usage.completion_tokens || 0) * parseFloat(modelData.pricing.completion);
+
+    // The prices are per token, not per million tokens, so we don't divide.
+    // OpenRouter's pricing endpoint gives price per token.
+    // Example: $0.000003 per prompt token
+    
+    return promptCost + completionCost;
 }

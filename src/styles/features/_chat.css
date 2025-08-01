@@ -99,6 +99,56 @@
     margin-bottom: 0;
 }
 
+/* Container for the assistant's response bubble */
+.message.assistant .message-content {
+    line-height: 1.7;
+}
+
+/* Style for H3 headings like "Key Takeaways" and "Sources" */
+.message-content h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Style for bullet points (Key Takeaways) */
+.message-content ul {
+    list-style: none; /* Remove default bullet */
+    padding-left: 0;
+}
+
+.message-content ul li {
+    padding-left: 1.5em;
+    position: relative;
+    margin-bottom: 0.5em;
+}
+
+.message-content ul li::before {
+    content: '🔹'; /* Custom bullet point */
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--primary-color);
+}
+
+/* Style for numbered list (Sources) */
+.message-content ol {
+    padding-left: 1.5em;
+    list-style-position: outside;
+}
+
+.message-content ol li {
+    margin-bottom: 0.5em;
+    padding-left: 0.5em;
+}
+
+/* Dark Mode Adjustments */
+body.dark-mode .message-content ul li::before {
+    color: var(--accent-color);
+}
 
 /* --- 5. Action Menu (Preserved from your original code) --- */
 /* ส่วนนี้ถูกคงไว้เหมือนเดิมทุกประการ */
@@ -169,6 +219,17 @@
 .message.assistant .message-content > * {
     margin-top: 0;
     margin-bottom: 0;
+}
+
+.message.assistant .message-content img {
+   display: block;
+   max-width: 100%;
+   max-height: 60vh;
+   height: auto;
+   object-fit: contain;
+   margin: 5px 0;
+   border-radius: 8px;
+   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* 2. [สำคัญที่สุด] สร้างระยะห่าง "ด้านบน" ของย่อหน้าที่อยู่ต่อกัน */
@@ -684,3 +745,30 @@ body.dark-mode .message.summary-marker {
 .summary-marker-actions .btn-icon.small .material-symbols-outlined {
     font-size: 18px;
 }
+
+.message-content img {
+   display: block; /* Prevents extra space below the image */
+   max-width: 100%; /* Ensure image doesn't exceed container width */
+   max-height: 60vh; /* Optional: Set a maximum height relative to the viewport */
+   height: auto; /* Maintain aspect ratio */
+   object-fit: contain; /* Scale down to fit, preserving aspect ratio */
+   margin: 5px 0; /* Add some vertical spacing around the image */
+   border-radius: 8px; /* Optional: Add rounded corners */
+   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Optional: Add a subtle shadow */
+}
+
+
+/* [NEW] A shared class for any image inside a chat bubble,
+  whether it's from a user or an assistant.
+*/
+.message-content img.multimodal-image {
+    display: block; /* Prevents extra space below the image */
+    max-width: 100%; /* Ensures the image is never wider than the bubble */
+    max-height: 50vh; /* Limits the height to half the screen height */
+    height: auto; /* Maintains the aspect ratio */
+    border-radius: 12px; /* Adds nice rounded corners */
+    margin-top: 8px;
+    margin-bottom: 8px;
+    object-fit: contain; /* Scales the image down to fit, preserving its shape */
+}
+

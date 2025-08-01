@@ -2,106 +2,154 @@
 // FILE: src/js/modules/agent/agent.handlers.js (Refactored)
 // ===============================================
 
-import { stateManager, ALL_AGENT_SETTINGS_IDS } from '../../core/core.state.js';
+import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
 import { callLLM } from '../../core/core.api.js';
-import { showCustomAlert } from '../../core/core.ui.js';
+import { showCustomAlert } from '../../core/core.ui.js'
 
 export async function generateAgentProfile() {
-    const enhancerPrompt = document.getElementById('enhancer-prompt-input').value.trim();
-    if (!enhancerPrompt) {
-        showCustomAlert('Please describe the agent you want to create.', 'Error');
+    const enhancerPromptText = document.getElementById('enhancer-prompt-input').value.trim();
+    if (!enhancerPromptText) {
+        showCustomAlert('Please describe the agent you want to create or enhance.', 'Error');
         return;
     }
-
-    // [DEBUG 2] ตรวจสอบว่า Handler ได้รับ Event และมี Prompt ถูกต้อง
-    console.log("🧠 generateAgentProfile handler received event. Enhancer Prompt:", enhancerPrompt);
-
-    stateManager.bus.publish('agent:enhancerStatus', { text: 'Generating profile...', color: 'var(--text-dark)' });
 
     const utilityAgent = stateManager.getProject().globalSettings.systemUtilityAgent;
     if (!utilityAgent || !utilityAgent.model) {
-        stateManager.bus.publish('agent:enhancerStatus', { text: 'Error: System Utility Model not configured.', color: 'var(--error-color)' });
+        showCustomAlert('System Utility Model not configured in Settings.', 'Error');
         return;
     }
 
-    const metaPrompt = `You are an expert in designing LLM agent profiles. Based on the user's request, create a complete agent profile. Your response MUST be a single, valid JSON object with the following keys: "agent_name" (a creative and fitting name for the agent), "agent_icon" (a single, relevant emoji for the agent), "system_prompt" (string), "temperature" (number), "top_p" (number), "top_k" (number), "presence_penalty" (number), "frequency_penalty" (number). For the parameters, choose values that are optimal for the requested task (e.g., creative tasks need higher temperature). User's Request: "${enhancerPrompt}"`;
+    const generateBtn = document.getElementById('generate-agent-profile-btn');
+    if (generateBtn) generateBtn.classList.add('is-loading');
+    
+    stateManager.bus.publish('agent:enhancerStatus', { text: 'Processing request...', color: 'var(--text-dark)' });
 
-    try {
-        const responseText = await callLLM(utilityAgent, [{ role: 'user', content: metaPrompt }]);
+try {
+        const isEnhanceMode = !!stateManager.getState().editingAgentName;
+        let metaPrompt = '';
+
+        if (isEnhanceMode) {
+            // Enhance prompt (เหมือนเดิม)
+            const currentSystemPrompt = document.getElementById('agent-system-prompt').value;
+            metaPrompt = `You are an expert in refining LLM system prompts. Your task is to modify an existing system prompt based on a user's new request. Do not replace the original prompt, but integrate the new instruction into it cohesively. Respond ONLY with the new, complete, and modified system prompt as a single block of text.
+
+            EXISTING PROMPT:
+            ---
+            ${currentSystemPrompt}
+            ---
+
+            USER'S MODIFICATION REQUEST:
+            ---
+            ${enhancerPromptText}
+            ---
+
+            NEW, MODIFIED SYSTEM PROMPT:`;
+        } else {
+            // [CRITICAL FIX] แก้ไข Prompt ให้ขอ Parameters ทั้งหมด
+            metaPrompt = `You are an expert in designing LLM agent profiles. Based on the user's request, create a complete agent profile.
+            Your response MUST be ONLY a single, valid JSON object with these exact keys:
+            - "agent_name": string
+            - "agent_icon": string (a single emoji)
+            - "system_prompt": string
+            - "temperature": number (between 0 and 2)
+            - "top_p": number (between 0 and 1)
+            - "top_k": integer (0 or higher)
+            - "max_tokens": integer (e.g., 4096)
+            - "frequency_penalty": number (between -2 and 2)
+            - "presence_penalty": number (between -2 and 2)
+            - "seed": integer (-1 for random)
+
+            User's Request: "${enhancerPromptText}"`;
+        }
         
-        // [DEBUG 3] ดูผลลัพธ์ดิบๆ ที่ได้จาก LLM
-        console.log("🤖 Raw response from LLM:", responseText);
+        const response = await callLLM(utilityAgent, [{ role: 'user', content: metaPrompt }]);
+        if (!response || typeof response.content !== 'string') {
+            throw new Error("Received an invalid or empty response from the AI.");
+        }
 
-        const jsonMatch = responseText.match(/{.*}/s);
-        if (!jsonMatch) throw new Error("LLM did not return a valid JSON object.");
-        
-        const parsedResponse = JSON.parse(jsonMatch[0]);
-        stateManager.bus.publish('agent:profileGenerated', parsedResponse);
-
-        stateManager.bus.publish('agent:enhancerStatus', { text: 'Profile generated successfully!', color: 'var(--success-color)' });
+        if (isEnhanceMode) {
+            stateManager.bus.publish('agent:promptEnhanced', { newPrompt: response.content });
+            stateManager.bus.publish('agent:enhancerStatus', { text: 'Prompt enhanced successfully!', color: 'var(--success-color)' });
+        } else {
+            const jsonMatch = response.content.match(/{.*}/s);
+            if (!jsonMatch) throw new Error("LLM did not return a valid JSON object.");
+            const parsedResponse = JSON.parse(jsonMatch[0]);
+            stateManager.bus.publish('agent:profileGenerated', parsedResponse);
+            stateManager.bus.publish('agent:enhancerStatus', { text: 'Profile generated successfully!', color: 'var(--success-color)' });
+        }
 
     } catch (error) {
-        console.error("Agent Profile Generation Error:", error);
-        stateManager.bus.publish('agent:enhancerStatus', { text: `Error: ${error.message}`, color: 'var(--error-color)' });
+        console.error("Agent Profile Generation/Enhancement Error:", error);
+        const errorMessage = `Error: ${error.message}`;
+        stateManager.bus.publish('agent:enhancerStatus', { text: errorMessage, color: 'var(--error-color)' });
+        
+        // [CRITICAL FIX] แสดง Alert ให้ผู้ใช้เห็น Error ชัดเจน
+        showCustomAlert(errorMessage, "Profile Generation Failed");
+
     } finally {
+        if (generateBtn) generateBtn.classList.remove('is-loading');
         setTimeout(() => stateManager.bus.publish('agent:enhancerStatus', { text: '' }), 5000);
     }
 }
 
 export function saveAgentPreset() {
-    const nameInput = document.getElementById('agent-name-input');
-    const newName = nameInput.value.trim();
-    if (!newName) {
-        showCustomAlert("Please enter a name for the agent.", "Error"); return;
-    }
-
     const project = stateManager.getProject();
     const oldName = stateManager.getState().editingAgentName;
+    const newName = document.getElementById('agent-name-input').value.trim();
 
+    if (!newName) {
+        showCustomAlert("Please enter a name for the agent.", "Error");
+        return;
+    }
     if (oldName !== newName && project.agentPresets[newName]) {
-        showCustomAlert(`An agent named '${newName}' already exists.`, "Error"); return;
+        showCustomAlert(`An agent named '${newName}' already exists.`, "Error");
+        return;
     }
 
-    const newAgentSettings = {};
-    Object.keys(ALL_AGENT_SETTINGS_IDS).forEach(elId => {
-        const key = ALL_AGENT_SETTINGS_IDS[elId];
-        if (key === 'name') return;
-        const element = document.getElementById(elId);
-        if (element) newAgentSettings[key] = (element.type === 'checkbox') ? element.checked : (element.type === 'number' ? parseFloat(element.value) : element.value);
-    });
-    if (!newAgentSettings.icon) newAgentSettings.icon = '🤖';
+    const settingsFromForm = {
+        icon: document.getElementById('agent-icon-button').textContent,
+        description: document.getElementById('agent-description').value,
+        model: document.getElementById('agent-model-select').value,
+        systemPrompt: document.getElementById('agent-system-prompt').value,
+        useMarkdown: document.getElementById('agent-use-markdown').checked,
+        enableWebSearch: document.getElementById('agent-enable-web-search').checked,
+        profilePicture: document.getElementById('agent-profile-picture-preview').src,
+        tags: Array.from(document.querySelectorAll('#agent-tags-container .tag-pill')).map(p => p.dataset.tag),
+        activeMemories: Array.from(document.querySelectorAll('#agent-memory-list .item input:checked')).map(input => input.closest('.item').dataset.memoryName),
+    };
 
-    if (oldName && oldName !== newName) {
-        const agentData = project.agentPresets[oldName];
-        delete project.agentPresets[oldName];
-        project.agentPresets[newName] = { ...agentData, ...newAgentSettings };
+    const parameterEditor = stateManager.getState().activeParameterEditor;
+    const advancedParams = parameterEditor ? parameterEditor.getValues() : {};
+    const finalAgentSettings = { ...settingsFromForm, ...advancedParams };
+
+    const agentToUpdate = (oldName && project.agentPresets[oldName]) 
+        ? { ...project.agentPresets[oldName] } // ถ้าเป็นการแก้ไข ให้ใช้ข้อมูลเก่าเป็นฐาน
+        : { 
+            ...defaultAgentSettings, // ถ้าสร้างใหม่ ให้ใช้ค่า Default เป็นฐาน
+            id: `agent_${Date.now()}`,
+            // แล้วกำหนดค่าเริ่มต้นที่นี่
+            createdBy: UserService.getCurrentUserProfile().userName,
+            createdAt: Date.now()
+          };
+    
+    // [CRITICAL FIX] อัปเดตทุกครั้งที่ Save
+    agentToUpdate.modifiedAt = Date.now();
+    agentToUpdate.createdBy = document.getElementById('agent-created-by-input').value;
         
-        // Update references in sessions and groups
-        project.chatSessions.forEach(session => {
-            if (session.linkedEntity?.type === 'agent' && session.linkedEntity.name === oldName) session.linkedEntity.name = newName;
-        });
-        Object.values(project.agentGroups).forEach(group => {
-           const memberIndex = group.agents.indexOf(oldName);
-           if (memberIndex > -1) group.agents[memberIndex] = newName;
-           if(group.moderatorAgent === oldName) group.moderatorAgent = newName;
-        });
-        if (project.activeEntity.type === 'agent' && project.activeEntity.name === oldName) project.activeEntity.name = newName;
-
-    } else if (oldName) { // Editing existing agent without renaming
-        project.agentPresets[oldName] = { ...project.agentPresets[oldName], ...newAgentSettings };
-    } else { // Creating a new agent
-        newAgentSettings.activeMemories = [];
-        project.agentPresets[newName] = newAgentSettings;
-        project.activeEntity = { type: 'agent', name: newName };
+    Object.assign(agentToUpdate, finalAgentSettings);
+    if (oldName && oldName !== newName) {
+        delete project.agentPresets[oldName];
+    }
+    project.agentPresets[newName] = agentToUpdate;
+    
+    if (!oldName || (project.activeEntity && project.activeEntity.name === oldName)) {
+         project.activeEntity = { type: 'agent', name: newName };
     }
 
     stateManager.setProject(project);
-    stateManager.updateAndPersistState(); // Save to DB
+    stateManager.updateAndPersistState();
     stateManager.bus.publish('studio:contentShouldRender');
     stateManager.bus.publish('agent:editorShouldClose');
-    // stateManager.bus.publish('agent:listChanged'); // Re-render agent list
-    // stateManager.bus.publish('entity:selected', project.activeEntity); // Update active entity UI
-    // stateManager.bus.publish('agent:editorShouldClose'); // Announce that editor should be hidden
 }
 
 export function deleteAgentPreset(agentNameToDelete) {

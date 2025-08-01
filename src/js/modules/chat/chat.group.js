@@ -7,6 +7,7 @@ import { streamLLMResponse, callLLM, buildPayloadMessages } from '../../core/cor
 import { dbRequest } from '../../core/core.db.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 import { LiveMarkdownRenderer } from '../../core/core.utils.js';
+import * as ChatUI from './chat.ui.js';
 
 /**
  * ฟังก์ชันหลักที่ควบคุมการทำงานของ Group Chat แต่ละรอบ
@@ -140,35 +141,32 @@ async function executeModeratorTurn(project, session, group) {
         state: 'loading' 
     });
 
-    // 1. สร้าง Prompt สำหรับให้ Moderator ตัดสินใจ
     const conversationForModerator = session.history.map(m => `${m.speaker || m.role}: ${m.content}`).join('\n');
     const availableAgents = group.agents.filter(agentName => agentName !== group.moderatorAgent).join(', ');
     const moderatorPrompt = `Based on the following conversation, choose the single most appropriate agent to speak next from this list: [${availableAgents}]. Respond with ONLY the agent's name.\n\nConversation:\n${conversationForModerator}`;
     
-    // 2. เรียก LLM ของ Moderator เพื่อหา nextAgentName
-    let nextAgentName; // ประกาศตัวแปรไว้ก่อน
+    let nextAgentName;
     try {
         const response = await callLLM(moderator, [{ role: 'user', content: moderatorPrompt }]);
-        // หาชื่อ agent ที่ตรงที่สุดจากคำตอบของ moderator
-        nextAgentName = group.agents.find(agent => response.includes(agent));
+        
+        // [CRITICAL FIX] แก้ไขบรรทัดนี้ให้ใช้ response.content
+        nextAgentName = group.agents.find(agent => response.content.includes(agent));
 
         if (!nextAgentName) {
             throw new Error("Moderator did not return a valid agent name from the list.");
         }
     } catch(err) {
         showCustomAlert(`Moderator failed: ${err.message}. Stopping this turn.`, "Error");
-        return false; // คืนค่า false เพื่อบอกให้ loop หยุดทำงาน
+        return false;
     }
 
-    // 3. ประกาศผลการตัดสินใจของ Moderator
     const moderatorDecisionMessage = { role: 'system', content: `[Moderator selected ${nextAgentName} to speak.]` };
     session.history.push(moderatorDecisionMessage);
     stateManager.bus.publish('ui:renderMessages');
 
-    // 4. สั่งให้ Agent ที่ถูกเลือกทำงาน
     await executeAgentTurn(project, session, nextAgentName);
     
-    return true; // คืนค่า true เพื่อบอกว่าทำงานสำเร็จ
+    return true;
 }
 
 

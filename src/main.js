@@ -16,6 +16,7 @@ import { initCoreUI } from './js/core/core.ui.js';
 import { initGlobalKeybindings } from './js/core/core.keyboard.js';
 import { initRightSidebarToggle } from './js/modules/chat/chat.ui.js';
 import { initGlobalDropdownListener } from './js/core/core.ui.js';
+// import { marked } from 'marked'; // ตรวจสอบว่ามีการ import marked แล้ว
 // import { updateSummarizationActionMenu } from './js/modules/project/project.ui.js';
 
 // UI & Handler Modules (Import all necessary modules)
@@ -41,11 +42,35 @@ import * as UserUI from './js/modules/user/user.ui.js';
 import * as UserService from './js/modules/user/user.service.js';
 import * as UserHandlers from './js/modules/user/user.handlers.js';
 import * as ModelManagerUI from './js/modules/models/model-manager.ui.js';
+import * as AccountUI from './js/modules/account/account.ui.js';
 
 // --- State for Lazy Initialization ---
 let isStudioInitialized = false;
+const renderer = new marked.Renderer();
+const originalLinkRenderer = renderer.link;
 
+// Override การแสดงผลของลิงก์
+renderer.link = (href, title, text) => {
+    const html = originalLinkRenderer.call(renderer, href, title, text);
+    return html.replace(/^<a /, '<a target="_blank" rel="noopener noreferrer" ');
+};
 
+marked.setOptions({
+    renderer: renderer,
+    gfm: true,
+    breaks: false
+});
+
+// --- End of Configuration ---
+
+function initCrossTabSync() {
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'promptPrimUserDatabase_v1') {
+            // [FIX] Call the new, lightweight reload function instead of the full init.
+            UserService.reloadDatabaseFromStorage();
+        }
+    });
+}
 // --- Main Application Initialization ---
 
 /**
@@ -188,8 +213,9 @@ function setupEventSubscriptions() {
     bus.subscribe('chat:copyMessage', ({ index, event }) => ChatHandlers.copyMessageToClipboard({ index, event }));
     bus.subscribe('chat:regenerateMessage', ({ index }) => ChatHandlers.regenerateMessage({ index }));
     bus.subscribe('chat:fileUpload', (event) => ChatHandlers.handleFileUpload(event));
+    bus.subscribe('chat:filesSelected', (files) => ChatHandlers.handleFileUpload(files));
     bus.subscribe('chat:removeFile', ({ index }) => ChatHandlers.removeAttachedFile({ index }));
-    
+
     bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);    
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
 
@@ -226,6 +252,8 @@ function initializeUI() {
     SummaryUI.initSummaryUI();
     ChatHandlers.initMessageInteractions();
     UserUI.initUserProfileUI(); // << เพิ่มอันนี้เข้ามาแทน
+    AccountUI.initAccountUI(); // <-- [ADD THIS]
+
     document.getElementById('import-settings-input')?.addEventListener('change', UserHandlers.handleSettingsFileSelect);
 
 
@@ -238,11 +266,22 @@ function initializeUI() {
 document.addEventListener('DOMContentLoaded', async () => {
     const loadingOverlay = document.getElementById('loading-overlay');
     try {
-        await UserService.initUserSettings(); // <-- แก้ไขชื่อฟังก์ชัน
+        await UserService.initUserSettings();
+
+        // [FIX] Get only the system-wide key for the initial load
+        const systemApiKey = UserService.getSystemApiSettings().openrouterKey;
+        if (systemApiKey) {
+            // Load system models using the admin key
+            await loadAllProviderModels({ apiKey: systemApiKey, isUserKey: false });
+        } else {
+            console.warn("No SYSTEM API key available. Skipping initial model load for Free/Pro users.");
+        }
+
         console.log("🚀 Application starting...");
 
         // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---
         initializeUI();
+        initCrossTabSync(); // <-- [ADD THIS] Call the new function
         setupEventSubscriptions();
         ProjectHandlers.setupAutoSaveChanges();
         document.getElementById('load-memory-package-input').addEventListener('change', MemoryHandlers.loadMemoryPackage);
@@ -283,3 +322,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingOverlay.querySelector('p').textContent = `A critical error occurred: ${error.message}`;
     }
 });
+window.UserService = UserService; // Expose for debugging
+// window.stateManager = stateManager; // << เพิ่มบรรทัดนี้เข้าไป
