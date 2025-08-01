@@ -33,9 +33,9 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/main-45taKGVN.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-CyFG_5Zz.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-CjnZBNEv.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/main-Bd_VwzUb.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-C6739qJg.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-C-3nhxjE.css">
   <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-zXP_oT3j.css">
 </head>
 <body class="admin-page">
@@ -741,16 +741,28 @@
         </div>
     </div>
     <div id="memory-editor-modal" class="modal-overlay">
-        <div class="modal-box"><h3 id="memory-modal-title">เพิ่ม/แก้ไข Memory</h3>
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="memory-modal-title">Create/Edit Memory</h3>
+                <button type="button" class="modal-close-btn">&times;</button>
+            </div>
             <div class="modal-body">
-                <div class="form-group"><label for="memory-name-input">ชื่อ Memory</label><input type="text" id="memory-name-input"></div>
-                <div class="form-group"><label for="memory-content-input">เนื้อหา Memory</label><textarea id="memory-content-input" rows="8"></textarea></div>
+                <div class="form-group">
+                    <label for="memory-name-input">Memory Name</label>
+                    <input type="text" id="memory-name-input" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="memory-content-input">Memory Content</label>
+                    <textarea id="memory-content-input" rows="8"></textarea>
+                </div>
                 <input type="hidden" id="memory-edit-index">
             </div>
-            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก</button></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-close-btn">Cancel</button>
+                <button class="btn">Save Memory</button>
+            </div>
         </div>
-    </div>
-    <div id="save-project-modal" class="modal-overlay">
+    </div>    <div id="save-project-modal" class="modal-overlay">
         <div class="modal-box"><h3>บันทึกโปรเจกต์</h3>
             <div class="modal-body">
                 <div class="form-group"><label for="project-name-input">ชื่อโปรเจกต์</label><input type="text" id="project-name-input" placeholder="My Awesome Project"></div>
