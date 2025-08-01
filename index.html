@@ -793,7 +793,21 @@
             </div>
         </div>
     </div>
-    
+    <div id="user-switcher-modal" class="modal-overlay">
+        <div class="modal-box" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>Switch User Profile (Debug)</h3>
+                <button type="button" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+                <p>Select a profile to continue testing:</p>
+                <button class="btn" data-user-id="user_pro">Switch to: Kaiwan (Pro)</button>
+                <button class="btn" data-user-id="user_free">Switch to: Demo User (Free)</button>
+                <button class="btn" data-user-id="user_master">Switch to: Admin (Master)</button>
+            </div>
+        </div>
+    </div>
+        
     <!-- ===== HIDDEN INPUTS ===== -->
     <input type="file" id="load-project-input" class="hidden" accept=".prim,.json">
     <input type="file" id="import-agents-input" class="hidden" accept=".json,.prim">

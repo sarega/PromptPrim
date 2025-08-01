@@ -116,7 +116,6 @@ export async function loadAllProviderModels({ apiKey, isUserKey = false } = {}) 
         console.log(`Loaded ${allModels.length} models for the System.`);
     }
 }
-
 export async function loadAllSystemModels() {
     stateManager.bus.publish('status:update', { message: 'Loading all system models...', state: 'loading' });
     

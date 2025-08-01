@@ -222,8 +222,11 @@ function setupEventSubscriptions() {
     bus.subscribe('upload-file', () => { document.getElementById('file-input')?.click();});
     // [FIX] Settings Actions
     bus.subscribe('api:loadModels', loadAllProviderModels);
-    bus.subscribe('settings:apiKeyChanged', UserHandlers.handleApiKeyChange); // <-- แก้ไข
-    bus.subscribe('settings:ollamaUrlChanged', UserHandlers.handleOllamaUrlChange); // <-- แก้ไข
+    bus.subscribe('api:loadUserModels', ({ apiKey, isUserKey }) => {
+        loadAllProviderModels({ apiKey, isUserKey });
+    });
+    bus.subscribe('settings:apiKeyChanged', UserHandlers.handleApiKeyChange);
+    bus.subscribe('settings:ollamaUrlChanged', UserHandlers.handleOllamaUrlChange);
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
     

@@ -163,7 +163,7 @@ export function initSettingsUI() {
             bus.publish('api:loadUserModels', { apiKey: userApiKey, isUserKey: true });
         }
     });
-
+    
     document.getElementById('apiKey')?.addEventListener('input', debounce((e) => {
         const user = UserService.getCurrentUserProfile();
         if (user && user.plan === 'master') {
@@ -171,16 +171,15 @@ export function initSettingsUI() {
             UserService.saveFullUserProfile(user);
         }
     }, 500));
+    
     bus.subscribe('user:modelsLoaded', () => {
          if (document.getElementById('settings-modal')?.style.display === 'flex') {
             renderSettingsPanel();
         }
-    });    
+    });
+    
     document.getElementById('ollamaBaseUrl')?.addEventListener('input', debounce((e) => bus.publish('settings:ollamaUrlChanged', e.target.value), 500));
-    document.getElementById('load-models-btn')?.addEventListener('click', () => bus.publish('api:loadModels'));
     
-    
-    // [FIX] Add the model selector's ID to this array.
     const systemSettingsFields = [
         'system-utility-model-select', 
         'system-utility-prompt', 
@@ -197,6 +196,7 @@ export function initSettingsUI() {
         console.log("Project loaded. Re-rendering settings panel data.");
         renderSettingsPanel();
     });
+    
     stateManager.bus.subscribe('models:loaded', () => {
         const settingsModal = document.getElementById('settings-modal');
         if (settingsModal && settingsModal.style.display === 'flex') {
@@ -209,12 +209,6 @@ export function initSettingsUI() {
         if (settingsModal && settingsModal.style.display === 'flex') {
             renderSettingsPanel();
         }
-    });
-
-    stateManager.bus.subscribe('project:loaded', () => {
-    // When a new project is loaded, silently re-render the settings panel's data
-    // This ensures that when the user opens it, the values are correct.
-    renderSettingsPanel();
     });
 
     console.log("✅ Settings UI Initialized.");

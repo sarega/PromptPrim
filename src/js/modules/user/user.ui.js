@@ -1,11 +1,10 @@
 // สร้างไฟล์ใหม่ที่: src/js/modules/user/user.ui.js
 
 import { stateManager } from '../../core/core.state.js';
-import { toggleDropdown } from '../../core/core.ui.js';
+import { toggleDropdown, showCustomAlert } from '../../core/core.ui.js'; 
 import * as SettingsUI from '../settings/settings.ui.js';
 import * as UserService from './user.service.js';
 import * as UserHandlers from './user.handlers.js';
-// [FIX] Import ฟังก์ชันจัดการ Theme จากไฟล์กลาง
 import { initThemeSwitcher } from '../../core/core.theme.js';
 
 function updateUserProfileDisplay() {
@@ -61,43 +60,57 @@ function updateUserProfileDisplay() {
 }
 export function initUserProfileUI() {
     const profileContainer = document.querySelector('.user-profile-container');
-    if (!profileContainer) return;
+    const userSwitcherModal = document.getElementById('user-switcher-modal');
+    if (!profileContainer || !userSwitcherModal) return;
 
+    // --- Event Listener หลักสำหรับ User Profile Dropdown ---
     profileContainer.addEventListener('click', (e) => {
         const actionTarget = e.target.closest('[data-action]');
-        if (actionTarget) {
-            const action = actionTarget.dataset.action;
-            if (action !== 'toggle-menu') e.preventDefault();
+        if (!actionTarget) return;
 
-            switch (action) {
-                case 'toggle-menu':
-                    toggleDropdown(e);
-                    break;
-                case 'user:account':
-                    stateManager.bus.publish('ui:showAccountModal');
-                    profileContainer.classList.remove('open');
-                    break;
-                case 'user:settings':
-                    SettingsUI.renderAndShowSettings();
-                    profileContainer.classList.remove('open');
-                    break;
-                case 'user:importSettings':
-                    UserHandlers.importUserSettings();
-                    profileContainer.classList.remove('open');
-                    break;
-                case 'user:exportSettings':
-                    UserHandlers.exportUserSettings();
-                    profileContainer.classList.remove('open');
-                    break;
-                // Add other cases for Help, Log Out etc. if needed
-            }
+        const action = actionTarget.dataset.action;
+        if (action !== 'toggle-menu') e.preventDefault();
+
+        switch (action) {
+            case 'toggle-menu':
+                toggleDropdown(e);
+                break; // << จบการทำงานของ case นี้ ไม่ทำอะไรต่อ
+            case 'user:account':
+                stateManager.bus.publish('ui:showAccountModal');
+                profileContainer.classList.remove('open'); // << ย้ายมาไว้ข้างใน
+                break;
+            case 'user:settings':
+                SettingsUI.renderAndShowSettings();
+                profileContainer.classList.remove('open'); // << ย้ายมาไว้ข้างใน
+                break;
+            case 'user:logout':
+                userSwitcherModal.style.display = 'flex';
+                profileContainer.classList.remove('open'); // << ย้ายมาไว้ข้างใน
+                break;
+            // ... case อื่นๆ ...
+        }
+        // [REMOVED] ลบบรรทัดที่ผิดพลาดออกจากตรงนี้
+    });
+
+    // --- Event Listener สำหรับ User Switcher Modal (เหมือนเดิม) ---
+    userSwitcherModal.addEventListener('click', (e) => {
+        const target = e.target;
+        const userButton = target.closest('button[data-user-id]');
+        if (userButton) {
+            const userIdToSwitch = userButton.dataset.userId;
+            UserService.setActiveUserId(userIdToSwitch);
+            showCustomAlert(`Switched to ${userIdToSwitch}. The app will now reload.`, "Success");
+            userSwitcherModal.style.display = 'none';
+            setTimeout(() => window.location.reload(), 1500);
+        }
+        if (target.matches('.modal-close-btn') || target === userSwitcherModal) {
+            userSwitcherModal.style.display = 'none';
         }
     });
 
+    // --- ส่วนที่เหลือของฟังก์ชัน (initThemeSwitcher, Subscriptions) เหมือนเดิม ---
     initThemeSwitcher('theme-switcher-dropdown');
-    
     stateManager.bus.subscribe('user:settingsLoaded', updateUserProfileDisplay);
     stateManager.bus.subscribe('user:settingsUpdated', updateUserProfileDisplay);
-
     updateUserProfileDisplay();
 }

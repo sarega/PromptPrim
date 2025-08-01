@@ -3,6 +3,7 @@
 import * as UserService from '../user/user.service.js';
 import * as AccountHandlers from './account.handlers.js';
 import { stateManager } from '../../core/core.state.js';
+import { convertCreditsToUSD } from '../user/user.service.js';
 
 const modal = document.getElementById('account-modal');
 const modalBody = document.getElementById('account-modal-body');

@@ -164,8 +164,10 @@ function saveUserDatabase() {
 // --- MOCK LOGIN / USER SWITCHING ---
 export function setActiveUserId(userId) {
     activeUserId = userId;
+    // [CRITICAL FIX] บันทึก ID ผู้ใช้ล่าสุดลง localStorage
+    localStorage.setItem('promptPrimActiveUserId', userId); 
     console.log(`👤 Active user switched to: ${userId}`);
-    initUserSettings();
+    // ไม่ต้อง init ซ้ำ เพราะเราจะ reload หน้าเว็บ
 }
 
 // --- Admin-specific Functions ---
@@ -209,10 +211,13 @@ export async function initUserSettings() {
     await loadMasterPresets();
     loadUserDatabase();
     
-    // [CRITICAL FIX] ตรวจสอบว่ามี activeUserId ที่ถูกต้องหรือไม่
-    // ถ้าไม่มี ให้ตั้งค่าเป็น user คนแรก (user_pro) เสมอ
-    if (!activeUserId || !userDatabase.some(u => u.userId === activeUserId)) {
-        activeUserId = userDatabase[0]?.userId || null;
+    // [CRITICAL FIX] อ่าน ID ผู้ใช้ล่าสุดจาก localStorage
+    const lastUserId = localStorage.getItem('promptPrimActiveUserId');
+    
+    if (lastUserId && userDatabase.some(u => u.userId === lastUserId)) {
+        activeUserId = lastUserId;
+    } else if (!activeUserId && userDatabase.length > 0) {
+        activeUserId = userDatabase[0].userId;
     }
     
     const currentUser = getCurrentUserProfile();
@@ -224,7 +229,6 @@ export async function initUserSettings() {
     stateManager.bus.publish('user:settingsLoaded', currentUser);
     return currentUser;
 }
-
 /**
  * Converts a user's internal credit balance back to a USD value for display.
  * @param {number} credits The user's internal credit balance.
