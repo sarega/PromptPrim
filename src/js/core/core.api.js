@@ -6,6 +6,7 @@
 import { stateManager } from './core.state.js';
 import * as UserService from '../modules/user/user.service.js';
 import { estimateTokens } from '../modules/chat/chat.handlers.js';
+import { showCustomAlert } from './core.ui.js'; // << ADD THIS LINE
 
 // import { recommendedModelIds } from './core.state.js';
 
