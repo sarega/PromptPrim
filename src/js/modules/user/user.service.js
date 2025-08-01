@@ -206,16 +206,15 @@ export function getCurrentUserProfile() {
 }
 
 export async function initUserSettings() {
-    // 1. Load the master presets first and separately.
     await loadMasterPresets();
-    
-    // 2. Load the user database.
     loadUserDatabase();
     
-    // 3. Set active user and perform checks.
-    if (!activeUserId && userDatabase.length > 0) {
-        activeUserId = userDatabase[0].userId;
+    // [CRITICAL FIX] ตรวจสอบว่ามี activeUserId ที่ถูกต้องหรือไม่
+    // ถ้าไม่มี ให้ตั้งค่าเป็น user คนแรก (user_pro) เสมอ
+    if (!activeUserId || !userDatabase.some(u => u.userId === activeUserId)) {
+        activeUserId = userDatabase[0]?.userId || null;
     }
+    
     const currentUser = getCurrentUserProfile();
     if (currentUser) {
         checkGracePeriod(currentUser);

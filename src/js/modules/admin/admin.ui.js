@@ -109,16 +109,21 @@ export function initAdminUI() {
     document.getElementById('save-system-settings-btn')?.addEventListener('click', () => {
         const key = document.getElementById('admin-api-key').value;
         const url = document.getElementById('admin-ollama-url').value;
+
+        if (!key) {
+            showCustomAlert("Please enter an OpenRouter API Key.", "Error");
+            return;
+        }
+
         UserService.saveSystemApiSettings({ openrouter: key, ollamaBaseUrl: url });
         showCustomAlert('System API settings saved!', 'Success');
 
+        // [CRITICAL FIX] บังคับให้โหลดโมเดลทันทีหลังจากบันทึก Key
         console.log("API Keys saved, triggering model refresh...");
-        // [FIX] Pass the newly saved key to the model loader.
         loadAllProviderModels({ apiKey: key, isUserKey: false });
     });
 
     renderBillingInfo();
     document.getElementById('save-billing-btn')?.addEventListener('click', saveBillingSettings);
     stateManager.bus.subscribe('user:settingsUpdated', renderBillingInfo);
-
 }
