@@ -4,7 +4,7 @@ import './styles/main.css';
 import './styles/admin.css';
 
 import * as UserService from './js/modules/user/user.service.js';
-import { loadAllProviderModels } from './js/core/core.api.js';
+import { loadAllProviderModels, loadAllSystemModels } from './js/core/core.api.js';
 import { stateManager } from './js/core/core.state.js';
 import { initThemeSwitcher } from './js/core/core.theme.js';
 import  { initCoreUI } from './js/core/core.ui.js';
@@ -15,7 +15,6 @@ import { initAccountLogUI } from './js/modules/admin/admin-account-log.ui.js';
 import { initActivityLogUI } from './js/modules/admin/admin-activity-log.ui.js';
 import { renderBillingInfo } from './js/modules/admin/admin.ui.js';
 import { initAdminReportingUI } from './js/modules/admin/admin-reporting.ui.js';
-import { loadAllSystemModels } from './js/core/core.api.js'; // <-- Import ฟังก์ชันใหม่
 
 function initCrossTabSync() {
     window.addEventListener('storage', (event) => {
@@ -37,14 +36,16 @@ async function initializeAdminPanel() {
     document.body.classList.add('admin-page');
     
     await UserService.initUserSettings();
-    await loadAllSystemModels();
-
-    const systemApiKey = UserService.getSystemApiSettings().openrouterKey;
-    if (systemApiKey) {
-        await loadAllProviderModels({ apiKey: systemApiKey, isUserKey: false });
-    } else {
-        console.warn("Admin startup: No system API key found.");
-    }
+    
+    // [CRITICAL FIX] แก้ไขชื่อฟังก์ชันที่เรียกผิด
+    const systemSettings = UserService.getSystemApiSettings(); 
+    
+    // [CRITICAL FIX] ส่งค่าที่ถูกต้องเข้าไปในฟังก์ชันโหลดโมเดล
+    await loadAllProviderModels({ 
+        apiKey: systemSettings.openrouterKey, 
+        ollamaBaseUrl: systemSettings.ollamaBaseUrl,
+        isUserKey: false 
+    });
     
     initCoreUI(); 
     initThemeSwitcher('admin-theme-switcher');

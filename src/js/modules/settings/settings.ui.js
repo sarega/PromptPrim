@@ -4,7 +4,7 @@
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
-import { createSearchableModelSelector, showSettingsModal, hideSettingsModal } from '../../core/core.ui.js';
+import { createSearchableModelSelector, showSettingsModal, hideSettingsModal, showCustomAlert } from '../../core/core.ui.js';
 import { debounce } from '../../core/core.utils.js'; // <-- 1. Import debounce เข้ามา
 import * as UserService from '../user/user.service.js';
 import { getFilteredModelsForDisplay } from '../models/model-manager.ui.js';
@@ -154,13 +154,16 @@ export function initSettingsUI() {
     document.getElementById('load-models-btn')?.addEventListener('click', () => {
         const user = UserService.getCurrentUserProfile();
         if (user.plan === 'master') {
+            // [FIX] ดึงทั้ง API Key และ Ollama URL จากฟอร์ม
             const userApiKey = document.getElementById('apiKey').value;
-            if (!userApiKey) {
-                showCustomAlert("Please enter your OpenRouter API Key first.", "API Key Required");
-                return;
-            }
-            // Load models using the user's key and save to the user's state
-            bus.publish('api:loadUserModels', { apiKey: userApiKey, isUserKey: true });
+            const userOllamaUrl = document.getElementById('ollamaBaseUrl').value;
+
+            // ส่งข้อมูลทั้งสองอย่างไปพร้อมกัน
+            bus.publish('api:loadUserModels', { 
+                apiKey: userApiKey, 
+                ollamaBaseUrl: userOllamaUrl, 
+                isUserKey: true 
+            });
         }
     });
     

@@ -176,6 +176,9 @@ export function initAdminModelManagerUI() {
         renderIncludedList();
     });
 
-    stateManager.bus.subscribe('models:loaded', renderAdminModelManager);
+    stateManager.bus.subscribe('models:loaded', () => {
+        console.log("Model list updated. Re-rendering Admin Model Manager.");
+        renderAdminModelManager();
+    });    
     stateManager.bus.subscribe('admin:presetsChanged', renderAdminModelManager);
 }

@@ -6,7 +6,7 @@
 import { stateManager } from './core.state.js';
 import * as UserService from '../modules/user/user.service.js';
 import { estimateTokens } from '../modules/chat/chat.handlers.js';
-import { showCustomAlert } from './core.ui.js'; // << ADD THIS LINE
+import { showCustomAlert } from './core.ui.js';
 
 // import { recommendedModelIds } from './core.state.js';
 
@@ -47,6 +47,7 @@ function getCapability(modelData, capability) {
 
 // --- Helper sub-functions (not exported, private to this module) ---
 async function fetchOpenRouterModels(apiKey) {
+    if (!apiKey) return []; // Return empty array if no key is provided
     const response = await fetch('https://openrouter.ai/api/v1/models', { 
         headers: { 'Authorization': `Bearer ${apiKey}` } 
     });
@@ -67,13 +68,13 @@ async function fetchOpenRouterModels(apiKey) {
 }
 
 async function fetchOllamaModels(baseUrl) {
+    if (!baseUrl) return []; // Return empty array if no URL is provided
     try {
-        const response = await fetch('/ollama-api/tags');
+        const response = await fetch(`${baseUrl}/api/tags`);
         if (!response.ok) throw new Error(`Ollama connection failed (HTTP ${response.status})`);
         const data = await response.json();
         return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama', supports_tools: false }));
     } catch (error) {
-        // [MODIFIED] Re-throw a more specific error
         throw new Error('Could not connect to Ollama. Check URL and CORS settings.');
     }
 }
@@ -89,56 +90,64 @@ async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
     }
 }
 
-// --- Main Exported Functions ---
-export async function loadAllProviderModels({ apiKey, isUserKey = false } = {}) {
-    if (!apiKey) {
-        console.warn("loadAllProviderModels called without an API key. Aborting.");
-        // For user keys, we can clear the list
-        if(isUserKey) stateManager.setUserModels([]);
-        return;
-    }
-
+export async function loadAllProviderModels({ apiKey, ollamaBaseUrl, isUserKey = false } = {}) {
     stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
     
     let allModels = [];
-    try {
-        // We only support OpenRouter for this function now, Ollama is separate
-        allModels = await fetchOpenRouterModels(apiKey);
-    } catch (error) {
-        stateManager.bus.publish('status:update', { message: `Error loading models: ${error.message}`, state: 'error' });
+
+    // 1. Fetch from OpenRouter if apiKey is provided
+    if (apiKey) {
+        try {
+            const openRouterModels = await fetchOpenRouterModels(apiKey);
+            allModels.push(...openRouterModels);
+        } catch (error) {
+            console.error("Failed to fetch OpenRouter models:", error);
+            if (apiKey) showCustomAlert("Could not fetch models from OpenRouter.", "Warning");
+        }
+    }
+
+    // 2. Fetch from Ollama if ollamaBaseUrl is provided
+    if (ollamaBaseUrl) {
+        try {
+            const ollamaModels = await fetchOllamaModels(ollamaBaseUrl);
+            allModels.push(...ollamaModels);
+        } catch (error) {
+            console.error("Failed to fetch Ollama models:", error);
+            if (ollamaBaseUrl) showCustomAlert(error.message, "Warning");
+        }
     }
     
-    // [FIX] Save to the correct state based on the type of key used
+    // 3. Save to the correct state (user or system)
     if (isUserKey) {
         stateManager.setUserModels(allModels);
-        console.log(`Loaded ${allModels.length} models for the User.`);
     } else {
         stateManager.setSystemModels(allModels);
-        console.log(`Loaded ${allModels.length} models for the System.`);
     }
+    
+    stateManager.bus.publish('status:update', { message: 'Models loaded', state: 'connected' });
 }
+
+// --- Main Exported Functions ---
 export async function loadAllSystemModels() {
     stateManager.bus.publish('status:update', { message: 'Loading all system models...', state: 'loading' });
     
-    const settings = UserService.getSystemApiSettings();
+    const settings = UserService.getSystemApiApiSettings();
     let allModels = [];
 
-    // 1. พยายามดึงโมเดลจาก OpenRouter
+    // 1. พยายามดึงโมเดลจาก OpenRouter (ถ้ามี Key)
     if (settings.openrouterKey) {
         try {
-            console.log("Fetching models from OpenRouter...");
             const openRouterModels = await fetchOpenRouterModels(settings.openrouterKey);
             allModels.push(...openRouterModels);
         } catch (error) {
             console.error("Failed to fetch OpenRouter models:", error);
-            showCustomAlert("Could not fetch models from OpenRouter. Check your API key and connection.", "Warning");
+            showCustomAlert("Could not fetch models from OpenRouter. Check key and connection.", "Warning");
         }
     }
 
-    // 2. พยายามดึงโมเดลจาก Ollama
+    // 2. พยายามดึงโมเดลจาก Ollama (ถ้ามี URL)
     if (settings.ollamaBaseUrl) {
         try {
-            console.log("Fetching models from Ollama...");
             const ollamaModels = await fetchOllamaModels(settings.ollamaBaseUrl);
             allModels.push(...ollamaModels);
         } catch (error) {
@@ -153,6 +162,7 @@ export async function loadAllSystemModels() {
     console.log(`Loaded a total of ${allModels.length} system models.`);
     stateManager.bus.publish('status:update', { message: 'Models loaded', state: 'connected' });
 }
+
 
 export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();

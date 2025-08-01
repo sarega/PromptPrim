@@ -4,7 +4,7 @@ import * as UserService from '../user/user.service.js';
 import * as AdminModelManagerUI from './admin-model-manager.ui.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 import { stateManager } from '../../core/core.state.js';
-import { loadAllProviderModels } from '../../core/core.api.js';
+import { loadAllProviderModels, loadAllSystemModels } from '../../core/core.api.js';
 import * as AdminBillingService from './admin-billing.service.js';
 
 function renderUserEditor() {
@@ -109,20 +109,18 @@ export function initAdminUI() {
     document.getElementById('save-system-settings-btn')?.addEventListener('click', () => {
         const key = document.getElementById('admin-api-key').value;
         const url = document.getElementById('admin-ollama-url').value;
-
-        if (!key) {
-            showCustomAlert("Please enter an OpenRouter API Key.", "Error");
-            return;
-        }
-
+        
+        // 1. บันทึก Keys (เหมือนเดิม)
         UserService.saveSystemApiSettings({ openrouter: key, ollamaBaseUrl: url });
         showCustomAlert('System API settings saved!', 'Success');
 
-        // [CRITICAL FIX] บังคับให้โหลดโมเดลทันทีหลังจากบันทึก Key
-        console.log("API Keys saved, triggering model refresh...");
-        loadAllProviderModels({ apiKey: key, isUserKey: false });
+        // 2. [CRITICAL FIX] เรียกใช้ฟังก์ชัน "loadAllSystemModels" ตัวใหม่
+        console.log("API Keys saved, triggering a full model refresh...");
+        loadAllSystemModels(); 
     });
 
+
+    // ... Event Listener และ Subscriptions อื่นๆ ยังคงเหมือนเดิม ...
     renderBillingInfo();
     document.getElementById('save-billing-btn')?.addEventListener('click', saveBillingSettings);
     stateManager.bus.subscribe('user:settingsUpdated', renderBillingInfo);

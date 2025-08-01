@@ -222,8 +222,8 @@ function setupEventSubscriptions() {
     bus.subscribe('upload-file', () => { document.getElementById('file-input')?.click();});
     // [FIX] Settings Actions
     bus.subscribe('api:loadModels', loadAllProviderModels);
-    bus.subscribe('api:loadUserModels', ({ apiKey, isUserKey }) => {
-        loadAllProviderModels({ apiKey, isUserKey });
+    bus.subscribe('api:loadUserModels', ({ apiKey, ollamaBaseUrl, isUserKey }) => {
+        loadAllProviderModels({ apiKey, ollamaBaseUrl, isUserKey });
     });
     bus.subscribe('settings:apiKeyChanged', UserHandlers.handleApiKeyChange);
     bus.subscribe('settings:ollamaUrlChanged', UserHandlers.handleOllamaUrlChange);
@@ -271,15 +271,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await UserService.initUserSettings();
 
-        // [FIX] Get only the system-wide key for the initial load
-        const systemApiKey = UserService.getSystemApiSettings().openrouterKey;
-        if (systemApiKey) {
-            // Load system models using the admin key
-            await loadAllProviderModels({ apiKey: systemApiKey, isUserKey: false });
-        } else {
-            console.warn("No SYSTEM API key available. Skipping initial model load for Free/Pro users.");
-        }
-
+        // const systemApiKey = UserService.getSystemApiSettings().openrouterKey;
+        // if (systemApiKey) {
+        //     // Load system models using the admin key
+        //     await loadAllProviderModels({ apiKey: systemApiKey, isUserKey: false });
+        // } else {
+        //     console.warn("No SYSTEM API key available. Skipping initial model load for Free/Pro users.");
+        // }
+       const systemSettings = UserService.getSystemApiSettings();
+        await loadAllProviderModels({ 
+            apiKey: systemSettings.openrouterKey, 
+            ollamaBaseUrl: systemSettings.ollamaBaseUrl,
+            isUserKey: false 
+        });
         console.log("🚀 Application starting...");
 
         // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---
