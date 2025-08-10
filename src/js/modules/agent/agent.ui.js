@@ -254,7 +254,26 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     // --- Other UI updates ---
     setEditorLockState(agentData.type === 'third-party');
     updateEnhancerModelName();
-    
+        // [CRITICAL FIX] เพิ่ม Logic การแจ้งเตือน "Model Not Found" กลับเข้ามา
+    const warningBanner = document.getElementById('agent-model-warning');
+    const warningText = document.getElementById('agent-model-warning-text');
+    const modelWrapper = document.getElementById('agent-model-search-wrapper');
+
+    if (warningBanner && warningText && modelWrapper) {
+        const allModels = UserService.getAllowedModelsForCurrentUser();
+        // ตรวจสอบว่า model ที่บันทึกไว้ มีอยู่ในลิสต์โมเดลที่ใช้งานได้หรือไม่
+        const modelExists = allModels.some(m => m.id === agentData.model);
+
+        if (isEditing && agentData.model && !modelExists) {
+            warningText.innerHTML = `<strong>Model Not Found:</strong> The original model (<code>${agentData.model}</code>) could not be found. Please select a new model.`;
+            warningBanner.classList.remove('hidden');
+            modelWrapper.classList.add('has-warning');
+        } else {
+            warningBanner.classList.add('hidden');
+            modelWrapper.classList.remove('has-warning');
+        }
+    }
+
     // 3. แสดง Modal
     agentEditorModal.style.display = 'flex';
 }
@@ -409,7 +428,8 @@ export function initAgentUI() {
         
         // 1. อัปเดต UI ที่มองเห็นได้ทันที
         document.getElementById('agent-name-input').value = profileData.agent_name || '';
-        document.getElementById('agent-icon-input').value = profileData.agent_icon || '';
+        // [FIX] เปลี่ยนจากการอ้างอิง input เก่า มาเป็น button ตัวใหม่
+        document.getElementById('agent-icon-button').textContent = profileData.agent_icon || '🤖';
         document.getElementById('agent-system-prompt').value = profileData.system_prompt || '';
 
         // 2. [CRITICAL FIX] สร้าง agentData ที่สมบูรณ์ โดยใช้ "ค่า Default" เป็น fallback
@@ -434,7 +454,7 @@ export function initAgentUI() {
             const editor = stateManager.getState().activeParameterEditor;
             if (editor) editor.destroy();
             
-            const provider = 'openrouter';
+            const provider = 'openrouter'; // Assume openrouter for generated profiles
             const newEditor = createParameterEditor(paramsContainer, completeAgentData, provider);
             stateManager.setState('activeParameterEditor', newEditor);
         }
@@ -445,4 +465,6 @@ export function initAgentUI() {
             promptTextarea.value = newPrompt;
         }
     });
+    console.log("✅ Agent UI Initialized with Full Profile Generation Logic.");
+
 }

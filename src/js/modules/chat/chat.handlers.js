@@ -272,7 +272,6 @@ async function sendSingleAgentMessage() {
 
     const agentName = project.activeEntity.name;
     const agent = project.agentPresets[agentName];
-    console.log("[CHAT-HANDLER] START of sendSingleAgentMessage. Publishing 'loading' status...");
 
     stateManager.bus.publish('status:update', { 
         message: `Responding with ${agent.model}...`, 
@@ -281,16 +280,20 @@ async function sendSingleAgentMessage() {
 
     stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
 
-    // Create a placeholder message in the session history
-    const placeholderMessage = { role: 'assistant', content: '', speaker: agentName, isLoading: true };
-    const assistantMsgIndex = session.history.length;
+    // 1. สร้าง Placeholder พร้อม ID ที่ไม่ซ้ำกัน
+    const placeholderMessage = { 
+        id: `msg_${Date.now()}`, // <--- เพิ่ม Unique ID
+        role: 'assistant', 
+        content: '', 
+        speaker: agentName, 
+        isLoading: true 
+    };
     session.history.push(placeholderMessage);
     
-    // Immediately render the messages to show the placeholder
+    // 2. วาดหน้าจอใหม่ทั้งหมด "แค่ครั้งเดียว" เพื่อสร้าง Bubble ว่างๆ
     ChatUI.renderMessages(); 
     
-    // Find the newly created placeholder element in the DOM
-    const placeholderElement = document.querySelector(`.message-turn-wrapper[data-index='${assistantMsgIndex}']`);
+    const placeholderElement = document.querySelector(`.message-turn-wrapper[data-message-id='${placeholderMessage.id}']`);
     let renderer;
 
     if (!placeholderElement) {
@@ -332,8 +335,8 @@ async function sendSingleAgentMessage() {
         UserService.burnCreditsForUsage(response.usage, agent.model, calculatedCost);
         
         const finalResponseText = renderer.getFinalContent();
-        const assistantMessage = { 
-            role: 'assistant', 
+        const finalMessage = { 
+            ...placeholderMessage, // ใช้ข้อมูลเดิมจาก Placeholder
             content: finalResponseText,
             speaker: agentName, 
             isLoading: false,
@@ -344,7 +347,14 @@ async function sendSingleAgentMessage() {
                 speed: response.usage.completion_tokens / (response.duration || 1)
             }
         };
-        session.history[assistantMsgIndex] = assistantMessage;
+        const messageIndex = session.history.findIndex(m => m.id === placeholderMessage.id);
+        if (messageIndex > -1) {
+            session.history[messageIndex] = finalMessage;
+        }
+
+        // [CRITICAL FIX] ไม่เรียก renderMessages() อีกต่อไป
+        // แต่จะเรียกฟังก์ชันใหม่ที่ทำงานกับ Bubble สุดท้ายเท่านั้น
+        ChatUI.finalizeMessageBubble(finalMessage);
 
     } catch (error) {
         // [DEFINITIVE FIX] This block now properly handles any error.
@@ -365,19 +375,16 @@ async function sendSingleAgentMessage() {
             console.log("Stream aborted by user.");
         }
     } finally {
-        // This 'finally' block ensures the UI is always cleaned up and updated.
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
-        ChatUI.renderMessages(); // Re-render the entire chat to show the final message or the error.
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-
         if (!stateManager.getState().abortController?.signal.aborted) {
-            console.log("[CHAT-HANDLER] END of sendSingleAgentMessage. Publishing 'connected' status...");
             stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
         }
     }
 }
 
 export function stopGeneration() {
+    console.log("STOP button pressed. Aborting current request...");
     stateManager.abort();
     stateManager.setLoading(false);
     stateManager.bus.publish('ui:toggleLoading', { isLoading: false });

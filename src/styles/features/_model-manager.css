@@ -9,6 +9,7 @@
     flex-direction: column;
     flex-grow: 1;
     min-height: 0;
+    position: relative;
 }
 
 /* 2. ทำให้ Layout 2 คอลัมน์ขยายเต็มพื้นที่ที่เหลือ */
@@ -37,8 +38,9 @@
     border: 1px solid var(--border-color); 
     border-radius: 8px; 
     padding: 8px; 
-    min-height: 200px; }
-
+    min-height: 200px; 
+    -webkit-overflow-scrolling: touch;
+}
 
 /* --- Styles for the Info Bar --- */
 #model-preset-editor .form-group {
@@ -72,7 +74,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px;
+    padding: 6px 8px;
     border-radius: 6px;
 }
 
@@ -81,9 +83,12 @@
     flex-grow: 1;
     margin-bottom: 0;
     font-weight: normal;
+    font-size: 0.85rem; /* [FIX] ลดขนาด Font ของชื่อหลัก */
 }
 .model-manager-item small {
     color: #64748b;
+    font-size: 0.75rem; /* [FIX] ลดขนาด Font ของ ID Model */
+
 }
 body.dark-mode .model-manager-item small {
     color: #94a3b8;
@@ -150,10 +155,26 @@ body.dark-mode #model-preset-editor {
 }
 
 /* 3. [REVISED] สไตล์สำหรับ Info Bar ให้อยู่ด้านล่าง */
-#model-info-bar {
-    flex-shrink: 0; /* ไม่ให้ bar หดตัว */
-    margin-top: 15px;
+/* #model-info-bar {
+    flex-shrink: 0;
+    margin-top: 0px;
     padding: 5px 20px;
+    background-color: #e2e8f0;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 15px;
+} */
+
+/* --- [FIX] Make Model Info Bar a true overlay --- */
+#model-info-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+
+    /* สไตล์เดิมที่ยังคงไว้ */
+    padding: 15px 20px;
     background-color: #e2e8f0;
     border-top: 1px solid var(--border-color);
     display: flex;
@@ -229,3 +250,4 @@ body.dark-mode .model-info-btn {
 body.dark-mode .model-info-btn:hover {
     color: var(--text-dark);
 }
+

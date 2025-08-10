@@ -3,7 +3,7 @@
 // ===============================================
 
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
-import { callLLM } from '../../core/core.api.js';
+import { callLLM, callSystemLLM } from '../../core/core.api.js'; 
 import { showCustomAlert } from '../../core/core.ui.js'
 
 export async function generateAgentProfile() {
@@ -61,8 +61,9 @@ try {
 
             User's Request: "${enhancerPromptText}"`;
         }
-        
-        const response = await callLLM(utilityAgent, [{ role: 'user', content: metaPrompt }]);
+
+        // [CRITICAL FIX] เปลี่ยนจากการเรียก callLLM มาเป็น callSystemLLM
+        const response = await callSystemLLM(utilityAgent, [{ role: 'user', content: metaPrompt }]);
         if (!response || typeof response.content !== 'string') {
             throw new Error("Received an invalid or empty response from the AI.");
         }
@@ -105,7 +106,19 @@ export function saveAgentPreset() {
         showCustomAlert(`An agent named '${newName}' already exists.`, "Error");
         return;
     }
-
+    // [CRITICAL FIX] ตรวจสอบว่ามีการเลือก Model แล้วหรือยัง
+    const modelId = document.getElementById('agent-model-select').value;
+    if (!modelId) {
+        showCustomAlert("You must select a model for the agent before saving.", "Model Required");
+        
+        // ทำให้ช่องเลือก Model กระพริบเพื่อดึงความสนใจ
+        const modelWrapper = document.getElementById('agent-model-search-wrapper');
+        if (modelWrapper) {
+            modelWrapper.classList.add('has-warning');
+            setTimeout(() => modelWrapper.classList.remove('has-warning'), 2000);
+        }
+        return; // หยุดการทำงานทันที
+    }
     const settingsFromForm = {
         icon: document.getElementById('agent-icon-button').textContent,
         description: document.getElementById('agent-description').value,

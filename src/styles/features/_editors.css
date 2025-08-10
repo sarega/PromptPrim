@@ -1141,3 +1141,14 @@ body.dark-mode #asset-sort-select {
     border-color: #4a5568;
     color: var(--text-dark);
 }
+
+/* --- Highlight for the model selector when there's a warning --- */
+.searchable-select-wrapper.has-warning input[type="text"] {
+    border-color: #f59e0b; /* สีเหลืองส้ม */
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); /* เพิ่มเงาเรืองแสง */
+}
+
+body.dark-mode .searchable-select-wrapper.has-warning input[type="text"] {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+}

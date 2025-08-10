@@ -47,7 +47,7 @@ function getCapability(modelData, capability) {
 
 // --- Helper sub-functions (not exported, private to this module) ---
 async function fetchOpenRouterModels(apiKey) {
-    if (!apiKey) return []; // Return empty array if no key is provided
+    if (!apiKey) return [];
     const response = await fetch('https://openrouter.ai/api/v1/models', { 
         headers: { 'Authorization': `Bearer ${apiKey}` } 
     });
@@ -167,11 +167,14 @@ export async function loadAllSystemModels() {
 export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
     if (!project) return "";
+    
+    // 1. ค้นหา Agent ที่กำลังจะทำงาน (เหมือนเดิม)
     let entityAgent;
     const activeEntity = project.activeEntity;
     const targetName = agentName || activeEntity?.name;
-    const targetType = agentName ? 'agent' : activeEntity?.type;
+    const targetType = agentName ? 'agent' : (activeEntity?.type || 'agent');
     if (!targetName) return "";
+    
     if (targetType === 'agent') {
         entityAgent = project.agentPresets?.[targetName];
     } else if (targetType === 'group') {
@@ -179,11 +182,27 @@ export function getFullSystemPrompt(agentName) {
         entityAgent = project.agentPresets?.[group?.moderatorAgent];
     }
     if (!entityAgent) return "";
+    
+    // 2. [CRITICAL FIX] ตรวจสอบว่ามี Summary ที่กำลัง Active อยู่หรือไม่
+    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    const activeSummaryId = session?.summaryState?.activeSummaryId;
+    
+    if (activeSummaryId) {
+        const activeSummary = project.summaryLogs?.find(log => log.id === activeSummaryId);
+        if (activeSummary) {
+            console.log(`✅ Using active summary "${activeSummary.summary}" as system prompt.`);
+            // ถ้ามี Summary ให้ใช้เนื้อหาของ Summary เป็น System Prompt ทันที
+            return activeSummary.content;
+        }
+    }
+
+    // 3. ถ้าไม่มี Summary ให้กลับไปใช้ Logic เดิม (System Prompt + Memories)
     let basePrompt = entityAgent.systemPrompt || "";
     const activeMemoryNames = entityAgent.activeMemories || [];
     if (activeMemoryNames.length === 0) {
         return basePrompt.trim();
     }
+
     const memoryContent = activeMemoryNames
         .map(name => {
             const memory = project.memories.find(m => m.name === name);
@@ -191,43 +210,74 @@ export function getFullSystemPrompt(agentName) {
         })
         .filter(content => content)
         .join('\n\n');
+        
     if (!memoryContent) {
         return basePrompt.trim();
     }
-    const finalPrompt = `${basePrompt.trim()}\n\n--- Active Memories ---\n${memoryContent}`;
-    return finalPrompt;
+    
+    return `${basePrompt.trim()}\n\n--- Active Memories ---\n${memoryContent}`;
 }
 
 export function buildPayloadMessages(history, targetAgentName) {
     const project = stateManager.getProject();
+    if (!project) return [];
+
     const agent = project.agentPresets[targetAgentName];
     if (!agent) return [];
-    
-    // [FIX] ดึงข้อมูล modelData มาเพื่อตรวจสอบความสามารถ
-    const allowedModels = UserService.getAllowedModelsForCurrentUser();
-    const allModels = stateManager.getState().allProviderModels;
-    const modelData = allowedModels.find(m => m.id === agent.model);
-    
+
     const messages = [];
-    const finalSystemPrompt = getFullSystemPrompt(targetAgentName);
-    if (finalSystemPrompt) {
-        messages.push({ role: 'system', content: finalSystemPrompt });
+
+    // --- 1. System Prompt หลักของ Agent ---
+    if (agent.systemPrompt && agent.systemPrompt.trim()) {
+        messages.push({ role: 'system', content: agent.systemPrompt.trim() });
     }
 
-    history.forEach(msg => {
-        if (msg.isLoading || !msg.content) return;
+    // --- 2. Context จาก Summary (ถ้ามี) ---
+    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    const activeSummaryId = session?.summaryState?.activeSummaryId;
+    if (activeSummaryId) {
+        const activeSummary = project.summaryLogs?.find(log => log.id === activeSummaryId);
+        if (activeSummary) {
+            const summaryContext = `Here is a summary of the conversation so far. Use this as your primary context for the user's next message:\n\n---\n${activeSummary.content}\n---`;
+            messages.push({ role: 'system', content: summaryContext });
+        }
+    }
 
+    // --- 3. Context จาก Active Memories ---
+    const activeMemoryNames = agent.activeMemories || [];
+    if (activeMemoryNames.length > 0) {
+        const memoryContent = activeMemoryNames
+            .map(name => project.memories.find(m => m.name === name)?.content)
+            .filter(Boolean)
+            .join('\n\n');
+        
+        if (memoryContent) {
+            messages.push({ role: 'system', content: `CRITICAL KNOWLEDGE BASE:\nRemember and apply the following information at all times:\n\n---\n${memoryContent}\n---` });
+        }
+    }
+
+    // --- 4. ประวัติการสนทนา (Chat History) ---
+    const startIndex = activeSummaryId ? (session.summaryState.summarizedUntilIndex || 0) : 0;
+    const relevantHistory = history.slice(startIndex);
+
+    relevantHistory.forEach(msg => {
+        if (msg.isLoading || !msg.content || msg.isSummary || msg.isSummaryMarker) return;
+
+        // --- [THIS IS THE MISSING PART] ---
+        // นี่คือโค้ดส่วนแปลง Multimodal content (รูปภาพ) ที่คุณถามถึง
         let apiMessageContent = msg.content;
-
-        // --- Logic การแปลง Content ---
-        // ถ้าเป็น Array (มีโอกาสเป็น multimodal)
+        
         if (Array.isArray(apiMessageContent)) {
-            // ตรวจสอบว่า Model นี้รองรับ Array content หรือไม่
-            // (สมมติว่าเฉพาะ OpenRouter ที่รองรับ และ Ollama ไม่รองรับ)
+            // ดึงข้อมูลโมเดลเพื่อตรวจสอบความสามารถ
+            const allModels = [
+                ...(stateManager.getState().systemProviderModels || []),
+                ...(stateManager.getState().userProviderModels || [])
+            ];
+            const modelData = allModels.find(m => m.id === agent.model);
             const supportsMultimodalArray = modelData?.provider === 'openrouter';
 
             if (supportsMultimodalArray) {
-                // สำหรับ OpenRouter: แปลง image_url format ให้ถูกต้อง
+                // สำหรับ OpenRouter: แปลง format ให้ถูกต้อง
                 apiMessageContent = apiMessageContent.map(part => {
                     if (part.type === 'image_url') {
                         return { type: 'image_url', image_url: { url: part.url } };
@@ -235,25 +285,20 @@ export function buildPayloadMessages(history, targetAgentName) {
                     return part;
                 });
             } else {
-                // สำหรับ Ollama: แปลง Array ให้เป็น String ล้วนๆ
+                // สำหรับ Backend อื่นๆ (เช่น Ollama): แปลง Array ให้เป็น String
                 apiMessageContent = apiMessageContent
                     .filter(part => part.type === 'text' && part.text)
                     .map(part => part.text)
                     .join('\n');
             }
         }
+        // --- [END OF MISSING PART] ---
         
-        const apiMessage = {
-            role: msg.role,
-            content: apiMessageContent
-        };
-        
-        messages.push(apiMessage);
+        messages.push({ role: msg.role, content: apiMessageContent });
     });
 
     return messages;
 }
-
 export async function generateAndRenameSession(history){
      try{
         const project = stateManager.getProject();
@@ -291,12 +336,8 @@ export async function generateAndRenameSession(history){
 
 function constructApiCall(agent, messages, stream = false) {
     const project = stateManager.getProject();
-    
-    // [CRITICAL FIX] ตรวจสอบว่าเป็น System Agent หรือไม่
     const isSystemAgentCall = (agent === project.globalSettings.systemUtilityAgent);
 
-    // If it's a system call, use the full list of system models for the check.
-    // Otherwise, use the current user's allowed models.
     const modelsToSearchFrom = isSystemAgentCall 
         ? (stateManager.getState().systemProviderModels || [])
         : UserService.getAllowedModelsForCurrentUser();
@@ -339,6 +380,13 @@ function constructApiCall(agent, messages, stream = false) {
     if (stopSequences.length > 0) safeParams.stop = stopSequences;
 
     if (provider === 'openrouter') {
+        const apiKey = isSystemAgentCall 
+            ? UserService.getSystemApiSettings().openrouterKey 
+            : UserService.getApiKey();
+        if (!apiKey) {
+            throw new Error("Required OpenRouter API Key is missing for this operation.");
+        }
+
         url = 'https://openrouter.ai/api/v1/chat/completions';
         headers = { 
             'Authorization': `Bearer ${UserService.getApiKey()}`,
@@ -370,7 +418,7 @@ function constructApiCall(agent, messages, stream = false) {
 // =========================================================================
 
 export async function streamLLMResponse(agent, messages, onChunk) {
-    const { url, headers, body, provider } = constructApiCall(agent, messages, true);
+    const { url, headers, body, provider } = constructApiCall(agent, messages, true, false);
     try {
         stateManager.bus.publish('status:update', { message: `Responding with ${agent.model}...`, state: 'loading' });
         
@@ -451,7 +499,7 @@ export async function streamLLMResponse(agent, messages, onChunk) {
 
 export async function callLLM(agent, messages) {
     console.log("📡 [callLLM] received:", { agent, messages });
-    const { url, headers, body, provider } = constructApiCall(agent, messages, false);
+    const { url, headers, body, provider } = constructApiCall(agent, messages, false, false);
 
     try {
         const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -522,4 +570,42 @@ export function calculateCost(modelId, usage) {
     // Example: $0.000003 per prompt token
     
     return promptCost + completionCost;
+}
+
+export async function callSystemLLM(agent, messages) {
+    // [CRITICAL] บังคับให้ใช้ System API Settings เท่านั้น
+    const systemSettings = UserService.getSystemApiSettings();
+    const systemApiKey = systemSettings.openrouterKey;
+    const ollamaUrl = systemSettings.ollamaBaseUrl;
+
+    if (!systemApiKey && !ollamaUrl) {
+        throw new Error("System API or Ollama URL is not configured by the admin.");
+    }
+    
+    // สร้าง Payload โดยใช้ System Key
+    const { url, headers, body, provider } = constructApiCall(agent, messages, false, true);
+    
+    try {
+        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        if (!response.ok) { 
+            const errorText = await response.text(); 
+            throw new Error(`API Error: ${response.status} ${errorText}`); 
+        }
+        
+        // ... โค้ดส่วนที่เหลือในการประมวลผล response เหมือนกับ callLLM เดิม ...
+        const data = await response.json();
+        const provider = body.model.includes('/') ? 'openrouter' : 'ollama'; // Simple provider check
+        const content = (provider === 'openrouter' && data.choices?.length > 0) 
+            ? data.choices[0].message.content 
+            : data.message?.content;
+
+        if (content === undefined) {
+            throw new Error("Invalid API response structure.");
+        }
+        return { content, usage: data.usage || {} };
+
+    } catch (error) {
+        console.error("callSystemLLM failed:", error);
+        throw error;
+    }
 }

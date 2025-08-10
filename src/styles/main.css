@@ -38,6 +38,7 @@
 
 /* 6. Responsive - Media queries. Must be last. */
 @import './responsive/_main.css';
+@import './responsive/_settings-responsive.css'; /* <-- [ADD THIS] เพิ่มบรรทัดนี้ */
 
 /* 7. Themes - Theming styles (e.g., dark mode). */
 @import './themes/_dark-mode.css';

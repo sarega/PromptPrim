@@ -7,7 +7,7 @@
 
 /* --- 1. Main Modal Box --- */
 #settings-panel.modal-box {
-    max-width: 900px;
+    max-width: 1100px; /* <-- [FIX] เพิ่มความกว้างสูงสุด (จากเดิม 900px) */
     width: 95vw;
     height: 90vh;
     max-height: 850px;
@@ -19,6 +19,8 @@
     flex-direction: column;
     overflow: hidden;
     padding-top: 15px; /* Add space below header */
+    padding-left: 0px;  /* <-- [FIX] เพิ่ม Padding ซ้าย */
+    padding-right: 0px; /* <-- [FIX] เพิ่ม Padding ขวา */
 }
 /* นำ padding ออกจาก tab-content เพราะ .modal-body มีอยู่แล้ว */
 #settings-panel .tab-content {

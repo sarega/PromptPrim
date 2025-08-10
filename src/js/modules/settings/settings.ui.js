@@ -11,29 +11,85 @@ import { getFilteredModelsForDisplay } from '../models/model-manager.ui.js';
 import { renderModelManager } from '../models/model-manager.ui.js';
 import { createParameterEditor } from '../../components/parameter-editor.js';
 
+// function initTabs() {
+//     const settingsModal = document.getElementById('settings-modal'); 
+//     if (!settingsModal) return;
+
+//     const tabButtons = settingsModal.querySelector('.tab-buttons');
+//     const tabContents = settingsModal.querySelectorAll('.tab-content');
+
+//     if (!tabButtons) return; 
+
+//     tabButtons.addEventListener('click', (e) => {
+//         if (e.target.matches('.tab-btn')) {
+//             const tabName = e.target.dataset.tab;
+//             if (tabButtons && tabContents) {
+//                 tabButtons.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+//                 e.target.classList.add('active');
+//                 tabContents.forEach(content => {
+//                     content.classList.toggle('active', content.dataset.tabContent === tabName);
+//                 });
+//             }
+//         }
+//     });
+// }
+
 function initTabs() {
     const settingsModal = document.getElementById('settings-modal'); 
     if (!settingsModal) return;
 
-    const tabButtons = settingsModal.querySelector('.tab-buttons');
+    const tabButtonsContainer = settingsModal.querySelector('.tab-buttons');
     const tabContents = settingsModal.querySelectorAll('.tab-content');
+    const mobileTrigger = document.getElementById('settings-mobile-menu-trigger');
+    const mobilePopup = settingsModal.querySelector('.mobile-menu-popup');
+    // [DEBUG 1] ตรวจสอบว่าหา Element เจอหรือไม่
+    console.log("--- 1. initTabs: Finding elements ---");
+    console.log("Mobile Trigger Button:", mobileTrigger);
+    console.log("Mobile Popup Container:", mobilePopup);
+    console.log("Tab Buttons inside Popup:", mobilePopup?.querySelector('.tab-buttons'));
 
-    if (!tabButtons) return; 
+    mobileTrigger?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // ค้นหา popup ทุกครั้งที่คลิก เพื่อความแน่นอน
+        const popup = settingsModal.querySelector('.mobile-menu-popup');
+        if (popup) {
+            popup.classList.toggle('is-open');
+        } else {
+            console.error("Could not find '.mobile-menu-popup' inside the settings modal on click.");
+        }
+    });
+    tabButtonsContainer?.addEventListener('click', (e) => {
+        const tabButton = e.target.closest('.tab-btn');
+        if (!tabButton) return;
 
-    tabButtons.addEventListener('click', (e) => {
-        if (e.target.matches('.tab-btn')) {
-            const tabName = e.target.dataset.tab;
-            if (tabButtons && tabContents) {
-                tabButtons.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-                e.target.classList.add('active');
-                tabContents.forEach(content => {
-                    content.classList.toggle('active', content.dataset.tabContent === tabName);
-                });
+        const tabName = tabButton.dataset.tab;
+        
+        tabButtonsContainer.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        tabButton.classList.add('active');
+        tabContents.forEach(content => {
+            content.classList.toggle('active', content.dataset.tabContent === tabName);
+        });
+
+        const currentTabNameSpan = document.getElementById('settings-current-tab-name');
+        const currentTabIconSpan = mobileTrigger.querySelector('.material-symbols-outlined');
+        if (currentTabNameSpan && currentTabIconSpan) {
+            const buttonIcon = tabButton.querySelector('.material-symbols-outlined').textContent;
+            const buttonTextSpan = tabButton.querySelector('.tab-btn-text');
+            if (buttonTextSpan) {
+                currentTabNameSpan.textContent = buttonTextSpan.textContent.trim();
             }
+            if (buttonIcon) currentTabIconSpan.textContent = buttonIcon;
+        }
+
+        mobilePopup?.classList.remove('is-open');
+    });
+    
+    document.addEventListener('click', (e) => {
+        if (mobilePopup?.classList.contains('is-open') && !mobilePopup.contains(e.target) && !mobileTrigger.contains(e.target)) {
+            mobilePopup.classList.remove('is-open');
         }
     });
 }
-
 function initSearchableModelSelector() {
     const project = stateManager.getProject();
     if (!project || !project.globalSettings || !project.globalSettings.systemUtilityAgent) {

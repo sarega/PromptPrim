@@ -238,3 +238,12 @@ body.dark-mode .searchable-option-item:hover {
 body.dark-mode .searchable-option-item small {
     color: #a0aec0;
 }
+
+/* Style for keyboard-navigated active option */
+.searchable-option-item.active {
+    background-color: var(--accent-color);
+    color: white;
+}
+body.dark-mode .searchable-option-item.active {
+    background-color: var(--primary-color);
+}

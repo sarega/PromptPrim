@@ -6,7 +6,65 @@ Code block css
 
 .code-block-wrapper {
     position: relative;
-    margin: 0.8em 0; /* ระยะห่างบน-ล่างของ code block ทั้งก้อน */
+    margin: 0.8em 0;
+    border-radius: 8px; /* ย้ายขอบมนมาไว้ที่ Wrapper */
+    overflow: hidden; /* ซ่อนส่วนที่เกินขอบเขต */
+    border: 1px solid var(--border-color);
+}
+
+/* --- [NEW] Header --- */
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background-color: #f1f5f9;
+    color: #475569;
+    font-family: sans-serif;
+    font-size: 0.8rem;
+}
+
+body.dark-mode .code-block-header {
+    background-color: #374151;
+    color: #cbd5e0;
+}
+
+.language-name {
+    font-weight: 500;
+}
+
+/* --- [FIXED] Copy Button --- */
+.copy-code-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: transparent;
+    color: inherit; /* ใช้สีเดียวกับ Header */
+    border: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.copy-code-btn:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .copy-code-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.copy-code-btn .material-symbols-outlined {
+    font-size: 16px; /* ทำให้ไอคอนมีขนาดพอดีกับปุ่ม */
+}
+
+/* --- <pre> and <code> tags --- */
+.code-block-wrapper pre {
+    margin: 0; /* ลบ margin เดิมของ <pre> */
+    border-radius: 0; /* เอาขอบมนของ <pre> ออก */
+    border: none;
 }
 
 /* 1. สร้างกฎที่ใช้ร่วมกันสำหรับ Code Block ทั้งใน Chat และ Composer */

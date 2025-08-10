@@ -14,52 +14,53 @@ import { updateAppStatus } from '../../core/core.ui.js';
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
     messageElement.querySelectorAll('pre > code').forEach(block => {
-        // [FIX 1] ถ้าเคย highlight ไปแล้ว (มี data-highlighted) ให้ข้ามไปเลย
-        if (block.dataset.highlighted === 'yes') {
-            return;
-        }
+        if (block.dataset.enhanced === 'true') return; // ป้องกันการทำงานซ้ำ
 
         const pre = block.parentNode;
         
-        if (pre.parentNode.classList.contains('code-block-wrapper')) {
-            return;
-        }
-
-        if (pre.parentNode.tagName === 'P') {
-            const p = pre.parentNode;
-            p.parentNode.insertBefore(pre, p);
-            if (!p.textContent.trim()) {
-                p.remove();
-            }
-        }
-
+        // 1. สร้าง Wrapper หลัก
         const wrapper = document.createElement('div');
         wrapper.className = 'code-block-wrapper';
-        pre.parentNode.insertBefore(wrapper, pre);
-        wrapper.appendChild(pre);
+        pre.parentNode.replaceChild(wrapper, pre);
 
+        // 2. สร้าง Header
+        const header = document.createElement('div');
+        header.className = 'code-block-header';
+
+        // 3. ดึงชื่อภาษาจาก class ของ <code>
+        const languageClass = Array.from(block.classList).find(cls => cls.startsWith('language-'));
+        const languageName = languageClass ? languageClass.replace('language-', '') : 'text';
+        
+        const langSpan = document.createElement('span');
+        langSpan.className = 'language-name';
+        langSpan.textContent = languageName;
+        header.appendChild(langSpan);
+
+        // 4. สร้างปุ่ม Copy และใส่ใน Header
         const copyButton = document.createElement('button');
         copyButton.className = 'copy-code-btn';
-        copyButton.textContent = 'Copy';
-        wrapper.appendChild(copyButton);
+        copyButton.innerHTML = `<span class="material-symbols-outlined">content_copy</span> Copy`;
+        header.appendChild(copyButton);
 
         copyButton.addEventListener('click', () => {
             navigator.clipboard.writeText(block.textContent).then(() => {
-                copyButton.textContent = 'Copied!';
-                setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
+                copyButton.innerHTML = `<span class="material-symbols-outlined">check</span> Copied!`;
+                setTimeout(() => { 
+                    copyButton.innerHTML = `<span class="material-symbols-outlined">content_copy</span> Copy`;
+                }, 2000);
             });
         });
 
-        if (window.hljs) {
-            // [FIX 2] ตรวจสอบว่ามี "ชื่อภาษาจริงๆ" หรือไม่ ก่อนสั่ง highlight
-            // โดยเช็คว่า class ต้องขึ้นต้นด้วย 'language-' แต่ต้องไม่ใช่ 'language-undefined'
-            const hasRealLanguage = Array.from(block.classList)
-                .some(cls => cls.startsWith('language-') && cls !== 'language-undefined');
+        // 5. ประกอบร่าง: ใส่ Header และ <pre> เข้าไปใน Wrapper
+        wrapper.appendChild(header);
+        wrapper.appendChild(pre);
 
-            if (hasRealLanguage) {
-                hljs.highlightElement(block);
-            }
+        // 6. เรียกใช้ highlight.js เพื่อลงสี
+        if (window.hljs) {
+            hljs.highlightElement(block);
         }
+        
+        block.dataset.enhanced = 'true';
     });
 }
 
@@ -131,6 +132,7 @@ function createMessageElement(message, index, session) {
     const turnWrapper = document.createElement('div');
     turnWrapper.className = `message-turn-wrapper ${role}-turn`;
     turnWrapper.dataset.index = index;
+    turnWrapper.dataset.messageId = message.id || `msg_idx_${index}`; // <-- [ADD THIS] เพิ่ม message ID
 
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
@@ -212,47 +214,34 @@ function createMessageElement(message, index, session) {
             const streamingContentSpan = document.createElement('span');
             streamingContentSpan.className = 'streaming-content';
             contentDiv.appendChild(streamingContentSpan);
-            let fullTextContent = '';
-            let isLong = false;
-            if (role === 'user') {
-                fullTextContent = Array.isArray(content) ? content.filter(p => p.type === 'text').map(p => p.text).join('\n') : (content || '');
-                isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
-            } else if (role === 'assistant') {
-                fullTextContent = content || '';
-                isLong = fullTextContent.length > LONG_TEXT_THRESHOLD;
-            }
-            if (isLong) {
-                streamingContentSpan.innerHTML = `<div class="loading-text">Loading large message...</div>`;
-                setTimeout(() => lazyRenderContent(fullTextContent, streamingContentSpan), 0);
-            } else {
-                try {
-                    if (role === 'assistant') {
-                        streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
-                        enhanceCodeBlocks(streamingContentSpan);
-                    } else if (role === 'user') {
-                        if (Array.isArray(content)) {
-                            content.forEach(part => {
-                                if (part.type === 'text' && part.text) {
-                                    const p = document.createElement('p');
-                                    p.textContent = part.text;
-                                    streamingContentSpan.appendChild(p);
-                                } else if (part.type === 'image_url' && part.url) {
-                                    const img = document.createElement('img');
-                                    img.src = part.url;
-                                    img.className = 'multimodal-image';
-                                    streamingContentSpan.appendChild(img);
-                                }
-                            });
-                        } else if (typeof content === 'string') {
-                            const p = document.createElement('p');
-                            p.textContent = content;
-                            streamingContentSpan.appendChild(p);
-                        }
+            
+            try {
+                if (role === 'assistant') {
+                    streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
+                    enhanceCodeBlocks(streamingContentSpan);
+                } else if (role === 'user') {
+                    if (Array.isArray(content)) {
+                        content.forEach(part => {
+                            if (part.type === 'text' && part.text) {
+                                const p = document.createElement('p');
+                                p.textContent = part.text;
+                                streamingContentSpan.appendChild(p);
+                            } else if (part.type === 'image_url' && part.url) {
+                                const img = document.createElement('img');
+                                img.src = part.url;
+                                img.className = 'multimodal-image';
+                                streamingContentSpan.appendChild(img);
+                            }
+                        });
+                    } else if (typeof content === 'string') {
+                        const p = document.createElement('p');
+                        p.textContent = content;
+                        streamingContentSpan.appendChild(p);
                     }
-                } catch (e) {
-                    console.error("Content rendering failed:", e);
-                    streamingContentSpan.textContent = 'Error displaying content';
                 }
+            } catch (e) {
+                console.error("Content rendering failed:", e);
+                streamingContentSpan.textContent = 'Error displaying content';
             }
         }
         
@@ -829,4 +818,24 @@ export function initRightSidebarToggle() {
             document.body.style.overflow = '';
         }
     });
+}
+
+// [ADD THIS] เพิ่มฟังก์ชันใหม่นี้ใน src/js/modules/chat/chat.ui.js
+
+/**
+ * ทำการ Render Bubble สุดท้ายให้สมบูรณ์หลังจาก Stream จบลง
+ * @param {number} index - Index ของ message ใน history
+ * @param {object} message - Message object ที่สมบูรณ์
+ */
+export function finalizeMessageBubble(message) {
+    const bubbleWrapper = document.querySelector(`.message-turn-wrapper[data-message-id='${message.id}']`);
+    if (!bubbleWrapper) {
+        console.warn(`finalizeMessageBubble: Could not find bubble with ID ${message.id}. Forcing a full re-render.`);
+        renderMessages();
+        return;
+    }
+
+    const newBubble = createMessageElement(message, parseInt(bubbleWrapper.dataset.index), null);
+    
+    bubbleWrapper.parentNode.replaceChild(newBubble, bubbleWrapper);
 }

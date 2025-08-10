@@ -2,7 +2,6 @@
 // FILE: src/js/core/core.utils.js (New File)
 // DESCRIPTION: A collection of reusable utility functions.
 // ===============================================
-
 /**
  * Creates a debounced function that delays invoking `func` until after `wait`
  * milliseconds have elapsed since the last time the debounced function was
@@ -21,7 +20,6 @@ export function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
-// ในไฟล์: src/js/core/core.utils.js
 
 /**
  * [THE FIX] This function is now renamed and modified to always return a full,
@@ -66,48 +64,45 @@ export class LiveMarkdownRenderer {
         this.isInsideCodeBlock = false;
         this.renderTimeout = null;
         this.debounceDelay = 40; // ms
+        this.isFinished = false; // [ADD THIS] เพิ่ม "สวิตช์ปิด"
         
         if (!this.contentDiv) {
             throw new Error("Target content element for rendering not found.");
         }
     }
 
-    /**
-     * รับข้อมูล (chunk) ที่ stream มาและจัดคิวเพื่อ render
-     * @param {string} chunk - ส่วนของข้อความที่ได้รับมา
-     */
     streamChunk = (chunk) => {
+        if (this.isFinished) return; // ถ้าจบแล้ว ไม่ต้องทำอะไรต่อ
         this.accumulatedMarkdown += chunk;
         clearTimeout(this.renderTimeout);
         this.renderTimeout = setTimeout(this.render, this.debounceDelay);
     };
 
-    /**
-     * ตรรกะการ render หลัก (ไม่มีการเรียก scrollToBottom)
-     */
     render = () => {
+        if (this.isFinished) return;
         try {
+            // นับจำนวน code block (```)
             const inUnclosedCodeBlock = (this.accumulatedMarkdown.match(/```/g) || []).length % 2 === 1;
 
-            if (inUnclosedCodeBlock || this.isInsideCodeBlock) {
+            if (inUnclosedCodeBlock) {
+                // ถ้าใช่ ให้แสดงเป็น Text ธรรมดาไปก่อนเพื่อป้องกัน HTML เสียหาย
                 const escapedText = this.accumulatedMarkdown
                     .replace(/&/g, "&amp;")
                     .replace(/</g, "&lt;")
                     .replace(/>/g, "&gt;");
                 this.contentDiv.innerHTML = `<pre class="streaming-code-preview">${escapedText}</pre>`;
             } else {
+                // ถ้าไม่ใช่ (อยู่ข้างนอก Code Block) ให้แปลงเป็น Markdown ตามปกติ
                 this.contentDiv.innerHTML = marked.parse(this.accumulatedMarkdown, { gfm: true, breaks: false });
             }
-            this.isInsideCodeBlock = inUnclosedCodeBlock;
         } catch (e) {
+            // Fallback: ถ้าเกิด Error ให้แสดงเป็น Text ธรรมดา
             this.contentDiv.textContent = this.accumulatedMarkdown;
         }
     };
     
-    /**
-     * @returns {string} ข้อความทั้งหมดที่สะสมไว้
-     */
     getFinalContent() {
+        this.isFinished = true;
         clearTimeout(this.renderTimeout);
         return this.accumulatedMarkdown;
     }

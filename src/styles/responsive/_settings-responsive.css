@@ -1,0 +1,128 @@
+/* ================================================================= */
+/* == DEFINITIVE RESPONSIVE STYLES FOR SETTINGS MODAL (POP-UP MENU) == */
+/* ================================================================= */
+
+/* --- 1. DESKTOP STYLES (หน้าจอใหญ่กว่า 768px) --- */
+/* ซ่อนปุ่มเมนูของ Mobile ไว้บน Desktop เสมอ        */
+.mobile-menu-trigger {
+    display: none;
+}
+body.dark-mode .mobile-menu-trigger {
+    background-color: #4a5568; /* สีพื้นหลังเดียวกับช่อง input อื่นๆ */
+    border-color: var(--border-color); /* ใช้สีขอบของ dark mode */
+    color: var(--text-dark); /* ใช้สีตัวอักษรของ dark mode */
+}
+
+/* --- 2. MOBILE STYLES (หน้าจอเล็กกว่าหรือเท่ากับ 768px) --- */
+@media (max-width: 768px) {
+
+    /* [KEY] แสดงปุ่มเมนูของ Mobile ขึ้นมาแทน */
+    .mobile-menu-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 4px 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-align: left;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background-color: var(--bg-color-secondary);
+        /* margin-bottom: 15px; */
+    }
+    .mobile-menu-trigger #settings-current-tab-name {
+        flex-grow: 1;
+    }
+
+    /* จัดการ Pop-up Menu */
+    .mobile-menu-popup {
+        display: none;
+        position: absolute;
+        z-index: 2200;
+        background: #fff;        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        border: 1px solid var(--border-color);
+    }
+    
+    body.dark-mode .mobile-menu-popup {
+        background: #2d3748; /* สีพื้นหลังเดียวกับ Modal ทั่วไป */
+        border-color: #4a5568;
+    }
+
+
+
+    .mobile-menu-popup.is-open {
+        display: block !important;    
+        position: absolute;
+        z-index: 2100;
+        min-width: 60px;
+        min-height: 200px;
+    }
+    
+    /* [KEY] ทำให้ .tab-buttons ที่อยู่ใน Pop-up แสดงผลถูกต้อง */
+    .mobile-menu-popup .tab-buttons {
+        display: flex !important; /* << บังคับให้แสดงผล */
+        flex-direction: column;
+        padding: 5px;
+    }
+    .mobile-menu-popup .tab-btn {
+        justify-content: flex-start;
+        border-bottom: none;
+        padding: 12px;
+        border-radius: 6px;
+    }
+    .mobile-menu-popup .tab-btn.active {
+        background-color: var(--accent-color);
+        color: white;
+    }
+
+    /* จัดการเนื้อหาของ Tab */
+    #settings-modal .tab-content-container {
+        padding: 0;
+    }
+      
+    #settings-modal .tab-content {
+        margin-top: 0;
+        padding: 15px;
+    }
+
+    #settings-modal .tab-content[data-tab-content="models"] {
+        padding: 10px 5px; 
+        
+    }
+
+    #settings-modal .model-manager-layout {
+        flex-direction: column;
+        gap: 25px;
+    }
+
+    #settings-modal .model-manager-column {
+        flex: none;
+        min-height: auto;
+    }
+
+
+    #settings-modal #model-manager-list-container .item-list-scrollable {
+        max-height: 0vh; 
+
+    }
+
+    /* #settings-modal .model-manager-layout #preset-included-list {
+        flex-grow: 1;
+    } */
+    #settings-modal .model-manager-layout #model-preset-editor .form-group:has(#preset-included-list) {
+        flex-grow: 1; /* ★ สั่งให้ขยายเต็มพื้นที่ที่เหลือ */
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0;
+    }
+    #settings-modal .model-manager-layout #preset-included-list {
+        flex-grow: 1; /* ★ สั่งให้ List ขยายเต็ม Form Group ของมัน */
+    }
+
+
+}
+
+

@@ -347,19 +347,35 @@ export function createSearchableModelSelector(wrapperId, initialModelId, modelsT
     const wrapper = document.getElementById(wrapperId);
     if (!wrapper) return;
 
-    // [FIX] ใช้ modelsToShow (ลิสต์ที่กรองแล้ว) ที่รับเข้ามาเป็นแหล่งข้อมูลหลัก
-    // ถ้าไม่ได้รับมา (เป็น undefined) ให้ใช้ allProviderModels จาก State เป็น Fallback
     const allModels = modelsToShow !== undefined ? modelsToShow : (stateManager.getState().allProviderModels || []);
-
     const searchInput = wrapper.querySelector('input[type="text"]');
     const valueInput = wrapper.querySelector('input[type="hidden"]');
     const optionsContainer = wrapper.querySelector('.searchable-select-options');
     if (!searchInput || !valueInput || !optionsContainer) return;
+
+    let activeIndex = -1;
+
+    const updateActiveOption = () => {
+        optionsContainer.querySelectorAll('.searchable-option-item').forEach((item, index) => {
+            item.classList.toggle('active', index === activeIndex);
+            if (index === activeIndex) {
+                item.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    };
+
+    const selectOption = (index) => {
+        const items = optionsContainer.querySelectorAll('.searchable-option-item');
+        if (items[index]) {
+            items[index].click();
+        }
+    };
     
     const renderOptions = (modelsToRender) => {
         optionsContainer.innerHTML = '';
+        activeIndex = -1; // Reset active index
         if (modelsToRender.length === 0) {
-            optionsContainer.innerHTML = `<div class="searchable-option-item">No models found for this preset.</div>`;
+            optionsContainer.innerHTML = `<div class="searchable-option-item">No models found.</div>`;
             return;
         }
         modelsToRender.forEach(model => {
@@ -371,26 +387,44 @@ export function createSearchableModelSelector(wrapperId, initialModelId, modelsT
                 searchInput.value = model.name;
                 valueInput.value = model.id;
                 optionsContainer.classList.add('hidden');
-                // ส่ง 'change' event เพื่อให้ handler ของ settings บันทึกค่าได้
                 valueInput.dispatchEvent(new Event('change', { bubbles: true }));
             });
             optionsContainer.appendChild(item);
         });
     };
 
-    // --- Event Listeners and Initial Setup (Logic remains the same but uses the correct `allModels` list) ---
+    // --- Keyboard Navigation Logic ---
+    searchInput.addEventListener('keydown', (e) => {
+        const items = optionsContainer.querySelectorAll('.searchable-option-item');
+        if (items.length === 0) return;
 
-    searchInput.addEventListener('input', () => {
-        const searchTerm = searchInput.value.toLowerCase();
-        const filtered = allModels.filter(m => m.name.toLowerCase().includes(searchTerm) || m.id.toLowerCase().includes(searchTerm));
-        renderOptions(filtered);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIndex = (activeIndex + 1) % items.length;
+            updateActiveOption();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = (activeIndex - 1 + items.length) % items.length;
+            updateActiveOption();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation(); // <-- ป้องกันไม่ให้ Modal ปิด
+            if (activeIndex > -1) {
+                selectOption(activeIndex);
+            }
+        } else if (e.key === 'Escape') {
+            optionsContainer.classList.add('hidden');
+        }
     });
-
+    
+    // --- Event Listeners for Mouse ---
+    searchInput.addEventListener('input', () => renderOptions(allModels.filter(m => m.name.toLowerCase().includes(searchInput.value.toLowerCase()))));
     searchInput.addEventListener('focus', () => {
         renderOptions(allModels);
         optionsContainer.classList.remove('hidden');
     });
 
+    // --- Initial Setup ---
     const currentModel = allModels.find(m => m.id === initialModelId);
     if (currentModel) {
         searchInput.value = currentModel.name;
@@ -398,10 +432,5 @@ export function createSearchableModelSelector(wrapperId, initialModelId, modelsT
     } else {
         searchInput.value = '';
         valueInput.value = '';
-    }
-    
-    // ตั้งค่า listener เพียงครั้งเดียว
-    if (!wrapper.dataset.initialized) {
-        wrapper.dataset.initialized = 'true';
     }
 }

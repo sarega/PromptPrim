@@ -43,6 +43,7 @@
     overflow-y: auto;
     flex-grow: 1;      /* <-- เพิ่ม: ทำให้ Body ขยายเต็มพื้นที่ที่เหลือ */
     min-height: 0;     /* <-- เพิ่ม: เทคนิคแก้ปัญหา scroll ใน flexbox */
+
 }
 
 .modal-box h3 {
