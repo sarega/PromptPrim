@@ -33,9 +33,9 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/main-CWxOySdp.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-_wedjo2R.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-CrPIaQ62.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/main-DxZ-PIhH.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-DqAV90Kr.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-D5S7tJY2.css">
   <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-zXP_oT3j.css">
 </head>
 <body class="admin-page">
@@ -224,8 +224,9 @@
                                 <div class="composer-content-area" contenteditable="true" spellcheck="false"></div>
                             </div>        
                         </div>
-                        <div class="chat-input-wrapper">
+                        <div class="chat-input-wrapper">                            
                             <div id="file-preview-container" class="hidden"></div>
+                            <div id="agent-selector-bar" class="agent-selector-bar hidden"></div>
                             <div class="input-container-seamless">
                                 <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
                                 <div class="input-actions-row">
@@ -476,7 +477,7 @@
         </div>
     </div>
     <div id="agent-group-editor-modal" class="modal-overlay">
-        <div class="modal-box">
+        <div class="modal-box is-resizable">
             <h3 id="agent-group-modal-title">Create/Edit Agent Group</h3>
             <div class="modal-body">
                 <div class="form-group"><label for="group-name-input">Group Name</label><input type="text" id="group-name-input" placeholder="e.g., Creative Team"></div>
@@ -501,7 +502,6 @@
                     <input type="number" id="group-timer-input" value="0" min="0" max="180" step="10">
                     <p class="modal-warning">ใส่ 0 เพื่อให้ Moderator ทำงานรอบเดียวแล้วหยุด (โหมดปกติ)</p>
                 </div>                
-                <div class="form-group"><label for="group-summarization-threshold-input">Summarization Token Threshold</label><input type="number" id="group-summarization-threshold-input" value="3000" min="0" step="100"><p class="modal-warning">สรุปบทสนทนาเมื่อมี Token ใหม่เกินค่านี้ (ใส่ 0 เพื่อปิด)</p></div>
                 <div class="form-group"><label>Group Members</label><div id="group-member-list"></div></div>
             </div>
             <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Group</button></div>
@@ -845,5 +845,8 @@
     <input type="file" id="file-input" class="hidden" multiple>
     <input type="file" id="import-settings-input" class="hidden" accept=".json">
     
+    <div id="react-root"></div>
+    <div id="react-modal-root"></div> 
+
 </body>
 </html>
