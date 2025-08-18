@@ -4,6 +4,7 @@
 //              sets up event listeners, and manages workspace logic.
 // ===============================================
 
+import './main.jsx' // <-- [THE FIX] เพิ่มบรรทัดนี้เพื่อเรียกใช้โค้ด React
 import './styles/main.css';
 import './styles/layout/_loading.css';
 import './styles/layout/_right-sidebar.css';
@@ -16,8 +17,7 @@ import { initCoreUI } from './js/core/core.ui.js';
 import { initGlobalKeybindings } from './js/core/core.keyboard.js';
 import { initRightSidebarToggle } from './js/modules/chat/chat.ui.js';
 import { initGlobalDropdownListener } from './js/core/core.ui.js';
-// import { marked } from 'marked'; // ตรวจสอบว่ามีการ import marked แล้ว
-// import { updateSummarizationActionMenu } from './js/modules/project/project.ui.js';
+import { processQueue } from './js/modules/chat/chat.group.js';
 
 // UI & Handler Modules (Import all necessary modules)
 import * as ProjectUI from './js/modules/project/project.ui.js';
@@ -42,7 +42,10 @@ import * as UserUI from './js/modules/user/user.ui.js';
 import * as UserService from './js/modules/user/user.service.js';
 import * as UserHandlers from './js/modules/user/user.handlers.js';
 import * as ModelManagerUI from './js/modules/models/model-manager.ui.js';
+import * as GroupChat from './js/modules/chat/chat.group.js';
 import * as AccountUI from './js/modules/account/account.ui.js';
+
+
 
 // --- State for Lazy Initialization ---
 let isStudioInitialized = false;
@@ -229,6 +232,26 @@ function setupEventSubscriptions() {
     bus.subscribe('settings:ollamaUrlChanged', UserHandlers.handleOllamaUrlChange);
     bus.subscribe('settings:fontChanged', ProjectHandlers.handleFontChange);
     bus.subscribe('settings:systemAgentChanged', ProjectHandlers.saveSystemUtilityAgentSettings);
+
+    //... ภายในฟังก์ชัน setupEventSubscriptions()
+    bus.subscribe('group:manualSelectAgent', ({ agentName }) => {
+        const project = stateManager.getProject();
+        const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+        const group = project.agentGroups[project.activeEntity.name];
+        if (!session || !group) return;
+
+        const newJob = {
+            type: 'agent_turn',
+            agentName: agentName,
+        };
+
+        session.groupChatState.turnQueue.push(newJob);
+        session.groupChatState.awaitsUserInput = false;
+        stateManager.bus.publish('ui:renderAgentSelector');
+
+        // เรียก "เครื่องจักร" ให้เริ่มทำงานกับ Job ที่เพิ่งสร้าง
+        GroupChat.processQueue(project, session, group);
+    });
     
     console.log("✅ Central Event Bus ready.");
 }

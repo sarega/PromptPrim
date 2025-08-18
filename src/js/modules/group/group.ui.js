@@ -2,9 +2,12 @@
 // FILE: src/js/modules/group/group.ui.js (ฉบับแก้ไขสมบูรณ์)
 // DESCRIPTION: แก้ไขการจัดการ Event Listener และ Bug ที่เกี่ยวข้องกับรายชื่อสมาชิก
 // ===============================================
-
+import { mountReactComponent } from '../../react-entry.jsx';
+import GroupEditorModal from '../../react-components/GroupEditorModal.jsx';
+import * as GroupHandlers from './group.handlers.js';
 import { stateManager } from '../../core/core.state.js';
 import { toggleDropdown } from '../../core/core.ui.js';
+
 
 // --- Private Helper Functions ---
 function createGroupElement(name) {
@@ -93,68 +96,117 @@ function updateGroupFlowControls() {
     }
 }
 
+// แก้ไขในไฟล์: src/js/modules/group/group.ui.js
+
+// export function showAgentGroupEditor(isEditing = false, groupName = null) {
+//     stateManager.setState('editingGroupName', isEditing ? groupName : null);
+//     const project = stateManager.getProject();
+//     const group = isEditing ? project.agentGroups[groupName] : null;
+
+//     document.getElementById('agent-group-modal-title').textContent = isEditing ? `Edit Group: ${groupName}` : "Create New Agent Group";
+//     document.getElementById('group-name-input').value = isEditing ? groupName : "";
+    
+//     const memberList = document.getElementById('group-member-list');
+//     memberList.innerHTML = '';
+
+//     // ===== [THE FIX] START: แก้ไข Logic การดึงและเรียงรายชื่อ Agent =====
+
+//     // 1. ดึงรายชื่อ Agent ทั้งหมดที่มีอยู่จริงในโปรเจกต์เป็น "Source of Truth"
+//     const allExistingAgents = Object.keys(project.agentPresets);
+
+//     // 2. ดึงรายชื่อสมาชิกที่บันทึกไว้ใน Group (อาจมีชื่อเก่าหรือชื่อที่ถูกลบไปแล้ว)
+//     const savedMembers = group ? (group.agents || []) : [];
+
+//     // 3. กรองสมาชิกที่บันทึกไว้ ให้เหลือเฉพาะ Agent ที่ยังมีตัวตนอยู่จริง
+//     const validSavedMembers = savedMembers.filter(name => allExistingAgents.includes(name));
+
+//     // 4. หา Agent ที่ยังไม่ได้เป็นสมาชิกของกลุ่มนี้
+//     const unselectedAgents = allExistingAgents.filter(name => !validSavedMembers.includes(name));
+
+//     // 5. สร้างรายการสุดท้ายที่จะนำไปแสดงผล โดยเรียงจาก สมาชิกเก่า -> สมาชิกใหม่ (ตามลำดับตัวอักษร)
+//     const finalAgentList = [
+//         ...validSavedMembers,
+//         ...unselectedAgents.sort((a, b) => a.localeCompare(b))
+//     ];
+
+//     // ===== [THE FIX] END =====
+
+//     finalAgentList.forEach(agentName => {
+//         // ใช้ validSavedMembers ในการเช็คสถานะ checked เพื่อความถูกต้อง
+//         const isChecked = validSavedMembers.includes(agentName);
+//         const item = document.createElement('div');
+//         item.className = 'agent-sortable-item';
+//         item.dataset.agentName = agentName;
+//         item.dataset.id = agentName;
+//         const checkboxId = `agent-cb-${agentName.replace(/\s+/g, '-')}`;
+//         item.innerHTML = `
+//             <input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''}>
+//             <label for="${checkboxId}">${agentName}</label>
+//             <span class="drag-handle">&#x2630;</span>
+//         `;
+//         item.querySelector('input[type="checkbox"]').addEventListener('change', () => updateModeratorDropdown(null));
+//         memberList.appendChild(item);
+//     });
+
+//     if (window.groupSortable) window.groupSortable.destroy();
+//     window.groupSortable = new Sortable(memberList, { 
+//         animation: 150, 
+//         handle: '.drag-handle',
+//         // เมื่อมีการลากสลับตำแหน่ง ให้ update moderator dropdown ใหม่
+//         onEnd: () => updateModeratorDropdown(null)
+//     });
+    
+//     const flowSelect = document.getElementById('group-flow-select');
+//     if (flowSelect) {
+//         flowSelect.innerHTML = `
+//             <option value="auto-moderator">Automated Moderator</option>
+//             <option value="round-robin">Round Robin</option>
+//             <option value="manual">Manual Selection</option> 
+//         `;
+//         flowSelect.value = group?.flowType || 'auto-moderator';
+//     }
+    
+//     updateModeratorDropdown(group?.moderatorAgent);
+//     document.getElementById('group-max-turns-input').value = group?.maxTurns || 1;
+//     document.getElementById('group-timer-input').value = group?.timerInSeconds || 0;
+//     // document.getElementById('group-summarization-threshold-input').value = group?.summarizationTokenThreshold ?? 3000;
+    
+//     updateGroupFlowControls(); 
+    
+//     document.getElementById('agent-group-editor-modal').style.display = 'flex';
+// }
+
+
 export function showAgentGroupEditor(isEditing = false, groupName = null) {
-    stateManager.setState('editingGroupName', isEditing ? groupName : null);
     const project = stateManager.getProject();
-    const group = isEditing ? project.agentGroups[groupName] : null;
-
-    document.getElementById('agent-group-modal-title').textContent = isEditing ? `Edit Group: ${groupName}` : "Create New Agent Group";
-    document.getElementById('group-name-input').value = isEditing ? groupName : "";
     
-    const memberList = document.getElementById('group-member-list');
-    memberList.innerHTML = '';
-    const currentMembers = group ? (group.agents || []) : [];
-    const allAgents = Object.keys(project.agentPresets);
+    const groupData = isEditing ? { name: groupName, ...project.agentGroups[groupName] } : null;
+    const allAgents = project.agentPresets || {};
+    const targetElement = document.getElementById('react-modal-root');
     
-    const sortedAgents = group ? [...currentMembers] : [];
-    allAgents.forEach(agentName => {
-        if (!sortedAgents.includes(agentName)) {
-            sortedAgents.push(agentName);
-        }
-    });
+    // สร้างฟังก์ชัน onSave ที่จะถูกส่งเข้าไปใน React
+    const onSave = (newData) => {
+        // เรียกใช้ handler ที่เรา import เข้ามา
+        GroupHandlers.saveGroupFromReact(newData, groupName);
+        // เมื่อบันทึกเสร็จ ให้ปิด Modal
+        hideAgentGroupEditor();
+    };
 
-    sortedAgents.forEach(agentName => {
-        const isChecked = currentMembers.includes(agentName);
-        const item = document.createElement('div');
-        item.className = 'agent-sortable-item';
-        item.dataset.agentName = agentName;
-        item.dataset.id = agentName;
-        const checkboxId = `agent-cb-${agentName.replace(/\s+/g, '-')}`;
-        item.innerHTML = `
-            <input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''}>
-            <label for="${checkboxId}">${agentName}</label>
-            <span class="drag-handle">&#x2630;</span>
-        `;
-        item.querySelector('input[type="checkbox"]').addEventListener('change', () => updateModeratorDropdown(null));
-        memberList.appendChild(item);
-    });
-
-    if (window.groupSortable) window.groupSortable.destroy();
-    window.groupSortable = new Sortable(memberList, { 
-        animation: 150, 
-        handle: '.drag-handle',
-    });
-
-    updateModeratorDropdown(group?.moderatorAgent);
-    document.getElementById('group-flow-select').value = group?.flowType || 'auto-moderator';
-    document.getElementById('group-max-turns-input').value = group?.maxTurns || 1;
-    document.getElementById('group-timer-input').value = group?.timerInSeconds || 0;
-    document.getElementById('group-summarization-threshold-input').value = group?.summarizationTokenThreshold ?? 3000;
-    
-    // [FIX] เรียกใช้ฟังก์ชันใหม่ที่ถูกต้อง
-    updateGroupFlowControls(); 
-    
-    document.getElementById('agent-group-editor-modal').style.display = 'flex';
+    if (targetElement) {
+        // ส่งฟังก์ชัน onSave เข้าไปเป็น prop
+        mountReactComponent(GroupEditorModal, { groupData, allAgents, onSave }, targetElement);
+    }
 }
+
 
 export function hideAgentGroupEditor() {
-    if (window.groupSortable) {
-        window.groupSortable.destroy();
-        window.groupSortable = null;
+    const targetElement = document.getElementById('react-modal-root');
+    if (targetElement) {
+        targetElement.innerHTML = '';
     }
-    document.getElementById('agent-group-editor-modal').style.display = 'none';
     stateManager.setState('editingGroupName', null);
 }
+
 
 export function updateModeratorDropdown(selectedModerator = null) {
     const moderatorSelect = document.getElementById('group-moderator-select');
@@ -175,41 +227,6 @@ export function updateModeratorDropdown(selectedModerator = null) {
         moderatorSelect.value = currentModerator;
     }
 }
-
-// export function initGroupUI() {
-//     stateManager.bus.subscribe('group:editorShouldClose', hideAgentGroupEditor);
-
-//     const groupEditorModal = document.getElementById('agent-group-editor-modal');
-//     if (groupEditorModal) {
-//         // Listener สำหรับปุ่ม Save/Cancel
-//         groupEditorModal.addEventListener('click', (e) => {
-//             if (e.target.matches('.modal-actions .btn:not(.btn-secondary)')) {
-//                 stateManager.bus.publish('group:save');
-//             } else if (e.target.matches('.btn-secondary') || e.target.closest('.modal-close-btn')) {
-//                 hideAgentGroupEditor();
-//             }
-//         });
-
-//         // Listener สำหรับปุ่ม +/-
-//         groupEditorModal.addEventListener('click', (e) => {
-//             if (e.target.matches('.stepper-btn')) {
-//                 const input = e.target.parentElement.querySelector('input[type="number"]');
-//                 if (!input) return;
-//                 const step = parseInt(e.target.dataset.step, 10);
-//                 const min = parseInt(input.min, 10);
-//                 const max = parseInt(input.max, 10);
-//                 let currentValue = parseInt(input.value, 10);
-//                 let newValue = currentValue + step;
-//                 if (newValue < min) newValue = min;
-//                 if (newValue > max) newValue = max;
-//                 input.value = newValue;
-//             }
-//         });
-//     }
-
-//     // [FIX] Listener สำหรับ Select Flow ให้เรียกใช้ฟังก์ชันที่ถูกต้อง
-//     document.getElementById('group-flow-select')?.addEventListener('change', updateGroupFlowControls);
-// }
 
 export function initGroupUI() {
     stateManager.bus.subscribe('group:editorShouldClose', hideAgentGroupEditor);

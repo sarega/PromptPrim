@@ -208,18 +208,22 @@ function createMessageElement(message, index, session) {
         contentDiv.className = 'message-content';
         msgDiv.appendChild(contentDiv);
 
+        // ✅ [THE FIX - PART 1] สร้างเป้าหมายสำหรับ streaming เสมอ
+        const streamingContentSpan = document.createElement('span');
+        streamingContentSpan.className = 'streaming-content';
+
         if (isLoading) {
-            contentDiv.innerHTML = `<span class="streaming-content"><div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div></span>`;
+            // ถ้ากำลังโหลด ให้ใส่ spinner เข้าไปข้างใน
+            streamingContentSpan.innerHTML = `<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>`;
         } else {
-            const streamingContentSpan = document.createElement('span');
-            streamingContentSpan.className = 'streaming-content';
-            contentDiv.appendChild(streamingContentSpan);
-            
+            // ถ้าโหลดเสร็จแล้ว ให้ render เนื้อหาจริงเข้าไป
+            // (โค้ดส่วนนี้จะทำงานเมื่อ finalizeMessageBubble เรียกใช้)
             try {
                 if (role === 'assistant') {
                     streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
                     enhanceCodeBlocks(streamingContentSpan);
                 } else if (role === 'user') {
+                    // ... (Logic การ render ของ User bubble เหมือนเดิม)
                     if (Array.isArray(content)) {
                         content.forEach(part => {
                             if (part.type === 'text' && part.text) {
@@ -244,6 +248,8 @@ function createMessageElement(message, index, session) {
                 streamingContentSpan.textContent = 'Error displaying content';
             }
         }
+
+        contentDiv.appendChild(streamingContentSpan);
         
         if (isLoading || isError) {
             const actions = document.createElement('div');
@@ -333,55 +339,21 @@ function initMobileScrollBehavior() {
     }, { passive: true });
 }
 // --- Exported UI Functions ---
-export function addMessageToUI(message, index) {
-    const { role, content, speaker, isLoading, isError } = message;
-    const project = stateManager.getProject();
+export function addMessageToUI(message, index, session) {
     const container = document.getElementById('chatMessages');
+    if (!container) return null;
 
-    const turnWrapper = document.createElement('div');
-    turnWrapper.className = `message-turn-wrapper ${role}-turn`;
-    // [FIX] เพิ่ม data-index ที่ turnWrapper เพื่อให้ค้นหาง่าย
-    turnWrapper.dataset.index = index;
+    // 1. เรียกใช้ createMessageElement ซึ่งสร้าง Bubble ที่สมบูรณ์เสมอ
+    const messageElement = createMessageElement(message, index, session);
 
-    const msgDiv = document.createElement('div');
-    msgDiv.className = `message ${role}`;
-    if (isError) msgDiv.classList.add('error');
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
+    // 2. นำ Element ที่สมบูรณ์นั้นไปต่อท้ายในหน้าจอ
+    container.appendChild(messageElement);
 
-    if (role === 'assistant' && speaker) {
-        const speakerAgent = project.agentPresets?.[speaker];
-        const speakerIcon = speakerAgent ? speakerAgent.icon : '🤖';
-        const speakerLabelWrapper = document.createElement('div');
-        speakerLabelWrapper.className = 'speaker-label-wrapper';
-        speakerLabelWrapper.innerHTML = `<span class="speaker-label">${speakerIcon} ${speaker}</span>`;
-        turnWrapper.appendChild(speakerLabelWrapper);
-    }
-    
-    const streamingContentSpan = document.createElement('span');
-    streamingContentSpan.className = 'streaming-content';
-    
-    if (isLoading) {
-        streamingContentSpan.innerHTML = `<div class="loading"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>`;
-    } else {
-        const agentForMarkdown = project.agentPresets?.[speaker] || {};
-        const useMarkdown = agentForMarkdown.useMarkdown !== false;
-        const textContent = (typeof content === 'string') ? content : (content?.find(p => p.type === 'text')?.text || '');
-        
-        streamingContentSpan.innerHTML = useMarkdown && window.marked ? marked.parse(textContent, { gfm: true, breaks: false }) : `<p>${textContent}</p>`;
-        enhanceCodeBlocks(streamingContentSpan);
-    }
-    
-    contentDiv.appendChild(streamingContentSpan);
-    msgDiv.appendChild(contentDiv);
-    turnWrapper.appendChild(msgDiv);
-    container.appendChild(turnWrapper);
-    
-    container.scrollTop = container.scrollHeight;
-    
-    // คืนค่า Element ทั้งก้อนกลับไป
-    return turnWrapper;
+    // 3. เลื่อนหน้าจอลงล่างสุด
+    scrollToBottom();
+
+    // 4. คืนค่า Element ที่ถูกต้องกลับไปให้ระบบทำงานต่อ
+    return messageElement;
 }
 
 export function renderMessages() {
@@ -776,6 +748,17 @@ export function initChatUI() {
         document.getElementById('sendBtn')?.classList.toggle('hidden', isLoading);
         document.getElementById('stopBtn')?.classList.toggle('hidden', !isLoading);
     });
+    
+    const agentSelectorBar = document.getElementById('agent-selector-bar');
+    agentSelectorBar?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.agent-select-btn');
+        if (btn) {
+            stateManager.bus.publish('group:manualSelectAgent', { agentName: btn.dataset.agentName });
+        }
+    });
+
+    stateManager.bus.subscribe('ui:renderAgentSelector', renderAgentSelectorBar);
+
     initDragAndDrop();
 
     console.log("✅ Chat UI Initialized.");
@@ -838,4 +821,33 @@ export function finalizeMessageBubble(message) {
     const newBubble = createMessageElement(message, parseInt(bubbleWrapper.dataset.index), null);
     
     bubbleWrapper.parentNode.replaceChild(newBubble, bubbleWrapper);
+}
+
+// เพิ่มฟังก์ชันนี้เข้าไปในไฟล์ chat.ui.js
+export function renderAgentSelectorBar() {
+    const project = stateManager.getProject();
+    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    const bar = document.getElementById('agent-selector-bar');
+    if (!bar || !session || !project.activeEntity || project.activeEntity.type !== 'group') {
+        bar?.classList.add('hidden');
+        return;
+    }
+
+    const group = project.agentGroups[project.activeEntity.name];
+    const shouldShow = session.groupChatState?.awaitsUserInput && group?.flowType === 'manual';
+
+    bar.innerHTML = '';
+    bar.classList.toggle('hidden', !shouldShow);
+
+    if (shouldShow) {
+        const members = (group.agents || []).filter(name => name !== group.moderatorAgent);
+        members.forEach(agentName => {
+            const btn = document.createElement('button');
+            btn.className = 'agent-select-btn';
+            btn.textContent = project.agentPresets[agentName]?.icon || '🤖';
+            btn.title = agentName;
+            btn.dataset.agentName = agentName;
+            bar.appendChild(btn);
+        });
+    }
 }

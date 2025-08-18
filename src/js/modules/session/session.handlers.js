@@ -54,7 +54,15 @@ export function createNewChatSession() {
         pinned: false,
         archived: false,
         linkedEntity: { ...activeEntity },
-        summaryState: { activeSummaryId: null, summarizedUntilIndex: -1 }
+        summaryState: { activeSummaryId: null, summarizedUntilIndex: -1 },
+        // [ADD THIS] เพิ่ม State สำหรับ Group Chat
+        groupChatState: {
+            isRunning: false,
+            awaitsUserInput: false,
+            turnQueue: [],
+            currentJob: null,
+            error: null
+        }
     };
 
     project.chatSessions.unshift(newSession);

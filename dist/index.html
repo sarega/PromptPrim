@@ -33,9 +33,9 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/main-Cn7938NG.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-g_vWwLtM.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-C-3nhxjE.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/main-DxZ-PIhH.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-DqAV90Kr.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/core-D5S7tJY2.css">
   <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-zXP_oT3j.css">
 </head>
 <body class="admin-page">
@@ -133,7 +133,7 @@
                         <div id="custom-entity-selector-options" class="custom-select-options"></div>
                     </div>
                     <button id="toggle-right-sidebar-btn" class="menu-toggle-btn" title="Toggle Agent & Asset Studio">
-                        <span class="material-symbols-outlined">support_agent</span>
+                        <span class="material-symbols-outlined">smart_toy</span>
                     </button>
                 </div>
 
@@ -224,8 +224,9 @@
                                 <div class="composer-content-area" contenteditable="true" spellcheck="false"></div>
                             </div>        
                         </div>
-                        <div class="chat-input-wrapper">
+                        <div class="chat-input-wrapper">                            
                             <div id="file-preview-container" class="hidden"></div>
+                            <div id="agent-selector-bar" class="agent-selector-bar hidden"></div>
                             <div class="input-container-seamless">
                                 <textarea id="chatInput" placeholder="พิมพ์ข้อความของคุณที่นี่..." rows="1"></textarea>
                                 <div class="input-actions-row">
@@ -315,26 +316,40 @@
         <div id="settings-panel" class="modal-box">
             <div class="modal-header">
                 <h3>Settings</h3>
-                <button type="button" class="modal-close-btn" title="Close Settings">&times;</button>
+                 <button type="button" class="modal-close-btn" title="Close Settings">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="tab-buttons">
-                    <button type="button" class="tab-btn active" data-tab="services">
-                        <span class="material-symbols-outlined">power</span> Services & APIs
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="system">
-                        <span class="material-symbols-outlined">smart_toy</span> System Agents
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="models">
-                        <span class="material-symbols-outlined">list_alt</span> Model Manager
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="tools">
-                        <span class="material-symbols-outlined">extension</span> Extensions
-                    </button>
-                    <button type="button" class="tab-btn" data-tab="about">
-                        <span class="material-symbols-outlined">info</span> About
-                    </button>
+
+                <button type="button" id="settings-mobile-menu-trigger" class="mobile-menu-trigger">
+                    <span class="material-symbols-outlined">power</span> <span id="settings-current-tab-name">Services & APIs</span>
+                    <span class="material-symbols-outlined">expand_more</span>
+                </button>
+
+                <div class="mobile-menu-popup">
+                    <div class="tab-buttons">
+                        <button type="button" class="tab-btn active" data-tab="services">
+                            <span class="material-symbols-outlined">power</span>
+                            <span class="tab-btn-text">Services & APIs</span>
+                        </button>
+                        <button type="button" class="tab-btn" data-tab="system">
+                            <span class="material-symbols-outlined">smart_toy</span>
+                            <span class="tab-btn-text">System Agents</span>
+                        </button>
+                        <button type="button" class="tab-btn" data-tab="models">
+                            <span class="material-symbols-outlined">list_alt</span>
+                            <span class="tab-btn-text">Model Manager</span>
+                        </button>
+                        <button type="button" class="tab-btn" data-tab="tools">
+                            <span class="material-symbols-outlined">extension</span>
+                            <span class="tab-btn-text">Extensions</span>
+                        </button>
+                        <button type="button" class="tab-btn" data-tab="about">
+                            <span class="material-symbols-outlined">info</span>
+                            <span class="tab-btn-text">About</span>
+                        </button>
+                    </div>
                 </div>
+
                 <!-- Tab Content: Services & APIs -->
                 <div class="tab-content active" data-tab-content="services">
                     <div class="section-box">
@@ -462,7 +477,7 @@
         </div>
     </div>
     <div id="agent-group-editor-modal" class="modal-overlay">
-        <div class="modal-box">
+        <div class="modal-box is-resizable">
             <h3 id="agent-group-modal-title">Create/Edit Agent Group</h3>
             <div class="modal-body">
                 <div class="form-group"><label for="group-name-input">Group Name</label><input type="text" id="group-name-input" placeholder="e.g., Creative Team"></div>
@@ -487,7 +502,6 @@
                     <input type="number" id="group-timer-input" value="0" min="0" max="180" step="10">
                     <p class="modal-warning">ใส่ 0 เพื่อให้ Moderator ทำงานรอบเดียวแล้วหยุด (โหมดปกติ)</p>
                 </div>                
-                <div class="form-group"><label for="group-summarization-threshold-input">Summarization Token Threshold</label><input type="number" id="group-summarization-threshold-input" value="3000" min="0" step="100"><p class="modal-warning">สรุปบทสนทนาเมื่อมี Token ใหม่เกินค่านี้ (ใส่ 0 เพื่อปิด)</p></div>
                 <div class="form-group"><label>Group Members</label><div id="group-member-list"></div></div>
             </div>
             <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก Group</button></div>
@@ -831,5 +845,8 @@
     <input type="file" id="file-input" class="hidden" multiple>
     <input type="file" id="import-settings-input" class="hidden" accept=".json">
     
+    <div id="react-root"></div>
+    <div id="react-modal-root"></div> 
+
 </body>
 </html>

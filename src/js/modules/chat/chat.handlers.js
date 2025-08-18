@@ -7,11 +7,11 @@ import { stateManager, SESSIONS_STORE_NAME, defaultSystemUtilityAgent } from '..
 import { dbRequest } from '../../core/core.db.js';
 import { callLLM, streamLLMResponse, buildPayloadMessages, getFullSystemPrompt, generateAndRenameSession } from '../../core/core.api.js';
 import { showCustomAlert, showContextMenu, updateAppStatus } from '../../core/core.ui.js';
-import { LiveMarkdownRenderer } from '../../core/core.utils.js';
 import * as ChatUI from './chat.ui.js';
 import * as GroupChat from './chat.group.js';
 import * as UserService from '../user/user.service.js'; 
 import { calculateCost } from '../../core/core.api.js';
+import { LiveMarkdownRenderer, generateUniqueMessageId } from '../../core/core.utils.js';
 
 export let attachedFiles = [];
 let turndownService = null; // [FIX 1] Declare here, but don't assign yet.
@@ -124,29 +124,53 @@ export function estimateTokens(text) {
 }
 
 
+// [THE DEFINITIVE FIX]
 export function getContextData() {
     const project = stateManager.getProject();
-    if (!project || !project.activeEntity) {
-        return { finalSystemPrompt: '', totalTokens: 0, agent: {}, agentNameForDisplay: 'N/A' };
+
+    // [หัวใจของการแก้ไข] ตรวจสอบก่อนว่า project และ chatSessions พร้อมใช้งานหรือไม่
+    if (!project || !project.chatSessions || !project.activeSessionId) {
+        // ถ้ายังไม่พร้อม ให้ return ค่าเริ่มต้นที่ปลอดภัยออกไปก่อน
+        return { finalSystemPrompt: '', totalTokens: 0, agent: {}, agentNameForDisplay: 'N/A', model: 'N/A' };
     }
 
-    const finalSystemPrompt = getFullSystemPrompt();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    
-    const historyTokens = session ? estimateTokens(JSON.stringify(session.history || [])) : 0;
+
+    if (!session || !project.activeEntity) {
+        return { finalSystemPrompt: '', totalTokens: 0, agent: {}, agentNameForDisplay: 'N/A', model: 'N/A' };
+    }
+
+    // --- ส่วนที่เหลือของฟังก์ชันจะทำงานได้อย่างปลอดภัย ---
+    let agentNameForDisplay = 'N/A';
+    let agentForContext = {};
+
+    if (project.activeEntity.type === 'group' && session.groupChatState?.isRunning && session.groupChatState.currentJob) {
+        agentNameForDisplay = session.groupChatState.currentJob.agentName;
+        agentForContext = project.agentPresets[agentNameForDisplay] || {};
+    } else {
+        agentNameForDisplay = project.activeEntity.name;
+        if (project.activeEntity.type === 'agent') {
+            agentForContext = project.agentPresets[agentNameForDisplay] || {};
+        } else if (project.activeEntity.type === 'group') {
+            const group = project.agentGroups[agentNameForDisplay];
+            agentNameForDisplay = `Group: ${agentNameForDisplay} (Moderator)`;
+            agentForContext = project.agentPresets[group?.moderatorAgent] || {};
+        }
+    }
+
+    const finalSystemPrompt = getFullSystemPrompt(agentForContext.name || agentNameForDisplay.replace('Group: ', '').replace(' (Moderator)', ''));
+
+    const historyTokens = estimateTokens(JSON.stringify(session.history || []));
     const inputTokens = estimateTokens(document.getElementById('chatInput')?.value || '');
     const systemTokens = estimateTokens(finalSystemPrompt);
     const totalTokens = systemTokens + historyTokens + inputTokens;
 
-    const agent = project.agentPresets[project.activeEntity.name] || {};
-    const agentNameForDisplay = project.activeEntity.name || 'N/A';
-    
     return {
         finalSystemPrompt,
         totalTokens,
-        agent,
+        agent: agentForContext,
         agentNameForDisplay,
-        model: agent.model || 'N/A'
+        model: agentForContext.model || 'N/A'
     };
 }
 
@@ -260,7 +284,10 @@ export async function sendMessage() {
 
         showCustomAlert(fullMessage, title); // ส่ง Title และ Message ที่สร้างใหม่เข้าไป
 
-        stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
+        attachedFiles = [];
+        stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
+        stateManager.bus.publish('ui:toggleLoading', { isLoading: false }); // <--- แก้ไขเพิ่มเติม: ต้องปลดล็อคปุ่มด้วย
+        
         stateManager.bus.publish('status:update', { message: 'Image processing failed', state: 'error' });
     }
 }
@@ -282,7 +309,7 @@ async function sendSingleAgentMessage() {
 
     // 1. สร้าง Placeholder พร้อม ID ที่ไม่ซ้ำกัน
     const placeholderMessage = { 
-        id: `msg_${Date.now()}`, // <--- เพิ่ม Unique ID
+        id: generateUniqueMessageId(),
         role: 'assistant', 
         content: '', 
         speaker: agentName, 
@@ -375,6 +402,10 @@ async function sendSingleAgentMessage() {
             console.log("Stream aborted by user.");
         }
     } finally {
+        if (stateManager.getState().abortController?.signal.aborted) {
+        console.log("Stream was manually aborted. UI state is handled by stopGeneration().");
+        return; // ออกจาก finally block ทันที
+        }
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
         if (!stateManager.getState().abortController?.signal.aborted) {
@@ -740,6 +771,16 @@ export async function editMessage({ index, event }) {
 
             // 4. อัปเดต History และ UI
             session.history[index].content = newContent;
+            if (session.summaryState?.activeSummaryId && index < session.summaryState.summarizedUntilIndex) {
+                session.summaryState.activeSummaryId = null;
+                session.summaryState.summarizedUntilIndex = -1;
+                console.log("Summary context has been reset due to a historical message edit.");
+                session.history.splice(index + 1, 0, { 
+                    role: 'system', 
+                    content: '[System: Conversation history was edited. Previous summary context has been cleared.]' 
+                });
+            }
+
             session.history.splice(index + 1);
             
             stateManager.updateAndPersistState();
@@ -830,20 +871,28 @@ export async function regenerateMessage({ index }) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session || index >= session.history.length) return;
-    stopGeneration();
-    let lastUserIndex = -1;
-    for (let i = index; i >= 0; i--) {
-        if (session.history[i].role === 'user') {
-            lastUserIndex = i;
-            break;
-        }
-    }
-    if (lastUserIndex === -1) return;
-    session.history.splice(lastUserIndex + 1);
-    stateManager.bus.publish('ui:renderMessages');
-    await sendSingleAgentMessage(); // <--- เรียกตรงนี้จบ!
-}
 
+    // หยุดการทำงานที่อาจค้างอยู่
+    stopGeneration();
+
+    // [THE FIX] ลบประวัติการสนทนาตั้งแต่ index ที่ต้องการ Regenerate เป็นต้นไป
+    // นี่คือการลบเฉพาะข้อความของ Agent คนนั้นและข้อความหลังจากนั้น (ถ้ามี)
+    session.history.splice(index);
+
+    // อัปเดต UI ให้แสดงผลประวัติที่ถูกตัดแล้ว
+    stateManager.bus.publish('ui:renderMessages');
+
+    // ตรวจสอบว่า Entity ที่ Active อยู่เป็น Group หรือ Agent เดี่ยว
+    if (project.activeEntity.type === 'agent') {
+        // ถ้าเป็น Agent เดี่ยว ให้เรียกใช้ Logic เดิม
+        await sendSingleAgentMessage();
+    } else if (project.activeEntity.type === 'group') {
+        // ถ้าเป็น Group ให้เรียกใช้ "เครื่องจักร" ของ Group Chat
+        const group = project.agentGroups[project.activeEntity.name];
+        // handleGroupChatTurn จะเริ่มกระบวนการใหม่จาก state ปัจจุบัน
+        await GroupChat.handleGroupChatTurn(project, session, group);
+    }
+}
 export function deleteMessage({ index }) {
     if (!confirm("Are you sure you want to delete this single message? This action cannot be undone.")) return;
     const project = stateManager.getProject();

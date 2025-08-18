@@ -167,54 +167,50 @@ export async function loadAllSystemModels() {
 export function getFullSystemPrompt(agentName) {
     const project = stateManager.getProject();
     if (!project) return "";
-    
-    // 1. ค้นหา Agent ที่กำลังจะทำงาน (เหมือนเดิม)
+
+    // 1. ประกาศตัวแปรที่นี่ เพื่อให้มี Scope ครอบคลุมทั้งฟังก์ชัน
     let entityAgent;
-    const activeEntity = project.activeEntity;
-    const targetName = agentName || activeEntity?.name;
-    const targetType = agentName ? 'agent' : (activeEntity?.type || 'agent');
-    if (!targetName) return "";
-    
-    if (targetType === 'agent') {
-        entityAgent = project.agentPresets?.[targetName];
-    } else if (targetType === 'group') {
-        const group = project.agentGroups?.[targetName];
-        entityAgent = project.agentPresets?.[group?.moderatorAgent];
-    }
-    if (!entityAgent) return "";
-    
-    // 2. [CRITICAL FIX] ตรวจสอบว่ามี Summary ที่กำลัง Active อยู่หรือไม่
-    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    const activeSummaryId = session?.summaryState?.activeSummaryId;
-    
-    if (activeSummaryId) {
-        const activeSummary = project.summaryLogs?.find(log => log.id === activeSummaryId);
-        if (activeSummary) {
-            console.log(`✅ Using active summary "${activeSummary.summary}" as system prompt.`);
-            // ถ้ามี Summary ให้ใช้เนื้อหาของ Summary เป็น System Prompt ทันที
-            return activeSummary.content;
+
+    // 2. ใช้ agentName ที่ส่งเข้ามาเป็นเป้าหมายหลักเสมอ
+    const targetAgentName = agentName;
+
+    // 3. ถ้ามี targetAgentName ให้ค้นหาข้อมูล Agent โดยตรง
+    if (targetAgentName) {
+        entityAgent = project.agentPresets?.[targetAgentName];
+    } else {
+        // 4. ถ้าไม่มี (เป็น Fallback) ให้หาจาก Active Entity
+        const activeEntity = project.activeEntity;
+        if (activeEntity?.type === 'agent') {
+            entityAgent = project.agentPresets?.[activeEntity.name];
+        } else if (activeEntity?.type === 'group') {
+            const group = project.agentGroups?.[activeEntity.name];
+            entityAgent = project.agentPresets?.[group?.moderatorAgent];
         }
     }
 
-    // 3. ถ้าไม่มี Summary ให้กลับไปใช้ Logic เดิม (System Prompt + Memories)
+    // 5. ตรวจสอบให้แน่ใจว่าเราหา Agent เจอจริงๆ ก่อนทำงานต่อ
+    if (!entityAgent) {
+        // console.warn(`getFullSystemPrompt: Could not resolve an agent for "${agentName || project.activeEntity?.name}".`);
+        return ""; // คืนค่าว่างอย่างปลอดภัย
+    }
+
+    // --- ส่วนที่เหลือของฟังก์ชันจะทำงานได้อย่างปลอดภัย ---
     let basePrompt = entityAgent.systemPrompt || "";
     const activeMemoryNames = entityAgent.activeMemories || [];
+
     if (activeMemoryNames.length === 0) {
         return basePrompt.trim();
     }
 
     const memoryContent = activeMemoryNames
-        .map(name => {
-            const memory = project.memories.find(m => m.name === name);
-            return memory ? memory.content : '';
-        })
-        .filter(content => content)
+        .map(name => project.memories.find(m => m.name === name)?.content)
+        .filter(Boolean)
         .join('\n\n');
-        
+
     if (!memoryContent) {
         return basePrompt.trim();
     }
-    
+
     return `${basePrompt.trim()}\n\n--- Active Memories ---\n${memoryContent}`;
 }
 
@@ -227,48 +223,38 @@ export function buildPayloadMessages(history, targetAgentName) {
 
     const messages = [];
 
-    // --- 1. System Prompt หลักของ Agent ---
-    if (agent.systemPrompt && agent.systemPrompt.trim()) {
-        messages.push({ role: 'system', content: agent.systemPrompt.trim() });
+    // --- ส่วนที่ 1: เพิ่ม System Prompt และ Memories (ไม่มีการแก้ไข) ---
+    const finalSystemPrompt = getFullSystemPrompt(targetAgentName);
+    if (finalSystemPrompt) {
+        messages.push({ role: 'system', content: finalSystemPrompt });
     }
 
-    // --- 2. Context จาก Summary (ถ้ามี) ---
+    // --- ส่วนที่ 2: จัดการ Summary Context (ไม่มีการแก้ไข) ---
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     const activeSummaryId = session?.summaryState?.activeSummaryId;
+    let startIndex = 0;
     if (activeSummaryId) {
         const activeSummary = project.summaryLogs?.find(log => log.id === activeSummaryId);
         if (activeSummary) {
-            const summaryContext = `Here is a summary of the conversation so far. Use this as your primary context for the user's next message:\n\n---\n${activeSummary.content}\n---`;
+            const summaryContext = `This is a summary of the conversation so far. Use this for context:\n\n---\n${activeSummary.content}\n---`;
             messages.push({ role: 'system', content: summaryContext });
+            startIndex = session.summaryState.summarizedUntilIndex || 0;
         }
     }
 
-    // --- 3. Context จาก Active Memories ---
-    const activeMemoryNames = agent.activeMemories || [];
-    if (activeMemoryNames.length > 0) {
-        const memoryContent = activeMemoryNames
-            .map(name => project.memories.find(m => m.name === name)?.content)
-            .filter(Boolean)
-            .join('\n\n');
-        
-        if (memoryContent) {
-            messages.push({ role: 'system', content: `CRITICAL KNOWLEDGE BASE:\nRemember and apply the following information at all times:\n\n---\n${memoryContent}\n---` });
-        }
-    }
-
-    // --- 4. ประวัติการสนทนา (Chat History) ---
-    const startIndex = activeSummaryId ? (session.summaryState.summarizedUntilIndex || 0) : 0;
+    // --- ส่วนที่ 3: [ผ่าตัด] สร้างประวัติการแชทพร้อมแปลง Role สำหรับ Group Chat ---
     const relevantHistory = history.slice(startIndex);
+    
+    // นับจำนวน Turn ของ Assistant เพื่อระบุว่าเป็น Group Chat หรือไม่
+    const assistantTurns = relevantHistory.filter(m => m.role === 'assistant' && m.content && !m.isLoading).length;
 
-    relevantHistory.forEach(msg => {
+    relevantHistory.forEach((msg, index) => {
         if (msg.isLoading || !msg.content || msg.isSummary || msg.isSummaryMarker) return;
 
-        // --- [THIS IS THE MISSING PART] ---
-        // นี่คือโค้ดส่วนแปลง Multimodal content (รูปภาพ) ที่คุณถามถึง
         let apiMessageContent = msg.content;
         
+        // --- ส่วนย่อย: จัดการ Multimodal Content (ไม่มีการแก้ไข) ---
         if (Array.isArray(apiMessageContent)) {
-            // ดึงข้อมูลโมเดลเพื่อตรวจสอบความสามารถ
             const allModels = [
                 ...(stateManager.getState().systemProviderModels || []),
                 ...(stateManager.getState().userProviderModels || [])
@@ -277,7 +263,6 @@ export function buildPayloadMessages(history, targetAgentName) {
             const supportsMultimodalArray = modelData?.provider === 'openrouter';
 
             if (supportsMultimodalArray) {
-                // สำหรับ OpenRouter: แปลง format ให้ถูกต้อง
                 apiMessageContent = apiMessageContent.map(part => {
                     if (part.type === 'image_url') {
                         return { type: 'image_url', image_url: { url: part.url } };
@@ -285,20 +270,38 @@ export function buildPayloadMessages(history, targetAgentName) {
                     return part;
                 });
             } else {
-                // สำหรับ Backend อื่นๆ (เช่น Ollama): แปลง Array ให้เป็น String
                 apiMessageContent = apiMessageContent
                     .filter(part => part.type === 'text' && part.text)
                     .map(part => part.text)
                     .join('\n');
             }
         }
-        // --- [END OF MISSING PART] ---
         
-        messages.push({ role: msg.role, content: apiMessageContent });
+        // --- ส่วนย่อย: สร้าง Payload สำหรับ API ---
+        const apiMessage = {
+            role: msg.role,
+            content: apiMessageContent
+        };
+
+        // ===== [หัวใจของการแก้ไขอยู่ตรงนี้] =====
+        const isLastMessageInHistory = (index === relevantHistory.length - 1);
+
+        if (assistantTurns > 0 && msg.role === 'assistant' && isLastMessageInHistory) {
+            // ถ้าเป็นการคุยกันของ Agent (assistantTurns > 0)
+            // และข้อความนี้เป็นข้อความล่าสุดของ Agent คนก่อนหน้า
+            // ให้ "แปลงร่าง" role ของมันเป็น 'user' ชั่วคราว
+            apiMessage.role = 'user';
+        } else if (msg.role === 'assistant' && msg.speaker) {
+            // สำหรับข้อความ Assistant อื่นๆ ในประวัติ ให้ใส่ชื่อกำกับไว้ (ถ้า model รองรับ)
+            apiMessage.name = msg.speaker.replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+        
+        messages.push(apiMessage);
     });
 
     return messages;
 }
+
 export async function generateAndRenameSession(history){
      try{
         const project = stateManager.getProject();
@@ -444,7 +447,7 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                     if (provider === 'openrouter') {
                         if (line.startsWith('data: ')) {
                             const jsonStr = line.replace(/^data: /, '').trim();
-                            if (jsonStr === '[DONE]') break;
+                            if (jsonStr === '[DONE]') continue; // Use continue instead of break
                             const data = JSON.parse(jsonStr);
                             token = data.choices?.[0]?.delta?.content || '';
                         }
@@ -460,12 +463,36 @@ export async function streamLLMResponse(agent, messages, onChunk) {
             }
         }
         
+        // [THE FIX] ประมวลผลข้อมูลส่วนสุดท้ายที่อาจค้างอยู่ใน buffer
+        if (buffer.trim()) {
+            // ทำการประมวลผลเหมือนใน Loop ทุกประการ
+            let token = '';
+            try {
+                if (provider === 'openrouter') {
+                    if (buffer.startsWith('data: ')) {
+                        const jsonStr = buffer.replace(/^data: /, '').trim();
+                        if (jsonStr !== '[DONE]') {
+                             const data = JSON.parse(jsonStr);
+                             token = data.choices?.[0]?.delta?.content || '';
+                        }
+                    }
+                } else { // ollama
+                    const data = JSON.parse(buffer);
+                    token = data.message?.content || '';
+                }
+            } catch (e) { console.warn("Skipping malformed final JSON chunk:", buffer); }
+            if (token) {
+                fullResponseText += token;
+                onChunk(token);
+            }
+        }
+        
         const endTime = performance.now();
-        const duration = (endTime - startTime) / 1000; // Duration in seconds
+        const duration = (endTime - startTime) / 1000;
 
         let usage = { prompt_tokens: 0, completion_tokens: 0 };
         let cost = 0;
-        let usageIsEstimated = true; // Default to true
+        let usageIsEstimated = true;
 
         if (provider === 'openrouter' && response.headers.get('x-openrouter-usage')) {
             try {
@@ -475,17 +502,15 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                     completion_tokens: parsedUsage.completion_tokens || 0
                 };
                 cost = parsedUsage.cost || 0;
-                usageIsEstimated = false; // It's an exact count from the header
+                usageIsEstimated = false;
             } catch(e) { console.error("Could not parse usage header:", e); }
         }
         
         if (usageIsEstimated) {
-            // Fallback for Ollama or if header is missing
             usage.prompt_tokens = estimateTokens(JSON.stringify(messages));
             usage.completion_tokens = estimateTokens(fullResponseText);
         }
         
-        // Return the new flag along with other data
         return { content: fullResponseText, usage, duration, cost, usageIsEstimated };
 
     } catch (error) {

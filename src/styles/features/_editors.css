@@ -71,7 +71,8 @@
 
 /* --- Agent Group Editor Modal --- */
 #group-member-list {
-    max-height: 200px;
+    /* max-height: 400px; */
+    flex-grow: 1;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -591,13 +592,15 @@ body.dark-mode .tag-pill {
 
 /* --- Main Modal Box Sizing & Flex Layout --- */
 #agent-editor-modal .modal-box {
-    width: 90vw;
-    max-width: 1000px;
+    width: calc(100vw - 40px); /* เว้นขอบซ้ายขวา 20px */
+    max-width: none;           /* เอาข้อจำกัด max-width ออก */
     height: 85vh;
     min-height: 650px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 /* --- Modal Sections (Header, Body, Actions) --- */
@@ -632,7 +635,7 @@ body.dark-mode .tag-pill {
 }
 
 #agent-editor-modal .tab-btn {
-    padding: 10px 15px;
+    /* padding: 10px 15px; */
     cursor: pointer;
     border: none;
     background: none;
@@ -679,6 +682,7 @@ body.dark-mode .tag-pill {
     grid-template-columns: 140px 1fr;
     gap: 25px;
     align-items: start;
+    padding: 0px 5px;
 }
 
 #agent-editor-modal .profile-picture-column {
@@ -1151,4 +1155,340 @@ body.dark-mode #asset-sort-select {
 body.dark-mode .searchable-select-wrapper.has-warning input[type="text"] {
     border-color: #f59e0b;
     box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+}
+
+
+/* ==== Summarization Modal: lock height & stable tabs ==== */
+
+/* 1) ล็อกความสูงของกล่องโมดัลให้คงที่ */
+#summarization-modal .modal-box {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 88dvh !important;     /* ความสูงคงที่ */
+  max-height: 88dvh !important;
+  width: 94vw !important;
+}
+
+@media (min-width: 801px) {
+  #summarization-modal .modal-box {
+    height: 80vh !important;    /* เดสก์ท็อป: คงที่เหมือนกัน */
+    max-height: 80vh !important;
+    width: 760px;                /* ปรับตามดีไซน์พี่ได้ */
+    max-width: 92vw;
+  }
+}
+
+/* 2) ให้ body กินพื้นที่ที่เหลือทั้งหมด และเป็นตัวสกรอลล์หลัก */
+#summarization-modal .modal-header { flex: 0 0 auto; }
+#summarization-modal .modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 3) ทำให้คอนเทนต์ของแท็บยืดเต็มพื้นที่เท่ากันทุกแท็บ */
+#summarization-modal .tab-content-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;             /* กันสกรอลล์ซ้อนชั้น */
+}
+
+#summarization-modal .tab-content {
+  display: flex;                /* มีอยู่แล้วในไฟล์เดิม */
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;                /* สำคัญ: ไม่ดันกล่องให้สูง/เตี้ยต่างกัน */
+  overflow: auto;               /* สกรอลล์ภายในแต่ละแท็บ */
+}
+
+/* 4) เลย์เอาต์ภายใน Summary Logs ให้ยืด/สกรอลล์ถูกที่ */
+#summarization-modal .summary-log-layout { 
+  flex: 1 1 auto; 
+  min-height: 0; 
+  overflow: hidden; 
+}
+#summarization-modal .log-list-column {
+  max-height: 30vh;             /* ปรับเลขได้ 26–38vh */
+  overflow: auto;
+}
+#summarization-modal .log-editor-column {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#summarization-modal .log-editor-column .form-group:has(#summary-editor-content) {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0;
+}
+#summarization-modal #summary-editor-content { flex: 1 1 auto; min-height: 120px; resize: none; }
+
+/* มือถือ: สลับเป็นคอลัมน์ แต่ “ความสูงกล่อง” ยังคงที่ */
+@media (max-width: 800px) {
+  #summarization-modal .summary-log-layout { flex-direction: column; }
+  #summarization-modal .log-list-column { max-height: 28vh; margin-bottom: 10px; }
+}
+
+/* Summarization Modal — show only active tab */
+#summarization-modal .tab-content { 
+  display: none !important;         /* ซ่อนทุกแท็บเป็นค่าเริ่มต้น */ 
+}
+#summarization-modal .tab-content.active { 
+  display: flex !important;         /* โชว์เฉพาะแท็บที่ active */
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ===== Agent Editor – Responsive & Compact ===== */
+
+/* 1) กล่องโมดัลให้คงที่ และเลื่อนใน body */
+#agent-editor-modal .modal-box{
+  display:flex; flex-direction:column;
+  width:94vw; max-width:1000px;
+  height:88dvh; max-height:88dvh;  /* ล็อกความสูงคงที่ */
+}
+#agent-editor-modal .modal-body{
+  flex:1 1 auto; min-height:0; overflow:auto;  /* ให้สกรอลล์ที่นี่ */
+}
+
+@media (max-width: 600px) {
+    #agent-editor-modal .modal-body {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+}
+/* 2) ทำแท็บให้กินที่น้อยลงและติดหัว (ไม่หลุดตอนเลื่อน) */
+#agent-editor-modal .tab-buttons{
+  position:sticky; top:0; z-index:1;
+  /* background:var(--bg-color-secondary); */
+}
+
+/* 3) แปลง layout หลักให้เป็นคอลัมน์เดียวบนจอเล็ก */
+@media (max-width: 860px){
+  /* details grid: รูป + ฟอร์ม → เรียงแนวตั้ง */
+  #agent-editor-modal .details-grid{
+    grid-template-columns: 1fr; gap:16px;
+  }
+  #agent-editor-modal .profile-picture-column{
+    flex-direction:row; align-items:center; gap:12px;
+  }
+  #agent-editor-modal .profile-picture-wrapper{
+    width:84px; height:84px; border-radius:10px;
+  }
+  /* metadata ย้ายมาเป็นแถวเดียวอ่านง่าย */
+  #agent-editor-modal .agent-metadata{
+    margin-top:0; font-size:.78rem;
+  }
+
+  /* แถว Icon + ID ให้รีบเรียงใหม่ (ไอคอนเล็กลง) */
+  #agent-editor-modal .icon-id-row{
+    grid-template-columns: auto 1fr;
+    gap:12px; align-items:center;
+  }
+  #agent-editor-modal .emoji-picker-button{ font-size:1.6rem; width:40px; height:40px; }
+
+  /* System grid (ซ้ายพารามิเตอร์/ขวา enhancer) → คอลัมน์เดียว */
+  #agent-editor-modal .system-tab-content-grid{
+    grid-template-columns: 1fr; gap:16px;
+  }
+}
+
+/* 4) พื้นที่ฟอร์มให้กระชับขึ้น */
+#agent-editor-modal .form-fields-column{ gap:10px; padding-right:0; }
+#agent-editor-modal .form-group{ margin-bottom:10px; }
+
+/* 5) พารามิเตอร์ (Advanced Parameters) ให้พับอัตโนมัติบนมือถือ */
+@media (max-width: 860px){
+  #agent-editor-modal details[open] > summary{ position:sticky; top:42px; z-index:1; background:var(--bg-color-secondary); }
+  /* เลือกได้: เริ่มต้นเป็นปิดในมือถือ ถ้าพี่สั่งจาก JS ก็ข้ามบล็อกนี้ได้ */
+  #agent-editor-modal details{ /* ปิดค่าเริ่มต้น (ถ้าต้องการ) */ }
+}
+
+/* 6) Searchable select + textarea ให้ยืดเต็ม แสดงผลดีในแนวตั้ง */
+#agent-editor-modal .searchable-select-wrapper{ width:100%; }
+#agent-editor-modal textarea{ min-height:120px; resize:vertical; }
+
+/* 7) ซ่อน label ที่ยาวในมือถือ (คง a11y ด้วย sr-only) */
+@media (max-width: 680px){
+  #agent-editor-modal .form-group > label{
+    position:absolute!important; width:1px!important; height:1px!important;
+    margin:-1px!important; padding:0!important; overflow:hidden!important;
+    clip:rect(0 0 0 0)!important; white-space:nowrap!important; border:0!important;
+  }
+  /* เว้นระยะช่องกรอกให้ไม่แน่นเกิน */
+  #agent-editor-modal .form-group{ margin-bottom:8px; }
+}
+
+/* 8) Memories tab: กล่องรายการให้มีสกรอลล์ย่อย ไม่ดันทั้งหน้า */
+#agent-editor-modal .scrollable-list-group{ min-height:160px; }
+#agent-editor-modal .item-list-scrollable.compact{
+  max-height:38vh; overflow:auto; -webkit-overflow-scrolling:touch;
+}
+
+/* 9) ปุ่มล่างให้ติดก้นโมดัลเสมอและเว้นช่องนิ้วจิ้ม */
+#agent-editor-modal .modal-actions{
+  gap:10px; padding-bottom:10px;
+}
+#agent-editor-modal .modal-actions .btn{ min-height:38px; }
+
+/* 10) Dark mode ความคอนทราสต์ของ input บนมือถือให้ชัดขึ้น */
+@media (max-width: 860px){
+  body.dark-mode #agent-editor-modal .modal-box input[type="text"],
+  body.dark-mode #agent-editor-modal .modal-box textarea{
+    background:#2d3748; border-color:#4a5568;
+  }
+}
+
+/* ===========================
+   Edit Agent — Dark cleanup
+   และ Compact Tabs (mobile)
+   =========================== */
+
+/* 1) ล้างสีพื้นหลังสว่างที่ยังหลงมาใน Dark */
+body.dark-mode #agent-editor-modal .agent-enhancer-column {
+  background: var(--bg-color-secondary) !important;
+  border-color: #4a5568 !important;
+}
+body.dark-mode #agent-editor-modal .section-box { background: transparent !important; }
+body.dark-mode #agent-editor-modal details { background: transparent !important; }
+body.dark-mode #agent-editor-modal details > summary {
+  background: #2d3748;           /* แถบหัวข้อย่อยให้กลืนกับธีม */
+  border: 1px solid #4a5568;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+body.dark-mode #agent-editor-modal .tags-input-container {
+  background: #2d3748;
+  border-color: #4a5568;
+}
+body.dark-mode #agent-editor-modal .item-list-scrollable.compact {
+  background: transparent;
+  border-color: #4a5568;
+}
+
+/* 2) ปรับ component parameter ที่ยังอมนวลสว่าง */
+body.dark-mode #agent-editor-modal .param-wrapper {
+  background: #1f2937 !important;
+  border-color: #374151 !important;
+}
+body.dark-mode #agent-editor-modal .param-control input[type="number"],
+body.dark-mode #agent-editor-modal .param-control input[type="text"] {
+  background: #111827 !important;
+  border-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+/* 3) Tab bar ให้เตี้ยลง—ทั้งเดสก์ท็อปและยิ่งเตี้ยบนมือถือ */
+#agent-editor-modal .tab-btn {
+  padding: 8px 12px;          /* เดิม 10/15 */
+  font-size: 0.88rem;
+}
+
+/* 4) ช่องว่างรวมให้กะทัดรัดขึ้น (mobile) */
+@media (max-width: 860px) {
+  #agent-editor-modal .tab-content-container { padding: 16px; }
+  #agent-editor-modal .details-grid { gap: 16px; }
+  #agent-editor-modal .system-tab-content-grid { gap: 16px; }
+  #agent-editor-modal .form-fields-column { gap: 6px; }
+  #agent-editor-modal .form-group { margin-bottom: 8px; }
+  #agent-editor-modal .profile-picture-wrapper { width: 96px; height: 96px; }
+}
+
+/* 5) เส้น hover/active ของ tab ใน Dark ให้ดูกลืน (ไม่เป็นแถบขาว) */
+body.dark-mode #agent-editor-modal .tab-btn:hover {
+  background-color: #334155;   /* แทน #f8fafc */
+}
+body.dark-mode #agent-editor-modal .tab-btn.active {
+  background-color: #374151;   /* มีแล้ว แต่ตอกย้ำกลบกรณีโดน style อื่นทับ */
+  border-bottom-color: transparent;
+}
+
+/* 6) แถบไฮไลต์/การ์ดใน Enhancer ให้เข้มขึ้น */
+body.dark-mode #agent-editor-modal .agent-enhancer-column h4 { color: #e5e7eb; }
+body.dark-mode #agent-editor-modal .enhancer-status-box { color: #a7b0c0; }
+
+/* 7) สกรอลล์ย่อยให้สีเข้ม (ถ้าใช้ webkit) – optional */
+#agent-editor-modal .item-list-scrollable::-webkit-scrollbar,
+#agent-editor-modal .tab-content-container::-webkit-scrollbar { width: 8px; height: 8px; }
+#agent-editor-modal .item-list-scrollable::-webkit-scrollbar-thumb,
+#agent-editor-modal .tab-content-container::-webkit-scrollbar-thumb { background: #48556a; border-radius: 6px; }
+
+/* ===== Agent Editor: scope-only dark fixes & compact tabs ===== */
+
+/* 1) เอาแถบขาวออก เฉพาะใน DARK + เฉพาะ Agent Editor */
+body.dark-mode #agent-editor-modal .agent-enhancer-column,
+body.dark-mode #agent-editor-modal .section-box,
+body.dark-mode #agent-editor-modal details,
+body.dark-mode #agent-editor-modal .item-list-scrollable.compact {
+  background: transparent !important;
+  border-color: #4a5568 !important;
+}
+
+/* card ฝั่ง Enhancer ให้กลืนกับธีม */
+body.dark-mode #agent-editor-modal .agent-enhancer-column {
+  background: #1f2937 !important; /* เข้มกว่าพื้นหลังเล็กน้อย */
+}
+
+/* รักษา Light theme เดิมไว้ (ไม่ให้เดสก์ท็อปเพี้ยน) */
+body:not(.dark-mode) #agent-editor-modal .agent-enhancer-column {
+  background: #f7fafc;   /* ตามไฟล์เดิม */
+}
+
+/* 2) ทำ tab ให้เตี้ยลงเฉพาะมือถือ (เดสก์ท็อปไม่โดน) */
+@media (max-width: 860px) {
+  #agent-editor-modal .tab-btn {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    gap: 6px;
+  }
+}
+
+/* 3) บังคับ input/textarea ใน Agent Editor ให้ใช้สีของธีม (กันแถบขาวแอบโผล่) */
+body.dark-mode #agent-editor-modal input[type="text"],
+body.dark-mode #agent-editor-modal input[type="number"],
+body.dark-mode #agent-editor-modal input[type="password"],
+body.dark-mode #agent-editor-modal textarea {
+  background-color: #2d3748 !important;
+  border-color: #4a5568 !important;
+  color: var(--text-dark) !important;
+}
+
+/* 4) อย่าไปแก้ขนาดโมดัลบนเดสก์ท็อปอีก (เผื่อมี !important ก่อนหน้า) */
+@media (min-width: 861px) {
+  #agent-editor-modal .modal-box {
+    height: 85vh;           /* ตามสไตล์เดิมในไฟล์ */
+    max-width: 1000px;
+  }
+}
+
+@media (max-width: 480px) {
+  #agent-editor-modal .modal-box input,
+  #agent-editor-modal .modal-box textarea { padding: 8px 10px; }
+}
+
+/* --- [FIX] Agent Group Editor Layout Improvements --- */
+
+/* ทำให้ Modal กว้างขึ้นบน Desktop */
+@media (min-width: 768px) {
+  #agent-group-editor-modal .modal-box {
+    height: 80vh; 
+    max-width: 750px; /* เพิ่มความกว้างสูงสุดของ Modal */
+  }
+}
+
+/* ทำให้รายการ Agent ใน List กระชับขึ้น */
+#agent-group-editor-modal .agent-sortable-item {
+  padding: 6px 10px;  /* ลด Padding แนวตั้ง */
+  margin-bottom: 4px; /* ลดระยะห่างระหว่างรายการ */
+}
+
+#agent-group-editor-modal .agent-sortable-item label {
+  font-size: 0.9rem; /* ลดขนาด Font เล็กน้อย */
+  margin-left: 8px;
+}
+
+#agent-group-editor-modal .modal-body {
+    flex-grow: 1;      /* [สำคัญ] ทำให้ Body ขยายเต็มพื้นที่ที่เหลือในแนวตั้ง */
+    overflow-y: auto;  /* [สำคัญ] ทำให้ Body มี scrollbar ของตัวเองเมื่อเนื้อหาล้น */
+    min-height: 0;     /* เทคนิคสำหรับ Flexbox เพื่อให้ overflow ทำงานถูกต้อง */
 }

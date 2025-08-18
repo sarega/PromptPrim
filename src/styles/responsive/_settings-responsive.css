@@ -50,8 +50,6 @@ body.dark-mode .mobile-menu-trigger {
         border-color: #4a5568;
     }
 
-
-
     .mobile-menu-popup.is-open {
         display: block !important;    
         position: absolute;
@@ -91,38 +89,114 @@ body.dark-mode .mobile-menu-trigger {
         padding: 10px 5px; 
         
     }
-
-    #settings-modal .model-manager-layout {
+/*  */
+    /* #settings-modal .model-manager-layout {
         flex-direction: column;
         gap: 25px;
-    }
+    } 
+    */
+}
+/* ==== Settings modal – Mobile nested scroll (MODE B) ==== */
+@media (max-width: 768px) {
+  /* 1) ให้ overlay เองเลื่อนได้เวลาจอเตี้ย (iOS-friendly) */
+  #settings-modal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    overflow: auto;                         /* สำคัญ */
+    -webkit-overflow-scrolling: touch;
+  }
 
-    #settings-modal .model-manager-column {
-        flex: none;
-        min-height: auto;
-    }
+  /* 2) คุมความสูงกล่อง + เปิด flex column */
+  #settings-panel {
+    width: 92vw;
+    max-height: 92vh !important;            /* คุมไม่ให้เกินจอ */
+    display: flex;
+    flex-direction: column;
+  }
 
+  #settings-panel .modal-header {
+    flex: 0 0 auto;
+  }
 
-    #settings-modal #model-manager-list-container .item-list-scrollable {
-        max-height: 0vh; 
+  /* 3) ให้ .modal-body เป็นตัวที่สกรอลล์ได้ */
+  #settings-panel .modal-body {
+    flex: 1 1 auto;
+    min-height: 0 !important;               /* อนุญาตให้ย่อลง */
+    overflow-y: auto !important;            /* แกนหลักเลื่อน */
+    -webkit-overflow-scrolling: touch;
+  }
 
-    }
+  /* 4) Layout ภายใน Model Manager */
+  #settings-panel .model-manager-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;                           /* กันลูกโดนบีบ */
+  }
+  #settings-panel .model-manager-column {
+    min-height: 0;
+  }
 
-    /* #settings-modal .model-manager-layout #preset-included-list {
-        flex-grow: 1;
-    } */
-    #settings-modal .model-manager-layout #model-preset-editor .form-group:has(#preset-included-list) {
-        flex-grow: 1; /* ★ สั่งให้ขยายเต็มพื้นที่ที่เหลือ */
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 0;
-    }
-    #settings-modal .model-manager-layout #preset-included-list {
-        flex-grow: 1; /* ★ สั่งให้ List ขยายเต็ม Form Group ของมัน */
-    }
+  /* 5) สกรอลล์ย่อยเฉพาะ "All Models" (แทน 0vh เดิม) */
+  #settings-panel #model-manager-list-container .item-list-scrollable {
+    max-height: calc(50vh - 50px);    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
 
+  /* 6) สกรอลล์ย่อยฝั่ง "Included Models" ด้วย */
+  #settings-panel #preset-included-list {
+    max-height: 32vh !important;            /* ให้เหลือพื้นที่ปุ่ม/ฟอร์ม */
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
 
+/* Compact "Model Presets" on mobile */
+@media (max-width: 768px) {
+  /* ซ่อน label แต่ยังเหลือที่สำหรับ screen reader */
+  #settings-panel #model-preset-editor .form-group > label[for="preset-selector"],
+  #settings-panel #model-preset-editor .form-group > label[for="preset-name-input"] {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+
+  /* เว้นช่องว่างน้อยลง */
+  #settings-panel #model-preset-editor .form-group {
+    margin-bottom: 10px;
+  }
+
+  /* แถว "Active Preset for App" ให้ select+Apply ชิดกันในบรรทัดเดียว */
+  #settings-panel #model-preset-editor .form-group .flex-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #settings-panel #preset-selector {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #settings-panel #apply-preset-btn {
+    padding: 6px 10px;
+  }
+
+  /* แถว "Preset Name" ให้ input + Save/Delete ชิดกัน */
+  #settings-panel #preset-name-input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #settings-panel #save-preset-btn,
+  #settings-panel #delete-preset-btn {
+    padding: 6px 10px;
+  }
 }
 
 

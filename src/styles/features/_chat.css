@@ -772,3 +772,37 @@ body.dark-mode .message.summary-marker {
     object-fit: contain; /* Scales the image down to fit, preserving its shape */
 }
 
+/* --- [NEW] Agent Selector Bar for Manual Group Chat --- */
+.agent-selector-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 12px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+}
+body.dark-mode .agent-selector-bar {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.agent-selector-bar.hidden {
+    display: none;
+}
+
+.agent-selector-bar .agent-select-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    background-color: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.agent-selector-bar .agent-select-btn:hover {
+    background-color: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
