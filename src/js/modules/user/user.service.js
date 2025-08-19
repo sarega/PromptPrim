@@ -245,51 +245,54 @@ export function convertCreditsToUSD(credits) {
 
 // --- [NEW] Credit & Plan Management Logic ---
 
-export function burnCreditsForUsage(usage, modelId, costUSD = 0) {
+export function burnCreditsForUsage(usage, modelId, costUSDFromHeader = 0) {
     const user = getCurrentUserProfile();
     if (!user || user.plan === 'master') return;
 
     const billingInfo = getSystemBillingInfo();
     const markupRate = billingInfo.markupRate || 1.0;
-    const creditsToBurn = costUSD * markupRate * 1000000;
     
-    // --- Credit and USD cost accumulation logic (This part is correct) ---
+    let actualCostUSD = 0;
+
+    // --- [THE FIX] Logic การคำนวณค่าใช้จ่ายตามลำดับความน่าเชื่อถือ ---
+    // Priority 1: ใช้ Cost จริงจาก Header ของ OpenRouter ถ้ามี (แม่นยำที่สุด)
+    if (costUSDFromHeader > 0) {
+        actualCostUSD = costUSDFromHeader;
+    }
+    // Priority 2: ถ้าไม่มี Cost จาก Header ให้คำนวณจาก Token Count จริงที่ได้จาก API
+    else if (usage && usage.prompt_tokens > 0) {
+        actualCostUSD = calculateCost(modelId, usage); // ใช้ฟังก์ชันคำนวณที่เรามีอยู่แล้ว
+    }
+    // Priority 3: (Fallback) ถ้าไม่มีข้อมูลอะไรเลยจริงๆ (เช่น Error) จะไม่หักเงิน
+    else {
+        console.warn(`Could not determine cost for model ${modelId}. No credits were burned.`);
+        return; // ไม่หักเครดิตถ้าคำนวณไม่ได้
+    }
+
+    // หักเครดิตตาม Cost จริง x Markup Rate
+    const creditsToBurn = actualCostUSD * markupRate * 1000000;
+
     user.credits.current -= creditsToBurn;
     user.credits.totalUsage += creditsToBurn;
     if (user.credits.current < 0) user.credits.current = 0;
-    if (!user.credits.totalUsedUSD) user.credits.totalUsedUSD = 0;
-    user.credits.totalUsedUSD += costUSD;
 
-        // [FIX] เปลี่ยนจากการบันทึก Log แบบ String เป็นแบบ Object
+    // บันทึกการใช้จ่ายเป็น USD จริง
+    if (!user.credits.totalUsedUSD) user.credits.totalUsedUSD = 0;
+    user.credits.totalUsedUSD += actualCostUSD;
+
+    // บันทึก Token Usage จริง
+    if (!user.credits.tokenUsage) user.credits.tokenUsage = { prompt: 0, completion: 0 };
+    user.credits.tokenUsage.prompt += (usage.prompt_tokens || 0);
+    user.credits.tokenUsage.completion += (usage.completion_tokens || 0);
+
     const balanceAfterUSD = convertCreditsToUSD(user.credits.current);
     user.logs.push({
         timestamp: Date.now(),
         event: 'Usage',
         details: `API Usage on model: ${modelId}`,
-        amountUSD: -costUSD, // เก็บเป็นค่าลบ
+        amountUSD: -actualCostUSD,
         balanceAfterUSD: balanceAfterUSD
     });
-    
-    // --- [THE FIX] ---
-    // This block correctly accumulates the total tokens used.
-    if (!user.credits.tokenUsage) {
-        user.credits.tokenUsage = { prompt: 0, completion: 0 };
-    }
-    user.credits.tokenUsage.prompt += (usage.prompt_tokens || 0);
-    user.credits.tokenUsage.completion += (usage.completion_tokens || 0);
-    user.logs.push({ timestamp: Date.now(), action: `API Usage Cost: $${costUSD.toFixed(8)}` });
-
-    // --- Low balance notification logic (This part is correct) ---
-    const balanceUSD = convertCreditsToUSD(user.credits.current);
-    const previousCredits = user.credits.current + creditsToBurn; // Reconstruct previous balance
-    const previousBalanceUSD = convertCreditsToUSD(previousCredits);
-
-    if (balanceUSD < 1.00 && previousBalanceUSD >= 1.00) {
-        showCustomAlert(
-            `Your balance is low ($${balanceUSD.toFixed(2)}). Please consider refilling to avoid service interruption.`, 
-            'Low Balance Warning'
-        );
-    }
 
     saveUserDatabase();
 }

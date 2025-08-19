@@ -218,11 +218,25 @@ export async function sendMessage() {
     try {
         const userMessageContent = [];
         const urlRegex = /(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|bmp))/gi;
-        const imageUrls = textContent.match(urlRegex) || [];
         
-        const plainText = textContent.replace(urlRegex, '').trim();
+        let textForProcessing = document.getElementById('chatInput').value.trim();
+        const imageUrls = textForProcessing.match(urlRegex) || [];
+        const plainText = textForProcessing.replace(urlRegex, '').trim();
+
         if (plainText) {
             userMessageContent.push({ type: 'text', text: plainText });
+        }
+
+        // Process URLs with individual error handling
+        for (const url of imageUrls) {
+            try {
+                const base64Url = await convertImageUrlToBase64(encodeURI(url));
+                userMessageContent.push({ type: 'image_url', url: base64Url });
+            } catch (urlError) {
+                console.warn(`Could not process image from URL: ${url}. Skipping.`, urlError);
+                // Optional: Add the failed URL back in as plain text
+                userMessageContent.push({ type: 'text', text: `(Could not load image: ${url})` });
+            }
         }
 
         // [FIX] แปลง URL ทั้งหมด และถ้ามี Error จะเข้าไปที่ catch block ทันที
@@ -359,7 +373,7 @@ async function sendSingleAgentMessage() {
         }
         
         UserService.logSystemApiCost(calculatedCost);
-        UserService.burnCreditsForUsage(response.usage, agent.model, calculatedCost);
+        UserService.burnCreditsForUsage(response.usage, agent.model, response.cost);
         
         const finalResponseText = renderer.getFinalContent();
         const finalMessage = { 

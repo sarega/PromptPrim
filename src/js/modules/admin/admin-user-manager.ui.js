@@ -200,12 +200,12 @@ export function renderUserDetail(userId) {
                     <input type="text" value="$${(user.credits.totalUsedUSD || 0).toFixed(6)}" readonly class="read-only-display">
                 </div>
                 <div class="form-group">
-                    <label>Total Credit Spend</label>
-                    <input type="text" value="${user.credits.totalUsage.toLocaleString()}" readonly class="read-only-display">
+                    <label>Total Refilled (USD)</label>
+                    <input type="text" value="$${(user.credits.totalRefilledUSD || 0).toFixed(2)}" readonly class="read-only-display">
                 </div>
                 <div class="form-group">
-                    <label>Total Token Spend</label>
-                    <input type="text" value="${totalTokenSpend.toLocaleString()}" readonly class="read-only-display">
+                    <label>Total Usage Cost (USD)</label>
+                    <input type="text" value="$${(user.credits.totalUsedUSD || 0).toFixed(6)}" readonly class="read-only-display">
                 </div>
                 <button id="view-activity-log-btn" class="btn btn-secondary">View Activity Log</button>
                 <button id="view-account-log-btn" class="btn btn-secondary">View Account Log</button>
