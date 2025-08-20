@@ -229,7 +229,6 @@
 }
 
 /* --- New Summarization Modal Styles --- */
-
 .modal-column {
     display: flex; flex-direction: column; min-height: 0;
 }
@@ -245,138 +244,84 @@
 #summary-editor-actions { display: flex; gap: 10px; }
 #summary-editor-actions.hidden { display: none; }
 
+/* ========================================================
+   [DEFINITIVE & FINAL] CSS for Conversation Summary Center
+   แก้ไขปัญหาคอลัมน์ขวาหายบน Mobile อย่างถาวร
+   ======================================================== */
 
-/* [FIX] Media Query สำหรับทำให้ Modal เป็น Responsive */
-@media (max-width: 800px) {
-    .modal-body-columns {
-        flex-direction: column; /* เปลี่ยนเป็นแนวตั้ง */
-        min-height: 0;
-        min-width: 0;  /* <-- บรรทัดสำคัญ: อนุญาตให้ Modal หดได้เล็กกว่า 450px */
-    }
-    .modal-column.left {
-        border-right: none;
-        padding-right: 0;
-        max-height: 250px; /* จำกัดความสูงของ Log List บนมือถือ */
-        flex-shrink: 0;
-    }
-    /* 1. กำหนดให้ Modal เป็น Flex Container แบบเต็มความสูง */
-    #summarization-modal .modal-box {
-        min-width: 0 !important; /* <-- คำสั่งสำคัญ: ยกเลิกความกว้างขั้นต่ำ */
-        width: 100% !important;  /* กำหนดให้ความกว้างเป็น 100% ของจอเสมอ */
-        padding-left: 15px !important;
-        padding-right: 15px !important;
-        box-sizing: border-box !important; /* ป้องกันปัญหา padding ดัน layout ล้น */
-    }
-
-
-    /* 2. ทำให้ Body (ส่วนเนื้อหา) ขยายเต็มพื้นที่ที่เหลือและ scroll ได้ */
-    #summarization-modal .modal-body {
-        flex-grow: 1;       /* <-- คำสั่งสำคัญ: ให้ขยายเต็มพื้นที่ว่าง */
-        overflow-y: auto;   /* ทำให้เนื้อหา scroll ได้เมื่อล้น */
-        padding: 10px 0;    /* ปรับ padding แนวตั้งเล็กน้อย */
-        min-height: 0;      /* เทคนิคแก้ปัญหา scroll ใน flexbox */
-        display: flex;      /* ทำให้ข้างในเป็น flex container ด้วย */
-        flex-direction: column; /* จัดเรียง form group แนวตั้ง */
-        gap: 3px;          /* ระยะห่างระหว่าง Title และ Content */
-    }
-    #summarization-modal .modal-column {
-        min-width: 0 !important;
-    }
-    /* 3. ทำให้ Textarea ขยายเต็มพื้นที่ที่เหลือใน Body */
-    #summarization-modal .modal-body .form-group:has(#summary-editor-content) {
-        flex-grow: 1;
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 0; /* เอา margin เดิมออก */
-    }
-
-    #summarization-modal #summary-editor-content {
-        flex-grow: 1; /* ขยายให้เต็มพื้นที่ใน form group */
-        resize: none; /* ปิดการย่อขยายด้วยมือบนมือถือ */
-    }
-
-    /* 4. จัดวางปุ่ม Actions ให้อยู่ด้านล่างสุด */
-    #summarization-modal .modal-actions {
-        flex-direction: row;        /* กลับมาเรียงแนวนอน */
-        justify-content: space-between; /* จัดให้กระจายตัว */
-        gap: 10px;
-        margin-top: auto;
-        padding-top: 10px;
-        border-top: 1px solid var(--border-color);
-    }
-   #summarization-modal .modal-actions .btn {
-        flex-grow: 1; /* ทำให้ปุ่มขยายเต็มพื้นที่เท่าๆ กัน */
-    }
-
-
-}
-#summarization-modal .modal-actions .btn {
-    padding: 8px 16px; /* ลดขนาดปุ่ม */
-    font-size: 0.9rem;
+/* --- 1. โครงสร้างหลักของ Modal (ใช้ร่วมกัน) --- */
+#summarization-modal .modal-box {
+    display: flex;
+    flex-direction: column;
+    width: 90vw;
+    max-width: 950px;
+    height: 85vh;
+    max-height: 800px;
 }
 
-#memory-editor-modal .modal-actions .btn {
-    font-size: 1rem;
-    flex-grow: 0; /* ป้องกันไม่ให้ปุ่มขยายตัว */
-}
-/* --- New Styles for Summarization Modal Layout --- */
-.summary-log-layout {
+#summarization-modal .modal-body {
     display: flex;
     flex-grow: 1;
-    gap: 20px;
     overflow: hidden;
-    min-height: 400px; /* Set a minimum height */
+    min-height: 0;
+    gap: 20px;
 }
+/* #summarization-modal .modal-header {
+    margin-bottom: 15px;
+} */
 
-.log-list-column {
-    flex: 1;
-    min-width: 280px;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    border-right: 1px solid var(--border-color);
-    padding-right: 20px;
-}
-
-.log-editor-column .form-group:has(#summary-editor-content) {
-    flex-grow: 1; /* ทำให้ form group ของ textarea ขยาย */
-    display: flex;
-    flex-direction: column;
-}
-
-.log-editor-column {
-    flex: 2;
-    display: flex;
-    flex-direction: column;
-}
-#summary-editor-content {
-    flex-grow: 1; /* ทำให้ textarea ขยายเต็มพื้นที่ */
-    resize: vertical;
-    /* min-height: 150px;  */
-}
-#summarization-modal .searchable-select-wrapper input[type="text"],
-#summarization-modal #summary-modal-preset-select {
-    padding: 8px 12px; /* ลดขนาดช่อง input/select */
-}
-
-#summarization-modal #summary-modal-preset-actions .btn {
-    padding: 8px 12px; /* ลดขนาดปุ่ม Actions */
-}
-
-/* Responsive for mobile */
-@media (max-width: 800px) {
-    .summary-log-layout {
-        flex-direction: column;
-        min-height: 0;
+/* --- 2. Desktop Layout (หน้าจอใหญ่กว่า 800px) --- */
+@media (min-width: 801px) {
+    #summarization-modal .modal-body {
+        flex-direction: row;
     }
-    .log-list-column {
+    #summarization-modal .log-list-column {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        border-right: 1px solid var(--border-color);
+        padding-right: 20px;
+    }
+    #summarization-modal #summary-log-list-modal {
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+    #summarization-modal .log-editor-column {
+        display: flex; /* แสดงผลเสมอใน Desktop */
+        flex-direction: column;
+        flex: 2;
+    }
+}
+
+/* --- 3. Mobile Layout (หน้าจอเล็กกว่าหรือเท่ากับ 800px) --- */
+@media (max-width: 800px) {
+    #summarization-modal .modal-body {
+        flex-direction: column;
+    }
+    #summarization-modal .log-list-column {
+        flex-shrink: 0;
+        height: 40vh;
+        max-height: 280px;
         border-right: none;
         padding-right: 0;
-        max-height: 200px; /* Limit height of log list on mobile */
-        flex-shrink: 0;
-        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+    #summarization-modal #summary-log-list-modal {
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+    
+    /* ===== [หัวใจของการแก้ไขอยู่ตรงนี้] ===== */
+    #summarization-modal .log-editor-column {
+        display: flex !important; /* <--- ใช้ !important เพื่อบังคับให้แสดงผลเสมอ */
+        flex-grow: 1;
+        min-height: 0;
+        flex-direction: column;
     }
 }
+
 
 /* --- Tab Styles for Modals --- */
 .modal-body {
@@ -1158,87 +1103,6 @@ body.dark-mode .searchable-select-wrapper.has-warning input[type="text"] {
 }
 
 
-/* ==== Summarization Modal: lock height & stable tabs ==== */
-
-/* 1) ล็อกความสูงของกล่องโมดัลให้คงที่ */
-#summarization-modal .modal-box {
-  display: flex !important;
-  flex-direction: column !important;
-  height: 88dvh !important;     /* ความสูงคงที่ */
-  max-height: 88dvh !important;
-  width: 94vw !important;
-}
-
-@media (min-width: 801px) {
-  #summarization-modal .modal-box {
-    height: 80vh !important;    /* เดสก์ท็อป: คงที่เหมือนกัน */
-    max-height: 80vh !important;
-    width: 760px;                /* ปรับตามดีไซน์พี่ได้ */
-    max-width: 92vw;
-  }
-}
-
-/* 2) ให้ body กินพื้นที่ที่เหลือทั้งหมด และเป็นตัวสกรอลล์หลัก */
-#summarization-modal .modal-header { flex: 0 0 auto; }
-#summarization-modal .modal-body {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow: auto !important;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* 3) ทำให้คอนเทนต์ของแท็บยืดเต็มพื้นที่เท่ากันทุกแท็บ */
-#summarization-modal .tab-content-container {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;             /* กันสกรอลล์ซ้อนชั้น */
-}
-
-#summarization-modal .tab-content {
-  display: flex;                /* มีอยู่แล้วในไฟล์เดิม */
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;                /* สำคัญ: ไม่ดันกล่องให้สูง/เตี้ยต่างกัน */
-  overflow: auto;               /* สกรอลล์ภายในแต่ละแท็บ */
-}
-
-/* 4) เลย์เอาต์ภายใน Summary Logs ให้ยืด/สกรอลล์ถูกที่ */
-#summarization-modal .summary-log-layout { 
-  flex: 1 1 auto; 
-  min-height: 0; 
-  overflow: hidden; 
-}
-#summarization-modal .log-list-column {
-  max-height: 30vh;             /* ปรับเลขได้ 26–38vh */
-  overflow: auto;
-}
-#summarization-modal .log-editor-column {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-#summarization-modal .log-editor-column .form-group:has(#summary-editor-content) {
-  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0;
-}
-#summarization-modal #summary-editor-content { flex: 1 1 auto; min-height: 120px; resize: none; }
-
-/* มือถือ: สลับเป็นคอลัมน์ แต่ “ความสูงกล่อง” ยังคงที่ */
-@media (max-width: 800px) {
-  #summarization-modal .summary-log-layout { flex-direction: column; }
-  #summarization-modal .log-list-column { max-height: 28vh; margin-bottom: 10px; }
-}
-
-/* Summarization Modal — show only active tab */
-#summarization-modal .tab-content { 
-  display: none !important;         /* ซ่อนทุกแท็บเป็นค่าเริ่มต้น */ 
-}
-#summarization-modal .tab-content.active { 
-  display: flex !important;         /* โชว์เฉพาะแท็บที่ active */
-  flex-direction: column;
-  min-height: 0;
-  overflow: auto;
-}
-
 /* ===== Agent Editor – Responsive & Compact ===== */
 
 /* 1) กล่องโมดัลให้คงที่ และเลื่อนใน body */
@@ -1492,3 +1356,8 @@ body.dark-mode #agent-editor-modal textarea {
     overflow-y: auto;  /* [สำคัญ] ทำให้ Body มี scrollbar ของตัวเองเมื่อเนื้อหาล้น */
     min-height: 0;     /* เทคนิคสำหรับ Flexbox เพื่อให้ overflow ทำงานถูกต้อง */
 }
+
+#alert-modal {
+    z-index: 3000 !important; /* กำหนดค่า z-index ให้สูงกว่า Modal อื่นๆ ทั้งหมด */
+}
+

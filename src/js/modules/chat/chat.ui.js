@@ -756,7 +756,7 @@ export function initChatUI() {
             stateManager.bus.publish('group:manualSelectAgent', { agentName: btn.dataset.agentName });
         }
     });
-
+    stateManager.bus.subscribe('entity:selected', renderAgentSelectorBar);
     stateManager.bus.subscribe('ui:renderAgentSelector', renderAgentSelectorBar);
 
     initDragAndDrop();
@@ -828,23 +828,33 @@ export function renderAgentSelectorBar() {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     const bar = document.getElementById('agent-selector-bar');
-    if (!bar || !session || !project.activeEntity || project.activeEntity.type !== 'group') {
-        bar?.classList.add('hidden');
+    if (!bar) return;
+
+    // --- Logic การตรวจสอบที่รัดกุม ---
+    // 1. ถ้าไม่มี session, ไม่มี active entity, หรือ entity ที่ active ไม่ใช่ group ให้ซ่อนทันที
+    if (!session || !project.activeEntity || project.activeEntity.type !== 'group') {
+        bar.classList.add('hidden');
         return;
     }
 
     const group = project.agentGroups[project.activeEntity.name];
-    const shouldShow = session.groupChatState?.awaitsUserInput && group?.flowType === 'manual';
+    
+    // 2. ตรวจสอบเงื่อนไขเฉพาะสำหรับ Manual Mode
+    const shouldShow = (
+        group?.flowType === 'manual' &&
+        session.groupChatState?.awaitsUserInput === true
+    );
 
-    bar.innerHTML = '';
-    bar.classList.toggle('hidden', !shouldShow);
+    bar.innerHTML = ''; // เคลียร์ปุ่มเก่าทิ้งเสมอ
+    bar.classList.toggle('hidden', !shouldShow); // ซ่อน/แสดงตามเงื่อนไข
 
     if (shouldShow) {
         const members = (group.agents || []).filter(name => name !== group.moderatorAgent);
         members.forEach(agentName => {
+            const agentPreset = project.agentPresets[agentName];
             const btn = document.createElement('button');
             btn.className = 'agent-select-btn';
-            btn.textContent = project.agentPresets[agentName]?.icon || '🤖';
+            btn.innerHTML = `${agentPreset?.icon || '🤖'}`;
             btn.title = agentName;
             btn.dataset.agentName = agentName;
             bar.appendChild(btn);

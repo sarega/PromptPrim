@@ -1,4 +1,6 @@
 // src/js/modules/summary/summary.ui.js (Definitive, Complete & Corrected Version)
+import { mountReactComponent } from '../../react-entry.jsx';
+import SummaryCenterModal from '../../react-components/SummaryCenterModal.jsx'; // Also import the component itself
 
 import { stateManager, defaultSummarizationPresets } from '../../core/core.state.js';
 import { toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
@@ -198,37 +200,60 @@ export function renderLogList() {
     });
 }
 
+// export function showSummarizationCenter() {
+//     const modal = document.getElementById('summarization-modal');
+//     if (!modal) return;
+
+//     // --- Reset UI elements ---
+//     modal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
+//     modal.querySelector('.tab-btn[data-tab="logs"]')?.classList.add('active');
+//     modal.querySelector('.tab-content[data-tab-content="logs"]')?.classList.add('active');
+    
+//     selectLog(null);
+//     renderLogList();
+//     renderSummarizationPresetSelector();
+//     SummaryHandlers.handleSummarizationPresetChange();
+//     updateModalActionsVisibility();
+
+//     // --- [THE FIX] ---
+//     // 1. Get the correctly filtered list of models for the current user.
+//     const modelsToShow = UserService.getAllowedModelsForCurrentUser();
+
+//     // 2. Get the currently selected model for the system agent as a default.
+//     const project = stateManager.getProject();
+//     const initialModelId = project.globalSettings.systemUtilityAgent?.model;
+    
+//     // 3. Create the searchable dropdown using the correct, filtered list.
+//     createSearchableModelSelector(
+//         'summary-model-wrapper',
+//         initialModelId,
+//         modelsToShow
+//     );
+
+//     modal.style.display = 'flex';
+// }
+
 export function showSummarizationCenter() {
-    const modal = document.getElementById('summarization-modal');
-    if (!modal) return;
-
-    // --- Reset UI elements ---
-    modal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
-    modal.querySelector('.tab-btn[data-tab="logs"]')?.classList.add('active');
-    modal.querySelector('.tab-content[data-tab-content="logs"]')?.classList.add('active');
-    
-    selectLog(null);
-    renderLogList();
-    renderSummarizationPresetSelector();
-    SummaryHandlers.handleSummarizationPresetChange();
-    updateModalActionsVisibility();
-
-    // --- [THE FIX] ---
-    // 1. Get the correctly filtered list of models for the current user.
-    const modelsToShow = UserService.getAllowedModelsForCurrentUser();
-
-    // 2. Get the currently selected model for the system agent as a default.
     const project = stateManager.getProject();
-    const initialModelId = project.globalSettings.systemUtilityAgent?.model;
+    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    if (!session) return;
     
-    // 3. Create the searchable dropdown using the correct, filtered list.
-    createSearchableModelSelector(
-        'summary-model-wrapper',
-        initialModelId,
-        modelsToShow
-    );
+    const props = {
+        summaryLogs: project.summaryLogs || [],
+        allModels: UserService.getAllowedModelsForCurrentUser(),
+        promptTemplates: { ...defaultSummarizationPresets, ...project.globalSettings.summarizationPromptPresets },
+        currentSessionName: session.name,
+        systemUtilityModel: project.globalSettings.systemUtilityAgent?.model,
+        // [THE FIX] อ่านค่าที่เคยบันทึกไว้ส่งเข้าไปเป็น State เริ่มต้น
+        activeTemplate: project.globalSettings.activeSummarizationPreset,
+        defaultPresets: defaultSummarizationPresets,
+        onApplySettings: (settings) => SummaryHandlers.applySummarySettings(settings),
+    };
 
-    modal.style.display = 'flex';
+    const targetElement = document.getElementById('react-modal-root');
+    if (targetElement) {
+        mountReactComponent(SummaryCenterModal, props, targetElement);
+    }
 }
 
 export function hideSummarizationCenter() {

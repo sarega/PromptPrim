@@ -5,6 +5,8 @@
 // ===============================================
 
 import './main.jsx' // <-- [THE FIX] เพิ่มบรรทัดนี้เพื่อเรียกใช้โค้ด React
+import SummaryCenterModal from './js/react-components/SummaryCenterModal.jsx';
+
 import './styles/main.css';
 import './styles/layout/_loading.css';
 import './styles/layout/_right-sidebar.css';
@@ -194,15 +196,24 @@ function setupEventSubscriptions() {
     bus.subscribe('memory:importPackage', () => { document.getElementById('load-memory-package-input').click(); });
 
     bus.subscribe('studio:itemClicked', ProjectHandlers.handleStudioItemClick); 
-    bus.subscribe('summary:view', ({ logId }) => SummaryUI.showSummaryModal(logId));
-    bus.subscribe('summary:load', ({ logId }) => ChatHandlers.loadSummaryIntoContext(logId));
-    bus.subscribe('summary:delete', ({ logId }) => ChatHandlers.deleteSummary(logId));
     bus.subscribe('summary:editFromChat', ({ logId }) => {
         SummaryUI.showSummarizationCenter();
         setTimeout(() => SummaryUI.selectLog(logId), 50);
     });
-    bus.subscribe('summary:deleteFromChat', SummaryHandlers.deleteSummaryFromChat);
+
+    // [ของใหม่] Actions ภายใน React Modal
+    bus.subscribe('summary:generateNew', SummaryHandlers.generateNewSummary);
+    bus.subscribe('summary:saveEdit', SummaryHandlers.saveSummaryEdit);
+    bus.subscribe('summary:deleteLog', ({ logId }) => SummaryHandlers.deleteSummaryLog({ logId }));
+    bus.subscribe('summary:loadToContext', ({ logId }) => SummaryHandlers.loadSummaryToContext({ logId }));
+
+    // [ของใหม่] Preset Settings Actions ภายใน React Modal
+    bus.subscribe('settings:saveSummaryPreset', (payload) => SummaryHandlers.handleSaveSummarizationPreset(payload));
+    bus.subscribe('settings:renameSummaryPreset', (payload) => SummaryHandlers.renameSummarizationPreset(payload));
+    bus.subscribe('settings:deleteSummaryPreset', (payload) => SummaryHandlers.deleteSummarizationPreset(payload));
     bus.subscribe('chat:clearSummaryContext', ChatHandlers.clearSummaryContext); 
+    bus.subscribe('summary:saveNewLog', (payload) => SummaryHandlers.saveNewSummaryLog(payload));
+
     bus.subscribe('entity:select', ({ type, name }) => ProjectHandlers.selectEntity(type, name));
 
     // Chat Actions

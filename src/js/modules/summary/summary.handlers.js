@@ -5,68 +5,89 @@ import { showCustomAlert } from '../../core/core.ui.js';
 import * as SummaryUI from './summary.ui.js';
 
 // --- ฟังก์ชันหลักในการสร้าง Summary ---
-export async function generateNewSummary() {
+export async function generateNewSummary({ modelId, promptTemplate }) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    if (!session) return;
+    if (!session) throw new Error("Active session not found.");
 
-    const selectedModelId = document.getElementById('summary-model-value').value;
-    if (!selectedModelId) {
+    if (!modelId) {
         showCustomAlert("Please select a model for summarization in the Settings tab.", "Error");
-        return;
+        throw new Error("Model for summarization not selected.");
     }
     
-    const agentForSummary = {
-        ...project.globalSettings.systemUtilityAgent,
-        model: selectedModelId
-    };
+    const agentForSummary = { ...project.globalSettings.systemUtilityAgent, model: modelId };
     
     const historyToSummarize = session.history.filter(msg => msg.role === 'user' || msg.role === 'assistant');
-    if (historyToSummarize.length === 0) {
-        showCustomAlert('Not enough messages to summarize.', 'Info');
-        return;
+    if (historyToSummarize.length < 2) {
+        showCustomAlert('Not enough new messages to summarize.', 'Info');
+        throw new Error("Not enough messages.");
     }
 
-    SummaryUI.setSummaryLoading(true);
-    try {
-        const newMessagesText = historyToSummarize.map(m => `${m.speaker || m.role}: ${Array.isArray(m.content) ? m.content.find(p => p.type === 'text')?.text || '[multimodal content]' : m.content}`).join('\n');
-        const promptTemplate = document.getElementById('summary-modal-prompt-textarea').value;
-        const summaryPrompt = promptTemplate
-            .replace(/\$\{previousSummary\}/g, "This is a full-history summary from the beginning.")
-            .replace(/\$\{newMessages\}/g, newMessagesText);
+    const newMessagesText = historyToSummarize.map(m => `${m.speaker || m.role}: ${Array.isArray(m.content) ? m.content.find(p => p.type === 'text')?.text || '[multimodal content]' : m.content}`).join('\n');
+    const summaryPrompt = promptTemplate
+        .replace(/\$\{previousSummary\}/g, "This is a full-history summary from the beginning.")
+        .replace(/\$\{newMessages\}/g, newMessagesText);
 
-        // [THE FIX] The callLLM function returns an object { content, usage, cost }.
-        const response = await callLLM(agentForSummary, [{ role: 'user', content: summaryPrompt }]);
-        
-        // Ensure the response is valid before proceeding.
-        if (!response || typeof response.content !== 'string') {
-            throw new Error("Received an invalid or empty response from the AI summarizer.");
-        }
-
-        document.getElementById('summary-editor-title').value = `Summary of "${session.name}" at ${new Date().toLocaleTimeString()}`;
-        // [THE FIX] Use 'response.content' to get the actual summary text.
-        document.getElementById('summary-editor-content').value = response.content;
-        
-        SummaryUI.showEditorActions('new');
-
-    } catch (error) {
-        showCustomAlert(`Summarization Failed: ${error.message}`, "Error");
-    } finally {
-        SummaryUI.setSummaryLoading(false);
+    const response = await callLLM(agentForSummary, [{ role: 'user', content: summaryPrompt }]);
+    
+    if (!response || typeof response.content !== 'string') {
+        throw new Error("Received an invalid or empty response from the AI summarizer.");
     }
+
+    // [THE FIX] ส่งคืนค่า title และ content กลับไปให้ผู้เรียก
+    return {
+        title: `Summary of "${session.name}" at ${new Date().toLocaleTimeString()}`,
+        content: response.content
+    };
 }
 
 // --- ฟังก์ชันจัดการ Log (ที่ขาดไป) ---
-export function saveNewSummaryLog() {
+// export function saveNewSummaryLog() {
+//     const project = stateManager.getProject();
+//     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+//     const title = document.getElementById('summary-editor-title').value.trim();
+//     const content = document.getElementById('summary-editor-content').value.trim();
+
+//     if (!title || !content) {
+//         showCustomAlert("Title and content cannot be empty.", "Error");
+//         return;
+//     }
+
+//     const newLog = {
+//         id: `sum_${Date.now()}`,
+//         summary: title,
+//         content: content,
+//         timestamp: Date.now(),
+//         sourceSessionId: session.id,
+//     };
+
+//     if (!project.summaryLogs) project.summaryLogs = [];
+//     project.summaryLogs.push(newLog);
+    
+//     // --- [ส่วนที่เพิ่มเข้ามา] ---
+//     // 1. สร้าง System Message ที่เป็น Marker
+//     const markerMessage = {
+//         role: 'system',
+//         content: `[Conversation summarized: "${title}"]`,
+//         isSummaryMarker: true, // Flag สำคัญสำหรับ UI
+//         summaryLogId: newLog.id // ผูก ID ของ Log ไว้กับ Marker
+//     };
+//     // 2. เพิ่ม Marker เข้าไปในประวัติการแชท
+//     session.history.push(markerMessage);
+//     // -------------------------
+
+//     stateManager.updateAndPersistState();
+//     showCustomAlert("New summary log saved!", "Success");
+    
+//     // อัปเดต UI
+//     SummaryUI.selectLog(newLog.id);
+//     stateManager.bus.publish('ui:renderMessages'); // สั่งวาดหน้าแชทใหม่
+// }
+
+export function saveNewSummaryLog({ title, content }) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    const title = document.getElementById('summary-editor-title').value.trim();
-    const content = document.getElementById('summary-editor-content').value.trim();
-
-    if (!title || !content) {
-        showCustomAlert("Title and content cannot be empty.", "Error");
-        return;
-    }
+    if (!project || !session || !title || !content) return;
 
     const newLog = {
         id: `sum_${Date.now()}`,
@@ -78,25 +99,12 @@ export function saveNewSummaryLog() {
 
     if (!project.summaryLogs) project.summaryLogs = [];
     project.summaryLogs.push(newLog);
-    
-    // --- [ส่วนที่เพิ่มเข้ามา] ---
-    // 1. สร้าง System Message ที่เป็น Marker
-    const markerMessage = {
-        role: 'system',
-        content: `[Conversation summarized: "${title}"]`,
-        isSummaryMarker: true, // Flag สำคัญสำหรับ UI
-        summaryLogId: newLog.id // ผูก ID ของ Log ไว้กับ Marker
-    };
-    // 2. เพิ่ม Marker เข้าไปในประวัติการแชท
-    session.history.push(markerMessage);
-    // -------------------------
 
     stateManager.updateAndPersistState();
     showCustomAlert("New summary log saved!", "Success");
     
-    // อัปเดต UI
-    SummaryUI.selectLog(newLog.id);
-    stateManager.bus.publish('ui:renderMessages'); // สั่งวาดหน้าแชทใหม่
+    // สั่งให้ UI อัปเดตตัวเอง
+    stateManager.bus.publish('summary:listChanged', { newlyCreatedId: newLog.id });
 }
 
 export function saveSummaryEdit({ logId, title, content }) {
@@ -163,63 +171,44 @@ export function handleSummarizationPresetChange() {
         stateManager.bus.publish('ui:updateSummaryActionButtons');
     }
 }
-//... (ฟังก์ชัน save, delete, rename preset อื่นๆ ที่มีอยู่แล้ว)
-export async function handleSaveSummarizationPreset({ saveAs }) {
-    const selector = document.getElementById('summary-modal-preset-select');
-    const currentText = document.getElementById('summary-modal-prompt-textarea').value.trim();
-    if (!currentText) return;
-
-    let presetName = selector.value;
-    const isFactory = defaultSummarizationPresets.hasOwnProperty(presetName);
-
-    if (saveAs || isFactory || presetName === 'custom') {
-        presetName = prompt('Enter a name for this preset:', isFactory ? `${presetName} (Copy)` : 'My Custom Prompt');
-        if (!presetName || !presetName.trim()) return;
+export async function handleSaveSummarizationPreset({ saveAs, presetName, content }) {
+    const currentText = content.trim();
+    if (!currentText) {
+        showCustomAlert("Preset content cannot be empty.", "Error");
+        return;
     }
 
+    let finalName = presetName;
     const project = stateManager.getProject();
-    const trimmedName = presetName.trim();
+    const isFactory = defaultSummarizationPresets.hasOwnProperty(finalName);
 
-    if (project.globalSettings.summarizationPromptPresets[trimmedName] && trimmedName !== selector.value) {
-        if (!confirm(`A preset named '${trimmedName}' already exists. Overwrite?`)) return;
+    // Logic การถามชื่อสำหรับ Save As (เหมือนเดิม)
+    if (saveAs || isFactory || !finalName) {
+        const newPromptName = prompt('Enter a name for this new preset:', isFactory ? `${finalName} (Copy)` : 'My Custom Preset');
+        if (!newPromptName || !newPromptName.trim()) return;
+        finalName = newPromptName.trim();
+    }
+    
+    if (project.globalSettings.summarizationPromptPresets[finalName] && finalName !== presetName) {
+        if (!confirm(`A preset named '${finalName}' already exists. Overwrite?`)) return;
     }
 
-    project.globalSettings.summarizationPromptPresets[trimmedName] = currentText;
+    // Logic การบันทึก (เหมือนเดิม)
+    project.globalSettings.summarizationPromptPresets[finalName] = currentText;
+    project.globalSettings.activeSummarizationPreset = finalName; // ตั้งให้ Active อัตโนมัติ
+    
     stateManager.setProject(project);
-
     await stateManager.updateAndPersistState();
     
-    stateManager.bus.publish('ui:renderSummarizationSelector');
-    setTimeout(() => {
-        const newSelector = document.getElementById('summary-modal-preset-select');
-        if (newSelector) newSelector.value = trimmedName;
-        stateManager.bus.publish('ui:updateSummaryActionButtons');
-    }, 50);
-    showCustomAlert(`Preset '${trimmedName}' saved!`, 'Success');
+    // ===== [หัวใจของการแก้ไขอยู่ตรงนี้] =====
+    // ส่งสัญญาณกลับไปพร้อม "ชื่อใหม่" ที่ต้องเลือก
+    stateManager.bus.publish('summary:presetsChanged', { newSelectedName: finalName });
+    // =====================================
+
+    showCustomAlert(`Preset '${finalName}' saved!`, 'Success');
 }
 
-export async function deleteSummarizationPreset() {
-    const selector = document.getElementById('summary-modal-preset-select');
-    const presetNameToDelete = selector.value;
-    
-    if (defaultSummarizationPresets.hasOwnProperty(presetNameToDelete)) return;
-
-    if (confirm(`Delete user preset "${presetNameToDelete}"?`)) {
-        const project = stateManager.getProject();
-        delete project.globalSettings.summarizationPromptPresets[presetNameToDelete];
-        
-        document.getElementById('summary-modal-prompt-textarea').value = defaultSummarizationPresets['Standard'];
-        stateManager.setProject(project);
-        await stateManager.updateAndPersistState();
-        
-        stateManager.bus.publish('ui:renderSummarizationSelector');
-        showCustomAlert(`Preset '${presetNameToDelete}' deleted.`, 'Success');
-    }
-}
-
-export async function renameSummarizationPreset() {
-    const selector = document.getElementById('summary-modal-preset-select');
-    const oldName = selector.value;
+export async function renameSummarizationPreset({ presetName: oldName }) {
     if (defaultSummarizationPresets.hasOwnProperty(oldName) || oldName === 'custom') return;
 
     const newName = prompt(`Enter new name for "${oldName}":`, oldName);
@@ -235,32 +224,68 @@ export async function renameSummarizationPreset() {
     project.globalSettings.summarizationPromptPresets[trimmedNewName] = project.globalSettings.summarizationPromptPresets[oldName];
     delete project.globalSettings.summarizationPromptPresets[oldName];
     
+    // [THE FIX] 1. อัปเดต Active Preset ให้เป็นชื่อใหม่โดยอัตโนมัติ
+    project.globalSettings.activeSummarizationPreset = trimmedNewName;
+    
     stateManager.setProject(project);
     await stateManager.updateAndPersistState();
     
-    stateManager.bus.publish('ui:renderSummarizationSelector');
-    setTimeout(() => {
-        document.getElementById('summary-modal-preset-select').value = trimmedNewName;
-        stateManager.bus.publish('ui:updateSummaryActionButtons');
-    }, 50);
+    // [THE FIX] 2. ส่งสัญญาณกลับไปพร้อม "ชื่อใหม่" ที่ต้องเลือก
+    stateManager.bus.publish('summary:presetsChanged');
     showCustomAlert(`Preset renamed to '${trimmedNewName}'!`, 'Success');
 }
 
-export function deleteSummaryFromChat({ logId, messageIndex }) {
-    if (!confirm("Are you sure you want to delete this summary log? This will also remove the marker from the chat.")) return;
-    
+
+export async function deleteSummarizationPreset({ presetName }) {
+    if (defaultSummarizationPresets.hasOwnProperty(presetName)) return;
+
+    if (confirm(`Delete user preset "${presetName}"?`)) {
+        const project = stateManager.getProject();
+        delete project.globalSettings.summarizationPromptPresets[presetName];
+        
+        if (project.globalSettings.activeSummarizationPreset === presetName) {
+            project.globalSettings.activeSummarizationPreset = 'Standard';
+        }
+        
+        stateManager.setProject(project);
+        await stateManager.updateAndPersistState();
+        
+        stateManager.bus.publish('summary:presetsChanged');
+        showCustomAlert(`Preset '${presetName}' deleted.`, 'Success');
+    }
+}
+
+export function applySummarySettings({ model, templateName }) {
     const project = stateManager.getProject();
+    if (!project || !project.globalSettings) return;
+
+    if (model && project.globalSettings.systemUtilityAgent) {
+        project.globalSettings.systemUtilityAgent.model = model;
+    }
     
-    // ลบ Log
+    // [THE FIX] บันทึกชื่อ Template ที่เลือกลง State หลัก
+    project.globalSettings.activeSummarizationPreset = templateName;
+    
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    showCustomAlert("Settings Applied!", "Success");
+}
+
+export function deleteSummaryFromChat({ logId }) {
+    if (!confirm("Are you sure you want to delete this summary log and its marker from the chat?")) return;
+
+    const project = stateManager.getProject();
+
+    // 1. Delete the Log itself
     project.summaryLogs = project.summaryLogs.filter(l => l.id !== logId);
 
-    // ลบ Marker ออกจาก History
+    // 2. Remove the marker message from the currently active session
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (session) {
         session.history = session.history.filter(msg => msg.summaryLogId !== logId);
     }
-    
-    // เคลียร์ Context ถ้าจำเป็น
+
+    // 3. Clear the active context if this log was being used in any session
     project.chatSessions.forEach(s => {
         if (s.summaryState?.activeSummaryId === logId) {
             s.summaryState.activeSummaryId = null;
@@ -268,9 +293,9 @@ export function deleteSummaryFromChat({ logId, messageIndex }) {
     });
 
     stateManager.updateAndPersistState();
-    showCustomAlert("Log deleted.", "Success");
-    
-    // อัปเดต UI ทั้งหมด
+    showCustomAlert("Summary log and chat marker have been deleted.", "Success");
+
+    // Update all relevant UIs
     stateManager.bus.publish('ui:renderMessages');
-    SummaryUI.selectLog(null); // เคลียร์ editor ใน modal
+    stateManager.bus.publish('summary:listChanged'); 
 }
