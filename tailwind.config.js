@@ -4,7 +4,7 @@ export default {
     "./index.html",
     "./app.html",
     "./admin.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}", // <-- บรรทัดนี้สำคัญมาก
   ],
   theme: {
     extend: {},
