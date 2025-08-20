@@ -1,0 +1,125 @@
+/* src/styles/landing.css */
+body {
+font-family: sans-serif;
+margin: 0;
+padding: 0;
+background-color: #f4f4f4;
+color: #333;
+}
+
+.landing-page {
+display: flex;
+flex-direction: column;
+min-height: 100vh;
+}
+
+.header {
+background-color: #333;
+color: #fff;
+padding: 20px;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.header .logo {
+font-size: 1.5em;
+font-weight: bold;
+}
+
+.header .navigation ul {
+list-style: none;
+padding: 0;
+margin: 0;
+display: flex;
+}
+
+.header .navigation ul li {
+margin-left: 20px;
+}
+
+.header .navigation ul li a {
+color: #fff;
+text-decoration: none;
+}
+
+.header .navigation ul li a.login-button {
+background-color: #5cb85c;
+color: #fff;
+padding: 10px 15px;
+border-radius: 5px;
+}
+
+.main-content {
+padding: 40px;
+flex-grow: 1;
+}
+
+.hero-section {
+text-align: center;
+padding: 80px 0;
+background-color: #e9ecef;
+border-radius: 8px;
+margin-bottom: 30px;
+}
+
+.hero-text h1 {
+font-size: 2.5em;
+margin-bottom: 15px;
+}
+
+.hero-text p {
+font-size: 1.2em;
+color: #555;
+margin-bottom: 30px;
+}
+
+.primary-button {
+background-color: #007bff;
+color: #fff;
+padding: 15px 30px;
+text-decoration: none;
+border-radius: 5px;
+font-size: 1.1em;
+}
+
+.feature-section,
+.documentation-section,
+.pricing-section,
+.terms-section,
+.login-section {
+background-color: #fff;
+padding: 30px;
+margin-bottom: 20px;
+border-radius: 8px;
+box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.feature-section h2,
+.documentation-section h2,
+.pricing-section h2,
+.terms-section h2,
+.login-section h2 {
+margin-top: 0;
+color: #333;
+}
+
+.secondary-button {
+background-color: #6c757d;
+color: #fff;
+padding: 10px 20px;
+text-decoration: none;
+border-radius: 5px;
+font-size: 1em;
+}
+
+.footer {
+background-color: #333;
+color: #fff;
+text-align: center;
+padding: 15px;
+position: sticky;
+bottom: 0;
+width: 100%;
+}
+

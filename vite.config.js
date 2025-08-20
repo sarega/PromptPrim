@@ -20,7 +20,11 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
+        // หน้าหลัก (/) จะเป็น Landing Page
+        main: resolve(__dirname, 'index.html'), 
+        // หน้าแอป (/app.html) คือแอปตัวเดิม
+        app: resolve(__dirname, 'app.html'), 
+        // หน้าแอดมินยังคงเหมือนเดิม
         admin: resolve(__dirname, 'admin.html'),
       },
     },
