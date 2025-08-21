@@ -326,7 +326,14 @@ body.dark-mode #model-count-status {
 /* --- [เพิ่มกฎนี้เข้าไป] --- */
 /* เมื่อ Composer ทำงาน ให้ซ่อน Input Bar หลักของ Chat ทิ้งไปเลย */
 .main-chat-area.composer-is-active .chat-input-wrapper {
-    display: none;
+    height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-width: 0 !important;
+    overflow: hidden;
+    transition: all 0.2s ease-out;
 }
 
 /* --- [โค้ดเดิมที่คุณมีอยู่แล้ว] --- */

@@ -1358,6 +1358,27 @@ body.dark-mode #agent-editor-modal textarea {
 }
 
 #alert-modal {
-    z-index: 3000 !important; /* กำหนดค่า z-index ให้สูงกว่า Modal อื่นๆ ทั้งหมด */
+    z-index: 10000 !important; /* กำหนดค่า z-index ให้สูงกว่า Modal อื่นๆ ทั้งหมด */
 }
 
+/* ชั้นของ Summarize / GroupEditor ทั้งหมด */
+#react-modal-root {               /* root ที่ ReactBridge.mount ใช้ */
+  position: fixed;
+  inset: 0;
+  z-index: 9000;                  /* modal ชั้นกลาง */
+}
+
+/* overlay ของ modal ข้างใน (ถ้าใส่สีทึบตรงนี้) */
+#react-modal-root .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+}
+
+/* ชั้นของหน้าคอนเฟิร์ม/alert */
+/* #alert-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;     
+} */

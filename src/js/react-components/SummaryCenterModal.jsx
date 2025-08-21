@@ -24,69 +24,113 @@ const LogsView = memo(({ selectedLog, currentSessionName, isGenerating, onGenera
     </>
 ));
 
-const SettingsView = memo(({ selectedModel, setSelectedModel, allModels, selectedTemplateName, handleTemplateChange, promptTemplates, templateContent, setTemplateContent, defaultPresets, handleActionClick }) => {
-    
-    // [THE FIX] 1. แยกรายชื่อ Preset ออกเป็น 2 กลุ่ม
-    const factoryPresetNames = Object.keys(promptTemplates)
-        .filter(name => defaultPresets.hasOwnProperty(name))
-        .sort();
-    
-    const userPresetNames = Object.keys(promptTemplates)
-        .filter(name => !defaultPresets.hasOwnProperty(name))
-        .sort();
+// --- SettingsView (SAFE VERSION) ---
+const SettingsView = memo(({
+  selectedModel,
+  setSelectedModel,
+  allModels = [],
+  selectedTemplateName,
+  handleTemplateChange,
+  promptTemplates = {},
+  templateContent,
+  setTemplateContent,
+  defaultPresets = {},          // ✅ กัน undefined ตั้งแต่รับ props
+  handleActionClick,
+}) => {
+  // ✅ ใช้ has() ที่ปลอดภัยแทน obj.hasOwnProperty
+  const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
 
-    return (
-     <>
-        <h4>Settings</h4>
-        <div className="form-group">
-            <label>Summarization Model</label>
-            <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
-                <option value="">-- Select a Model --</option>
-                {allModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-        </div>
-         <div className="form-group" style={{flexGrow: 1, display: 'flex', flexDirection: 'column'}}>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-                <label style={{ flexGrow: 1, marginBottom: 0 }}>Summarization Prompt Template</label>
-                <div className="dropdown align-right">
-                    <button className="btn btn-small btn-secondary" onClick={e => e.currentTarget.parentElement.classList.toggle('open')}>Actions &#9662;</button>
-                    <div className="dropdown-content">
-                        {selectedTemplateName && !defaultPresets[selectedTemplateName] ? (
-                            <>
-                                <a href="#" onClick={() => handleActionClick('settings:saveSummaryPreset', {saveAs: false, presetName: selectedTemplateName, content: templateContent})}>Save Changes</a>
-                                <a href="#" onClick={() => handleActionClick('settings:renameSummaryPreset', { presetName: selectedTemplateName })}>Rename...</a>
-                                <a href="#" onClick={() => handleActionClick('settings:saveSummaryPreset', {saveAs: true, content: templateContent})}>Save as New Preset...</a>
-                                <div className="dropdown-divider"></div>
-                                <a href="#" className="is-destructive" onClick={() => handleActionClick('settings:deleteSummaryPreset', { presetName: selectedTemplateName })}>Delete Preset</a>
-                            </>
-                        ) : (
-                            <a href="#" onClick={() => handleActionClick('settings:saveSummaryPreset', {saveAs: true, content: templateContent})}>Save as New Preset...</a>
-                        )}
-                    </div>
-                </div>
+  // ✅ แยก preset ชัดเจน โดยไม่พังถ้า defaultPresets เป็น {} หรือ undefined
+  const factoryPresetNames = Object.keys(promptTemplates)
+    .filter(name => has(defaultPresets, name))
+    .sort();
+
+  const userPresetNames = Object.keys(promptTemplates)
+    .filter(name => !has(defaultPresets, name))
+    .sort();
+
+  return (
+    <>
+      <h4>Settings</h4>
+
+      <div className="form-group">
+        <label>Summarization Model</label>
+        <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
+          <option value="">-- Select a Model --</option>
+          {allModels.map(model => (
+            <option key={model.id} value={model.id}>{model.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="form-group" style={{flexGrow: 1, display: 'flex', flexDirection: 'column'}}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
+          <label style={{ flexGrow: 1, marginBottom: 0 }}>Summarization Prompt Template</label>
+
+          <div className="dropdown align-right">
+            <button
+              className="btn btn-small btn-secondary"
+              onClick={e => e.currentTarget.parentElement.classList.toggle('open')}
+            >
+              Actions &#9662;
+            </button>
+            <div className="dropdown-content">
+              {selectedTemplateName && !has(defaultPresets, selectedTemplateName) ? (
+                <>
+                  <a href="#" onClick={(ev) => { ev.preventDefault(); handleActionClick('settings:saveSummaryPreset', { saveAs: false, presetName: selectedTemplateName, content: templateContent }); }}>Save Changes</a>
+                  <a href="#" onClick={(ev) => { ev.preventDefault(); handleActionClick('settings:renameSummaryPreset', { presetName: selectedTemplateName }); }}>Rename...</a>
+                  <a href="#" onClick={(ev) => { ev.preventDefault(); handleActionClick('settings:saveSummaryPreset', { saveAs: true, content: templateContent }); }}>Save as New Preset...</a>
+                  <div className="dropdown-divider"></div>
+                  <a href="#" className="is-destructive" onClick={(ev) => { ev.preventDefault(); handleActionClick('settings:deleteSummaryPreset', { presetName: selectedTemplateName }); }}>Delete Preset</a>
+                </>
+              ) : (
+                <a href="#" onClick={(ev) => { ev.preventDefault(); handleActionClick('settings:saveSummaryPreset', { saveAs: true, content: templateContent }); }}>Save as New Preset...</a>
+              )}
             </div>
-            {/* [THE FIX] 2. สร้าง Dropdown ใหม่โดยใช้ <optgroup> */}
-            <select value={selectedTemplateName} onChange={handleTemplateChange}>
-                <optgroup label="Factory Presets (Read-only)">
-                    {factoryPresetNames.map(name => <option key={name} value={name}>{name}</option>)}
-                </optgroup>
-                {userPresetNames.length > 0 && (
-                    <optgroup label="User Presets">
-                        {userPresetNames.map(name => <option key={name} value={name}>{name}</option>)}
-                    </optgroup>
-                )}
-            </select>
-            <textarea style={{flexGrow: 1, resize: 'none', marginTop: '10px'}} value={templateContent} onChange={e => setTemplateContent(e.target.value)} />
+          </div>
         </div>
+
+        {/* ✅ ใช้ optgroup + รายการปลอดภัย */}
+        <select value={selectedTemplateName} onChange={handleTemplateChange}>
+          <optgroup label="Factory Presets (Read-only)">
+            {factoryPresetNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </optgroup>
+
+          {userPresetNames.length > 0 && (
+            <optgroup label="User Presets">
+              {userPresetNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+
+        <textarea
+          style={{flexGrow: 1, resize: 'none', marginTop: '10px'}}
+          value={templateContent}
+          onChange={e => setTemplateContent(e.target.value)}
+        />
+      </div>
     </>
-    );
+  );
 });
 
 
 // --- Main Component ---
 
-export default function SummaryCenterModal({ unmount, summaryLogs, allModels, promptTemplates: initialPromptTemplates, currentSessionName, systemUtilityModel, activeTemplate, defaultPresets, onApplySettings }) {
-    
+export default function SummaryCenterModal({
+  unmount,
+  summaryLogs = [],
+  allModels = [],
+  promptTemplates: initialPromptTemplates = {},
+  currentSessionName = '',
+  systemUtilityModel = '',
+  activeTemplate = 'Standard',
+  defaultPresets = {},               // ⬅️ ใส่ default
+  onApplySettings = () => {},
+}) {    
     // --- State Management ---
     const [view, setView] = useState('logs');
     const [selectedLog, setSelectedLog] = useState(null);
@@ -173,7 +217,12 @@ export default function SummaryCenterModal({ unmount, summaryLogs, allModels, pr
     
     // --- Main Render ---
     return (
-        <div id="summarization-modal" className="modal-overlay" style={{ display: 'flex' }}>
+            <div
+              id="summarization-modal"
+              className="modal-overlay"
+              data-owner="summary"                 // ⬅️ ติดแท็กไว้
+              style={{ display: 'flex' }}
+            >    
             <div className="modal-box is-resizable">
                 <div className="modal-header">
                     <h3>Conversation Summary Center</h3>

@@ -31,14 +31,14 @@ import * as ChatUI from './js/modules/chat/chat.ui.js';
 import * as ChatHandlers from './js/modules/chat/chat.handlers.js';
 import * as SettingsUI from './js/modules/settings/settings.ui.js';
 import * as StudioUI from './js/modules/studio/studio.ui.js';
-import * as ComposerUI from './js/modules/composer/composer.ui.js';
 import * as AgentUI from './js/modules/agent/agent.ui.js';
 import * as AgentHandlers from './js/modules/agent/agent.handlers.js';
 import * as GroupUI from './js/modules/group/group.ui.js';
 import * as GroupHandlers from './js/modules/group/group.handlers.js';
 import * as MemoryUI from './js/modules/memory/memory.ui.js';
 import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
-import * as ComposerHandlers from './js/modules/composer/composer.handlers.js'; // <-- ตรวจสอบว่ามีบรรทัดนี้
+import * as ComposerUI from './js/modules/composer/composer.ui.js';
+import * as ComposerHandlers from './js/modules/composer/composer.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
 import * as SummaryHandlers from './js/modules/summary/summary.handlers.js';
 import * as UserUI from './js/modules/user/user.ui.js';
@@ -140,23 +140,80 @@ function setupEventSubscriptions() {
     bus.subscribe('project:saveConfirm', ({ projectName }) => ProjectHandlers.handleProjectSaveConfirm(projectName));
     bus.subscribe('project:unsavedChangesChoice', ProjectHandlers.handleUnsavedChanges);
 
+    bus.subscribe('project:loaded', (eventData) => {
+        // โค้ดเดิมที่อัปเดต UI ยังอยู่เหมือนเดิม
+        ProjectUI.updateProjectTitle(eventData.projectData.name);
+        ProjectUI.renderEntitySelector();
+        // เมื่อโปรเจกต์โหลดเสร็จแล้ว ค่อยเรียกคืนสถานะ Composer
+        try {
+            const savedComposerState = localStorage.getItem('promptPrimComposerState');
+            if (savedComposerState === 'normal' || savedComposerState === 'maximized') {
+                
+                // 1. สั่งให้เปิด Composer ก่อน (ซึ่งจะใช้ค่า default จาก CSS)
+                setComposerState(savedComposerState);
+
+                // --- [✅ ส่วนที่แก้ไข] ---
+                // 2. "เขียนทับ" ความสูงด้วยค่าที่บันทึกไว้จาก localStorage ทีหลัง
+                const savedHeight = localStorage.getItem('promptPrimComposerHeight');
+                const composerPanel = document.getElementById('composer-panel');
+                
+                // ตรวจสอบให้แน่ใจว่าเราอยู่ในโหมด normal เท่านั้นถึงจะปรับความสูง
+                if (savedHeight && composerPanel && savedComposerState === 'normal') {
+                    // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า Browser วาด UI เสร็จก่อน
+                    requestAnimationFrame(() => {
+                        composerPanel.style.flexBasis = `${savedHeight}px`;
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Could not restore composer state:", error);
+        }
+        // ------------------------------------
+    });
+
     // Session Management
     bus.subscribe('session:new', SessionHandlers.createNewChatSession);
     // bus.subscribe('session:load', ({ sessionId }) => SessionHandlers.loadChatSession(sessionId));
     // --- [NEW] สร้าง Listener กลางสำหรับจัดการ UI ทั้งหมดหลังโหลด Session ---
+
     bus.subscribe('session:loaded', ({ session }) => {
-        // ฟังก์ชันเหล่านี้จะถูกเรียกตามลำดับอย่างเป็นระเบียบ
+        // --- ส่วนที่ 1: วาด Chat UI ทั้งหมด (เหมือนเดิม) ---
         ChatUI.updateChatTitle(session.name);
         ChatUI.renderMessages(); 
-
-        // [FIX] เรียกใช้ฟังก์ชันจาก Module ที่ถูกต้อง
-        ComposerHandlers.loadComposerContent(); // <--- แก้ไขบรรทัดนี้
-
         SessionUI.renderSessionList();
-        
-        // ส่ง event ย่อยเพื่อให้โมดูลอื่นทำงานต่อ
         stateManager.bus.publish('entity:selected', session.linkedEntity);
-        // ไม่จำเป็นต้อง publish context:requestData แล้ว เพราะ UI จะอัปเดตเอง
+
+        // --- ส่วนที่ 2: จัดการสถานะ Composer (ส่วนที่เพิ่มเข้ามา) ---
+        try {
+            const savedComposerState = localStorage.getItem('promptPrimComposerState');
+            if (savedComposerState === 'normal' || savedComposerState === 'maximized') {
+                // เรียก setComposerState ซึ่งจะไปดึง content ของ session ใหม่มาเอง
+                setComposerState(savedComposerState);
+                const savedHeight = localStorage.getItem('promptPrimComposerHeight');
+                const composerPanel = document.getElementById('composer-panel');
+                if (savedHeight && composerPanel && savedComposerState === 'normal') {
+                    composerPanel.style.flexBasis = `${savedHeight}px`;
+                }
+            } else {
+                // ถ้าสถานะเดิมคือ 'collapsed' ให้แน่ใจว่ามันปิดอยู่
+                setComposerState('collapsed');
+            }
+        } catch (error) {
+            console.error("Could not set composer state on session load:", error);
+        }
+    });
+
+    
+    bus.subscribe('composer:append', ({ content }) => {
+        // มันจะไปดึง API ที่เราเพิ่งเก็บไว้ใน stateManager
+        const composerApi = stateManager.getState().composerApi;
+        if (composerApi && composerApi.appendContent) {
+            // แล้วเรียกใช้ฟังก์ชัน appendContent ที่อยู่ใน React Component
+            composerApi.appendContent(content);
+        } else {
+            // (Optional) อาจจะเปิด Composer ขึ้นมาก่อนถ้ามันปิดอยู่
+            console.warn("Composer is not ready to append content.");
+        }
     });
 
     // --- [NEW] สร้าง Listener สำหรับเคลียร์หน้าจอ ---
@@ -220,8 +277,10 @@ function setupEventSubscriptions() {
     // Chat Actions
     bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
     bus.subscribe('composer:heightChanged', SessionHandlers.saveComposerHeight);
+    bus.subscribe('ui:requestComposerOpen', () => { setComposerState('normal');});
     bus.subscribe('ui:toggleComposer', () => { setComposerState('normal');});
-        
+    bus.subscribe('composer:export', ComposerHandlers.exportComposerContent);
+    
     bus.subscribe('chat:deleteMessage', (payload) => ChatHandlers.deleteMessage(payload));
 
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
@@ -233,7 +292,7 @@ function setupEventSubscriptions() {
     bus.subscribe('chat:filesSelected', (files) => ChatHandlers.handleFileUpload(files));
     bus.subscribe('chat:removeFile', ({ index }) => ChatHandlers.removeAttachedFile({ index }));
 
-    bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);    
+    bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
 
     bus.subscribe('upload-file', () => { document.getElementById('file-input')?.click();});
@@ -283,16 +342,16 @@ function initializeUI() {
     SessionUI.initSessionUI();
     ChatUI.initChatUI();
     SettingsUI.initSettingsUI();
-    ComposerUI.initComposerUI();
+    // ComposerUI.initComposerUI();
     StudioUI.initStudioUI();
     AgentUI.initAgentUI();
     GroupUI.initGroupUI();
     MemoryUI.initMemoryUI();
-    ModelManagerUI.initModelManagerUI(); // <-- เพิ่มบรรทัดนี้
+    ModelManagerUI.initModelManagerUI();
     SummaryUI.initSummaryUI();
     ChatHandlers.initMessageInteractions();
-    UserUI.initUserProfileUI(); // << เพิ่มอันนี้เข้ามาแทน
-    AccountUI.initAccountUI(); // <-- [ADD THIS]
+    UserUI.initUserProfileUI();
+    AccountUI.initAccountUI();
 
     document.getElementById('import-settings-input')?.addEventListener('change', UserHandlers.handleSettingsFileSelect);
 
@@ -330,19 +389,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---
         initializeUI();
-        // เรียกคืนสถานะของ Composer จาก localStorage
-        try {
-            const savedComposerState = localStorage.getItem('promptPrimComposerState');
-            
-            // ถ้าเคยเปิดไว้เป็น 'normal' หรือ 'maximized' ให้เปิดขึ้นมาใหม่
-            // เราจะไม่คืนค่า 'collapsed' เพราะค่าเริ่มต้นมันก็คือปิดอยู่แล้ว
-            if (savedComposerState === 'normal' || savedComposerState === 'maximized') {
-                console.log(`Restoring Composer state to: ${savedComposerState}`);
-                setComposerState(savedComposerState);
-            }
-        } catch (error) {
-            console.error("Could not restore composer state:", error);
-        }
         initCrossTabSync(); // <-- [ADD THIS] Call the new function
         setupEventSubscriptions();
         ProjectHandlers.setupAutoSaveChanges();

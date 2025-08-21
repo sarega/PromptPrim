@@ -1,53 +1,97 @@
 // ===============================================
 // FILE: src/js/modules/composer/composer.ui.js
 // ===============================================
-
 import { stateManager } from '../../core/core.state.js';
-import { appendToComposer, exportComposerContent, updateComposerContent, loadComposerContent } from './composer.handlers.js';
-import { debounce } from '../../core/core.utils.js';
+import { ReactBridge } from '../../react-entry.jsx'; 
+import Composer from '../../react-components/Composer.jsx';
+import * as ComposerHandlers from './composer.handlers.js';
+import { initHorizontalResizer } from '../../core/core.layout.js';
 
-// ดึง Element ที่ต้องใช้บ่อยๆ มาเก็บไว้ข้างนอก
-const composerPanel = document.getElementById('composer-panel');
+// --- Element ที่จำเป็น ---
+const composerPanelContainer = document.getElementById('composer-panel');
+const resizerRow = document.getElementById('resizer-row');
 const mainContentWrapper = document.querySelector('.main-content-wrapper');
 const mainChatArea = document.querySelector('.main-chat-area');
-const mobileToggleBtn = document.getElementById('mobile-composer-toggle');
 
-/**
- * ฟังก์ชันกลางสำหรับควบคุมสถานะของ Composer ทั้งหมด
- * @param {'collapsed' | 'normal' | 'maximized'} newState สถานะที่ต้องการให้เป็น
- */
+// --- ตัวแปรสำหรับเก็บ instance ของ React Component ---
+let activeComposerInstance = null;
+
+function mountOrUpdateComposer(content, isMaximized) {
+    if (!composerPanelContainer) return;
+
+    const props = {
+        initialContent: content,
+        isMaximized,
+        onContentChange: ComposerHandlers.updateComposerContent,
+        onCollapse: () => setComposerState('collapsed'),
+        onToggleMaximize: () => {
+            const currentIsMaximized = mainContentWrapper.classList.contains('composer-maximized');
+            setComposerState(currentIsMaximized ? 'normal' : 'maximized');
+        },
+        onExport: ({ html, text }) => {
+            ComposerHandlers.exportComposerContent({ html, text });
+            stateManager.bus.publish('composer:export');
+        },
+        onReady: (api) => {
+            stateManager.setState('composerApi', api);
+        }
+    };
+
+    ReactBridge.mount(Composer, props, composerPanelContainer);
+    initHorizontalResizer(resizerRow, composerPanelContainer);
+}
+
+function unmountComposer() {
+    ReactBridge.unmount(composerPanelContainer);
+    stateManager.setState('composerApi', null); 
+}
+
+
 export function setComposerState(newState) {
-    if (!composerPanel || !mainContentWrapper || !mainChatArea) return;
+    if (!composerPanelContainer || !mainContentWrapper || !mainChatArea) return;
 
-    // --- Reset สถานะทั้งหมดก่อน ---
-    composerPanel.classList.remove('collapsed');
-    mainContentWrapper.classList.remove('composer-maximized');
+    // --- Reset Class ทั้งหมดก่อน ---
+   mainContentWrapper.classList.remove('composer-maximized');
     mainChatArea.classList.remove('composer-is-active');
-    if (mobileToggleBtn) mobileToggleBtn.classList.remove('is-open');
+    composerPanelContainer.classList.remove('collapsed');
 
-    // --- ตั้งค่าสถานะใหม่ตามที่ได้รับมา ---
+    const project = stateManager.getProject();
+    const session = project?.chatSessions.find(s => s.id === project.activeSessionId);
+    const composerContent = session?.composerContent || '';
+
     switch (newState) {
         case 'collapsed':
-            composerPanel.classList.add('collapsed');
-            // ไม่ต้อง add 'composer-is-active' เพื่อให้ Input Bar ของ Chat กลับมา
+            unmountComposer();
+            composerPanelContainer.classList.add('collapsed');
             break;
 
         case 'normal':
-            // composerPanel ไม่มี class อะไรเป็นพิเศษ
-            mainChatArea.classList.add('composer-is-active'); // ซ่อน Input Bar ของ Chat
-            if (mobileToggleBtn) mobileToggleBtn.classList.add('is-open');
-            break;
-
         case 'maximized':
-            mainContentWrapper.classList.add('composer-maximized');
-            mainChatArea.classList.add('composer-is-active'); // ซ่อน Input Bar ของ Chat
-            if (mobileToggleBtn) mobileToggleBtn.classList.add('is-open');
+            mainChatArea.classList.add('composer-is-active');
+            if (newState === 'maximized') {
+                mainContentWrapper.classList.add('composer-maximized');
+            }
+            mountOrUpdateComposer(composerContent, newState === 'maximized');
             break;
     }
+    
     localStorage.setItem('promptPrimComposerState', newState);
-    // ประกาศ Event บอกส่วนอื่นๆ ของแอป (สำคัญมากสำหรับ Resizer)
     stateManager.bus.publish('composer:visibilityChanged');
 }
+
+let composerApi = null;
+// ฟังก์ชันสำหรับให้โลกภายนอกเรียกใช้ (เช่น การ append)
+export function getComposerApi() {
+    return composerApi;
+}
+
+
+// =================================================================================
+
+
+// ดึง Element ที่ต้องใช้บ่อยๆ มาเก็บไว้ข้างนอก
+const mobileToggleBtn = document.getElementById('mobile-composer-toggle');
+
 
 // --- Helper Functions for Toolbar ---
 

@@ -67,7 +67,7 @@ function cacheDOMElements() {
     DOM.resizerRow = document.getElementById('resizer-row');
 }
 
-function initHorizontalResizer(resizer, panelToResize) {
+export function initHorizontalResizer(resizer, panelToResize) {
     if (!resizer || !panelToResize) return;
     
     let initialMouseY = 0, initialPanelHeight = 0;
@@ -79,10 +79,12 @@ function initHorizontalResizer(resizer, panelToResize) {
         resizer.classList.add('active');
         document.body.style.cursor = 'row-resize';
 
+        panelToResize.classList.add('is-resizing'); 
+
         if (panelToResize.classList.contains('collapsed')) {
-            panelToResize.classList.remove('collapsed');
-            resizer.classList.remove('collapsed');
-            stateManager.bus.publish('composer:visibilityChanged');
+            // panelToResize.classList.remove('collapsed');
+            // resizer.classList.remove('collapsed');
+            stateManager.bus.publish('ui:requestComposerOpen');
         }
 
         initialMouseY = e.clientY;
@@ -93,32 +95,47 @@ function initHorizontalResizer(resizer, panelToResize) {
 
     // แก้ไขฟังก์ชัน onMouseMove ใหม่
     const onMouseMove = (e) => {
-        lastMouseY = e.clientY; // แค่บันทึกตำแหน่งเมาส์ล่าสุด
+        lastMouseY = e.clientY;
         
         if (!ticking) {
             window.requestAnimationFrame(() => {
-                // คำนวณและเปลี่ยนความสูงในนี้
                 const deltaY = lastMouseY - initialMouseY;
                 let newHeight = initialPanelHeight - deltaY;
-                const minHeight = parseInt(getComputedStyle(panelToResize).minHeight, 10) || 50;
+                const minHeight = 100; // ความสูงน้อยสุดที่ยอมรับได้
                 if (newHeight < minHeight) newHeight = minHeight;
                 
+                // 1. สั่งปรับขนาด Panel หลัก (เหมือนเดิม)
                 panelToResize.style.flexBasis = `${newHeight}px`;
-                ticking = false; // รีเซ็ตธง
+
+                // 2. [คำสั่งใหม่] หา .composer-editor ที่อยู่ข้างในแล้วสั่งปรับความสูงด้วย!
+                const editorDiv = panelToResize.querySelector('.composer-editor');
+                if (editorDiv) {
+                    // เราอาจจะต้องเผื่อความสูงของ Header ของ Composer ไว้ด้วย
+                    const headerHeight = 50; // ประมาณความสูงของ Toolbar
+                    editorDiv.style.height = `${newHeight - headerHeight}px`;
+                }
+
+                ticking = false;
             });
-            ticking = true; // ตั้งธงว่ากำลังรอวาดผล
+            ticking = true;
         }
     };
 
     const onMouseUp = () => {
         resizer.classList.remove('active');
         document.body.style.cursor = '';
+        panelToResize.classList.remove('is-resizing');
+
+        const currentHeight = panelToResize.getBoundingClientRect().height;
+        localStorage.setItem('promptPrimComposerHeight', currentHeight);
+
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
     };
     
     resizer.addEventListener('mousedown', onMouseDown);
 }
+
 function initializePanelControls() {
     if (!DOM.sessionsPanel) return;
 

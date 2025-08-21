@@ -1,12 +1,13 @@
 // src/js/modules/summary/summary.ui.js (Definitive, Complete & Corrected Version)
-import { mountReactComponent } from '../../react-entry.jsx';
-import SummaryCenterModal from '../../react-components/SummaryCenterModal.jsx'; // Also import the component itself
-
+import { ReactBridge } from '../../react-entry.jsx';
+import SummaryCenterModal from '../../react-components/SummaryCenterModal.jsx';
 import { stateManager, defaultSummarizationPresets } from '../../core/core.state.js';
 import { toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
 import * as SummaryHandlers from './summary.handlers.js';
 import { getFilteredModelsForDisplay } from '../models/model-manager.ui.js';
 import * as UserService from '../user/user.service.js';
+
+const CONTAINER_ID = 'summary-modal-container';
 
 let activeLogId = null;
 
@@ -200,67 +201,6 @@ export function renderLogList() {
     });
 }
 
-// export function showSummarizationCenter() {
-//     const modal = document.getElementById('summarization-modal');
-//     if (!modal) return;
-
-//     // --- Reset UI elements ---
-//     modal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
-//     modal.querySelector('.tab-btn[data-tab="logs"]')?.classList.add('active');
-//     modal.querySelector('.tab-content[data-tab-content="logs"]')?.classList.add('active');
-    
-//     selectLog(null);
-//     renderLogList();
-//     renderSummarizationPresetSelector();
-//     SummaryHandlers.handleSummarizationPresetChange();
-//     updateModalActionsVisibility();
-
-//     // --- [THE FIX] ---
-//     // 1. Get the correctly filtered list of models for the current user.
-//     const modelsToShow = UserService.getAllowedModelsForCurrentUser();
-
-//     // 2. Get the currently selected model for the system agent as a default.
-//     const project = stateManager.getProject();
-//     const initialModelId = project.globalSettings.systemUtilityAgent?.model;
-    
-//     // 3. Create the searchable dropdown using the correct, filtered list.
-//     createSearchableModelSelector(
-//         'summary-model-wrapper',
-//         initialModelId,
-//         modelsToShow
-//     );
-
-//     modal.style.display = 'flex';
-// }
-
-export function showSummarizationCenter() {
-    const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    if (!session) return;
-    
-    const props = {
-        summaryLogs: project.summaryLogs || [],
-        allModels: UserService.getAllowedModelsForCurrentUser(),
-        promptTemplates: { ...defaultSummarizationPresets, ...project.globalSettings.summarizationPromptPresets },
-        currentSessionName: session.name,
-        systemUtilityModel: project.globalSettings.systemUtilityAgent?.model,
-        // [THE FIX] อ่านค่าที่เคยบันทึกไว้ส่งเข้าไปเป็น State เริ่มต้น
-        activeTemplate: project.globalSettings.activeSummarizationPreset,
-        defaultPresets: defaultSummarizationPresets,
-        onApplySettings: (settings) => SummaryHandlers.applySummarySettings(settings),
-    };
-
-    const targetElement = document.getElementById('react-modal-root');
-    if (targetElement) {
-        mountReactComponent(SummaryCenterModal, props, targetElement);
-    }
-}
-
-export function hideSummarizationCenter() {
-    const el = document.getElementById('summarization-modal');
-    if (el) el.style.display = 'none';
-}
-
 export function setSummaryLoading(isLoading) {
     const btn = document.getElementById('summarize-conversation-btn');
     if (btn) {
@@ -328,112 +268,61 @@ function populateSummaryModelSelector() {
     }
 }
 
-export function initSummaryUI() {
-    const modal = document.getElementById('summarization-modal');
-    if (!modal) return;
 
-    modal.querySelector('#summary-modal-close-btn')?.addEventListener('click', hideSummarizationCenter);
-    modal.querySelector('.modal-close-btn')?.addEventListener('click', hideSummarizationCenter);
-    modal.querySelector('#summarize-conversation-btn')?.addEventListener('click', SummaryHandlers.generateNewSummary);
-    
-    modal.querySelector('#summary-editor-save-btn')?.addEventListener('click', () => {
-        if (activeLogId) {
-            SummaryHandlers.saveSummaryEdit({
-                logId: activeLogId,
-                title: document.getElementById('summary-editor-title').value,
-                content: document.getElementById('summary-editor-content').value
-            });
-        } else {
-            SummaryHandlers.saveNewSummaryLog();
-        }
-    });
-
-    modal.querySelector('#summary-editor-delete-btn')?.addEventListener('click', () => {
-        if(activeLogId) SummaryHandlers.deleteSummaryLog({ logId: activeLogId });
-    });
-    modal.querySelector('#summary-editor-load-btn')?.addEventListener('click', () => {
-        if(activeLogId) SummaryHandlers.loadSummaryToContext({ logId: activeLogId });
-    });
-
-    modal.querySelector('.tab-buttons')?.addEventListener('click', (e) => {
-        if (e.target.matches('.tab-btn')) {
-            const tabName = e.target.dataset.tab;
-            modal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));
-            e.target.classList.add('active');
-            modal.querySelector(`.tab-content[data-tab-content="${tabName}"]`)?.classList.add('active');
-            
-            // --- เรียกใช้ฟังก์ชันเพื่ออัปเดตปุ่มทุกครั้งที่สลับแท็บ ---
-            updateModalActionsVisibility();
-        }
-    });
-    
-    modal.querySelector('#summary-log-list-modal')?.addEventListener('click', (e) => {
-        const logItem = e.target.closest('.summary-log-item[data-log-id]');
-        if (logItem) {
-            selectLog(logItem.dataset.logId);
-        }
-    });
-
-    modal.querySelector('#summary-modal-preset-select')?.addEventListener('change', () => {
-        SummaryHandlers.handleSummarizationPresetChange();
-    });
-
-    modal.querySelector('#summary-modal-prompt-textarea')?.addEventListener('input', () => {
-        renderSummarizationPresetSelector();
-    });
-
-    const summaryActionsWrapper = modal.querySelector('#summary-modal-preset-actions');
-    if (summaryActionsWrapper) {
-        summaryActionsWrapper.addEventListener('click', (e) => {
-            const target = e.target.closest('a[data-action], button[data-action]');
-            if (!target) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const action = target.dataset.action;
-
-            if (action === 'toggle-menu') {
-                toggleDropdown(e);
-            } else {
-                const saveAs = target.dataset.saveAs === 'true';
-                if (action === 'settings:saveSummaryPreset') {
-                    SummaryHandlers.handleSaveSummarizationPreset({ saveAs });
-                } else if (action === 'settings:renameSummaryPreset') {
-                    SummaryHandlers.renameSummarizationPreset();
-                } else if (action === 'settings:deleteSummaryPreset') {
-                    SummaryHandlers.deleteSummarizationPreset();
-                }
-                target.closest('.dropdown.open')?.classList.remove('open');
-            }
-        });
+// Helper: สร้าง Container ของตัวเอง
+function ensureContainer() {
+    let container = document.getElementById(CONTAINER_ID);
+    if (!container) {
+        container = document.createElement('div');
+        container.id = CONTAINER_ID;
+        document.body.appendChild(container);
     }
-
-        // [ADD THIS] Add a listener for when a new summary model is selected.
-    const summaryModelValueInput = document.getElementById('summary-model-value');
-    if (summaryModelValueInput) {
-        summaryModelValueInput.addEventListener('change', (e) => {
-            const newModelId = e.target.value;
-            if (newModelId) {
-                const project = stateManager.getProject();
-                if (project && project.globalSettings.systemUtilityAgent) {
-                    project.globalSettings.systemUtilityAgent.model = newModelId;
-                    stateManager.updateAndPersistState(); // Save the change
-                    console.log(`Summary/System model updated to: ${newModelId}`);
-                }
-            }
-        });
-    }
-
-    // Subscribe to events that should trigger a re-render of the preset selector
-    stateManager.bus.subscribe('ui:renderSummarizationSelector', renderSummarizationPresetSelector);
-    stateManager.bus.subscribe('ui:updateSummaryActionButtons', updateActionMenu);
-
-    // Subscribe กับ Event กลางเพื่ออัปเดตตัวเอง
-    stateManager.bus.subscribe('app:settingsChanged', () => {
-        if (modal && modal.style.display === 'flex') {
-            showSummarizationCenter();
-        }
-    });
-
-
-    console.log("✅ Summarization Center UI Initialized.");
+    return container;
 }
+
+// Helper: ทำลาย Container ของตัวเอง
+function removeContainer() {
+    const container = document.getElementById(CONTAINER_ID);
+    if (container) {
+        ReactBridge.unmount(container); // สั่ง React ให้ทำความสะอาดก่อน
+        container.remove();
+    }
+}
+
+export function showSummarizationCenter() {
+    console.log("📍 showSummarizationCenter called");
+    const project = stateManager.getProject();
+    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    if (!session) return;
+
+    // [แก้ไข] เรียกใช้ helper function เพื่อความแน่นอน
+    const targetElement = ensureContainer();
+
+    const props = {
+        summaryLogs: project.summaryLogs || [],
+        allModels: UserService.getAllowedModelsForCurrentUser(),
+        promptTemplates: { ...defaultSummarizationPresets, ...project.globalSettings.summarizationPromptPresets },
+        currentSessionName: session.name,
+        systemUtilityModel: project.globalSettings.systemUtilityAgent?.model,
+        activeTemplate: project.globalSettings.activeSummarizationPreset,
+        defaultPresets: defaultSummarizationPresets,
+        onApplySettings: (settings) => {
+            SummaryHandlers.applySummarySettings(settings);
+            hideSummarizationCenter();
+        },
+        unmount: hideSummarizationCenter
+    };
+
+    ReactBridge.mount(SummaryCenterModal, props, targetElement);
+    targetElement.style.display = 'block'; // ทำให้แสดงผล
+}
+
+export function hideSummarizationCenter() {
+    console.log("📍 hideSummarizationCenter called");
+    removeContainer(); // สั่งทำลาย Container ทิ้งทั้งหมด
+}
+
+export function initSummaryUI() {
+    console.log("✅ Summary UI Initialized (Listeners are in app.js)");
+}
+

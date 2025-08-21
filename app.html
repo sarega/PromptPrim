@@ -178,77 +178,9 @@
                     <div class="main-content-wrapper">
                         <div class="chat-messages" id="chatMessages"></div>
                         <div id="resizer-row" class="panel-resizer horizontal"></div>
-                        <div id="composer-panel" class="composer-panel collapsed">
-                            <div class="composer-header">
-                                <div class="composer-title-area">
-                                    <h3><span class="material-symbols-outlined">edit_square</span> Composer</h3>
-                                </div>
-                                <div class="composer-tools-area">
-                                    <button class="btn-icon small" data-command="formatBlock" data-value="H1" title="Heading 1">H1</button>
-                                    <button class="btn-icon small" data-command="formatBlock" data-value="H2" title="Heading 2">H2</button>
-                                    <button class="btn-icon small" data-command="formatBlock" data-value="H3" title="Heading 3">H3</button>
-                                    <button class="btn-icon small" data-command="formatBlock" data-value="P" title="Paragraph">P</button>
-                                    <div class="toolbar-divider"></div>
-                                    
-                                    <button class="btn-icon small" data-command="removeFormat" title="Clear Formatting">
-                                        <span class="material-symbols-outlined">format_clear</span>
-                                    </button>
 
-                                    <div class="dropdown">
-                                        <button class="btn-icon small" id="color-picker-btn" title="Text Color">
-                                            <span class="material-symbols-outlined">format_color_text</span>
-                                        </button>
-                                        <div id="color-palette" class="dropdown-content"></div>
-                                    </div>
-                                    <div class="toolbar-divider"></div>
-                                    <button class="btn-icon small" data-command="bold" title="Bold"><span class="material-symbols-outlined">format_bold</span></button>
-                                    <button class="btn-icon small" data-command="italic" title="Italic"><span class="material-symbols-outlined">format_italic</span></button>
-                                    <button class="btn-icon small" data-command="underline" title="Underline"><span class="material-symbols-outlined">format_underlined</span></button>
-                                    <button class="btn-icon small" data-command="strikeThrough" title="Strikethrough"><span class="material-symbols-outlined">format_strikethrough</span></button>
-                                    <div class="toolbar-divider"></div>
-                                    <button class="btn-icon small" data-command="insertUnorderedList" title="Bulleted List"><span class="material-symbols-outlined">format_list_bulleted</span></button>
-                                    <button class="btn-icon small" data-command="insertOrderedList" title="Numbered List"><span class="material-symbols-outlined">format_list_numbered</span></button>
-                                    <div class="toolbar-divider"></div>
-                                    <button class="btn-icon small" data-command="formatBlock" data-value="<blockquote>" title="Blockquote">
-                                        <span class="material-symbols-outlined">format_quote</span>
-                                    </button>
+                        <div id="composer-panel" class="composer-panel collapsed"></div>
 
-                                    <div class="toolbar-divider"></div>
-                                    <button class="btn-icon small" data-command="justifyLeft" title="Align Left">
-                                        <span class="material-symbols-outlined">format_align_left</span>
-                                    </button>
-                                    <button class="btn-icon small" data-command="justifyCenter" title="Align Center">
-                                        <span class="material-symbols-outlined">format_align_center</span>
-                                    </button>
-                                    <button class="btn-icon small" data-command="justifyRight" title="Align Right">
-                                        <span class="material-symbols-outlined">format_align_right</span>
-                                    </button>
-
-                                    <div class="toolbar-divider"></div>
-                                    <button class="btn-icon small" data-command="increaseFontSize" title="Increase Font Size">
-                                        <span class="material-symbols-outlined">text_increase</span>
-                                    </button>
-                                    <button class="btn-icon small" data-command="decreaseFontSize" title="Decrease Font Size">
-                                        <span class="material-symbols-outlined">text_decrease</span>
-                                    </button>
-                                                
-                                </div>
-                                <div class="composer-actions">
-                                    <button class="btn-icon" id="composer-collapse-btn" title="Collapse">
-                                        <span class="material-symbols-outlined">keyboard_arrow_down</span>
-                                    </button>
-                                    <button class="btn-icon" id="composer-expand-btn" title="Expand/Collapse">
-                                        <span class="material-symbols-outlined">fullscreen</span>
-                                    </button>
-                                    <button id="export-composer-btn" class="btn-icon" title="Export Content">
-                                        <span class="material-symbols-outlined">save</span>
-                                    </button>
-                                </div>
-                            </div>
-                            <div id="composer-editor" class="composer-editor">
-                                <div class="composer-content-area" contenteditable="true" spellcheck="false"></div>
-                            </div>        
-                        </div>
                         <div class="chat-input-wrapper">                            
                             <div id="file-preview-container" class="hidden"></div>
                             <div id="agent-selector-bar" class="agent-selector-bar hidden"></div>
@@ -871,8 +803,8 @@
     <input type="file" id="import-settings-input" class="hidden" accept=".json">
     
     <script type="module" src="/src/app.js"></script>
-    <div id="react-root"></div>
-    <div id="react-modal-root"></div> <script type="module" src="/src/app.js"></script>
+    <!-- <div id="react-root"></div>
+    <div id="react-modal-root"></div> <script type="module" src="/src/app.js"></script> -->
 
 </body>
 </html>

@@ -3,7 +3,7 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    flex-basis: 35vh; /* Default height */
+    /*flex-basis: 35vh;  Default height */
     min-height: 100px;
     width: 100%;
     background-color: var(--bg-color-secondary);
@@ -46,6 +46,7 @@
 
 .composer-editor {
     flex-grow: 1;
+    min-height: 0; /* <-- เทคนิคสำคัญสำหรับ Flexbox */
     padding: 15px 50px; /* [FIX] เพิ่ม padding ซ้าย-ขวา */
     outline: none;
     line-height: 1.6;
@@ -219,4 +220,107 @@ body.dark-mode .composer-toolbar .btn-icon.is-active {
     flex-grow: 1;       /* ให้มันขยายเต็มที่ */
     flex-basis: auto;   /* ไม่ต้องกำหนดความสูงตายตัว */
     height: 100%;       /* สูง 100% ของ parent (.main-content-wrapper) */
+}
+
+/* เพิ่ม CSS นี้เข้าไป */
+/* .ProseMirror {
+  height: 100%;
+  outline: none;
+} */
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+}
+
+.composer-panel.is-resizing {
+    transition: none !important;
+}
+/* --- ทำให้ #composer-panel เป็น Flex Container แนวตั้ง --- */
+#composer-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* ป้องกันการล้นที่ไม่คาดคิด */
+    min-height: 100px;
+}
+
+#composer-panel.is-resizing {
+    transition: none !important;
+}
+
+/* --- ทำให้ Header มีขนาดคงที่ ไม่ยืดไม่หด --- */
+#composer-panel .composer-header {
+    flex-shrink: 0;
+}
+
+/* --- [หัวใจของการแก้ไข] ทำให้ .composer-editor ยืดหยุ่นและมี Scroll ของตัวเอง --- */
+.composer-editor {
+    flex-grow: 1;      /* <-- คำสั่งสำคัญ: ทำให้พื้นที่นี้ยืดขยายเต็มพื้นที่ที่เหลือในแนวตั้ง */
+    min-height: 0;     /* <-- เทคนิคสำคัญสำหรับ Flexbox เพื่อให้ overflow ทำงานถูกต้อง */
+    overflow-y: auto;  /* <-- ทำให้มี scrollbar ของตัวเองเมื่อเนื้อหาล้น */
+    padding: 15px 50px;
+}
+
+/* --- ทำให้ .ProseMirror (สร้างโดย TipTap) มีความสูงเต็ม 100% ของ parent --- */
+.ProseMirror {
+    height: 100%;      /* <-- คำสั่งสำคัญ: ทำให้ editor ยืดเต็ม .composer-editor */
+    outline: none;
+}
+
+/* --- [เพิ่ม] คืนชีพสไตล์ให้ Blockquote ใน TipTap Editor --- */
+.composer-editor .ProseMirror blockquote {
+  margin: 0.75rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--border-color); /* ใช้สีขอบของธีม */
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* ทำให้ย่อหน้าภายใน Blockquote ไม่มีระยะห่างผิดเพี้ยน */
+.composer-editor .ProseMirror blockquote p {
+  margin: 0;
+}
+
+/* เพิ่มสไตล์สำหรับ Dark Mode */
+body.dark-mode .composer-editor .ProseMirror blockquote {
+    border-left-color: #4a5568;
+    background-color: rgba(255, 255, 255, 0.05);
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+.ProseMirror mark {
+  background-color: #FAF594; /* สีเหลืองไฮไลท์ */
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+/* ทำให้สีสวยขึ้นใน Dark Mode */
+body.dark-mode .ProseMirror mark {
+    background-color: #B49100;
+    color: #F8F9FA;
+}
+
+/* --- [เพิ่ม] สไตล์สำหรับ Font Size Selector --- */
+.font-size-selector {
+    width: 110px; /* [✅ เพิ่ม/แก้ไข] กำหนดความกว้างให้แคบลง */
+    height: 30px;
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--bg-color-secondary);
+    margin: 0 4px;
+}
+body.dark-mode .font-size-selector {
+    background-color: #2d3748;
+    border-color: #4a5568;
+    color: var(--text-dark);
+}
+
+.ProseMirror {
+    font-size: 16px;
 }
