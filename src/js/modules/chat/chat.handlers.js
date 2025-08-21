@@ -286,22 +286,27 @@ export async function sendMessage() {
         }
 
     } catch (error) {
-        // [CRITICAL] เมื่อการแปลง URL ล้มเหลว โค้ดจะมาทำงานที่นี่
+        // 1. ถ้าเป็นการยกเลิกโดยผู้ใช้ (กด Stop) ให้จบการทำงานเงียบๆ
+        if (error.name === 'AbortError') {
+            console.log("sendMessage aborted by user during image processing.");
+            // ไม่ต้องทำอะไรเลย เพราะ stopGeneration() จะจัดการ UI ทั้งหมดเอง
+            return;
+        }
+
+        // 2. ถ้าเป็น Error อื่นๆ (เช่น โหลดรูปไม่ได้จริงๆ) ให้แสดง Alert ที่ถูกต้อง
         console.error("Error during sendMessage (Image Processing):", error);
-        // [FIX] สร้างข้อความแจ้งเตือนแบบมีโครงสร้างและเป็นมิตรกับผู้ใช้มากขึ้น
+        
         const title = "Image Could Not Be Processed";
         const recommendation = "For best results, please save the image to your device and use the '+' button to upload it directly.";
         const technicalDetails = `Details: ${error.message}`;
-
-        // รวมข้อความทั้งหมดเข้าด้วยกัน โดยเน้นคำแนะนำเป็นหลัก
         const fullMessage = `${recommendation}\n\n---\n${technicalDetails}`;
 
-        showCustomAlert(fullMessage, title); // ส่ง Title และ Message ที่สร้างใหม่เข้าไป
+        showCustomAlert(fullMessage, title);
 
+        // 3. รีเซ็ต UI ที่เกี่ยวกับการส่งข้อความให้กลับสู่สถานะปกติ
         attachedFiles = [];
         stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
-        stateManager.bus.publish('ui:toggleLoading', { isLoading: false }); // <--- แก้ไขเพิ่มเติม: ต้องปลดล็อคปุ่มด้วย
-        
+        stateManager.bus.publish('ui:toggleLoading', { isLoading: false }); 
         stateManager.bus.publish('status:update', { message: 'Image processing failed', state: 'error' });
     }
 }
@@ -420,24 +425,46 @@ async function sendSingleAgentMessage() {
         console.log("Stream was manually aborted. UI state is handled by stopGeneration().");
         return; // ออกจาก finally block ทันที
         }
+        if (stateManager.getState().abortController?.signal.aborted) {
+            console.log("Stream was manually aborted. UI state is handled by stopGeneration().");
+            return; // ออกจาก finally block ทันที
+        }
+
+        // ถ้าจบการทำงานตามปกติ ให้ทำเหมือนเดิม
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
-        if (!stateManager.getState().abortController?.signal.aborted) {
-            stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
-        }
+        stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
     }
 }
 
 export function stopGeneration() {
     console.log("STOP button pressed. Aborting current request...");
+    
+    // 1. ส่งสัญญาณ Abort (เหมือนเดิม)
     stateManager.abort();
+
+    // 2. [เพิ่ม] หยุดการทำงานของ Group Chat โดยตรง
+    const project = stateManager.getProject();
+    if (project && project.activeSessionId) {
+        const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+        if (session && session.groupChatState) {
+            session.groupChatState.isRunning = false;
+        }
+    }
+
+    // 3. อัปเดต UI (เหมือนเดิม)
     stateManager.setLoading(false);
     stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
+    
+    // 4. [เพิ่ม] อัปเดต Status Bar ให้ถูกต้อง
+    stateManager.bus.publish('status:update', { message: 'Generation stopped.', state: 'connected' });
 }
+
 window.ChatHandlers = {
     sendMessage,
     stopGeneration
 };
+
 // [NEW] เพิ่มฟังก์ชันสำหรับลบไฟล์ และทำการ export
 export function removeAttachedFile({ index }) {
     if (attachedFiles && attachedFiles[index] !== undefined) {

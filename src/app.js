@@ -1,5 +1,5 @@
 // ===============================================
-// FILE: src/main.js (ฉบับสมบูรณ์)
+// FILE: src/app.js (ฉบับสมบูรณ์)
 // DESCRIPTION: Main entry point for the application. Initializes all modules,
 //              sets up event listeners, and manages workspace logic.
 // ===============================================
@@ -20,6 +20,7 @@ import { initGlobalKeybindings } from './js/core/core.keyboard.js';
 import { initRightSidebarToggle } from './js/modules/chat/chat.ui.js';
 import { initGlobalDropdownListener } from './js/core/core.ui.js';
 import { processQueue } from './js/modules/chat/chat.group.js';
+import { setComposerState } from './js/modules/composer/composer.ui.js';
 
 // UI & Handler Modules (Import all necessary modules)
 import * as ProjectUI from './js/modules/project/project.ui.js';
@@ -219,6 +220,8 @@ function setupEventSubscriptions() {
     // Chat Actions
     bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
     bus.subscribe('composer:heightChanged', SessionHandlers.saveComposerHeight);
+    bus.subscribe('ui:toggleComposer', () => { setComposerState('normal');});
+        
     bus.subscribe('chat:deleteMessage', (payload) => ChatHandlers.deleteMessage(payload));
 
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
@@ -327,6 +330,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // --- ส่วนของการ Initialize UI และ Event ทั้งหมดจะยังคงเหมือนเดิม ---
         initializeUI();
+        // เรียกคืนสถานะของ Composer จาก localStorage
+        try {
+            const savedComposerState = localStorage.getItem('promptPrimComposerState');
+            
+            // ถ้าเคยเปิดไว้เป็น 'normal' หรือ 'maximized' ให้เปิดขึ้นมาใหม่
+            // เราจะไม่คืนค่า 'collapsed' เพราะค่าเริ่มต้นมันก็คือปิดอยู่แล้ว
+            if (savedComposerState === 'normal' || savedComposerState === 'maximized') {
+                console.log(`Restoring Composer state to: ${savedComposerState}`);
+                setComposerState(savedComposerState);
+            }
+        } catch (error) {
+            console.error("Could not restore composer state:", error);
+        }
         initCrossTabSync(); // <-- [ADD THIS] Call the new function
         setupEventSubscriptions();
         ProjectHandlers.setupAutoSaveChanges();

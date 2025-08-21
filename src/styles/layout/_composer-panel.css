@@ -207,3 +207,16 @@ body.dark-mode .composer-toolbar .btn-icon.is-active {
     padding-left: 30px;
     list-style-position: inside;
 }
+
+/* เพิ่ม Class นี้เพื่อซ่อนหน้าต่างแชทและตัวปรับขนาด */
+.main-content-wrapper.composer-maximized .chat-messages,
+.main-content-wrapper.composer-maximized #resizer-row {
+    display: none;
+}
+
+/* ทำให้ Composer ขยายเต็มพื้นที่เมื่อมี Class นี้ */
+.main-content-wrapper.composer-maximized .composer-panel {
+    flex-grow: 1;       /* ให้มันขยายเต็มที่ */
+    flex-basis: auto;   /* ไม่ต้องกำหนดความสูงตายตัว */
+    height: 100%;       /* สูง 100% ของ parent (.main-content-wrapper) */
+}

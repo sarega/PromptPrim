@@ -181,7 +181,7 @@ export function toggleDropdown(event) {
 }
 
 // [NEW] เพิ่ม Listener กลางสำหรับปิด Dropdown เมื่อคลิกนอกพื้นที่
-// เราจะเรียกใช้ฟังก์ชันนี้เพียงครั้งเดียวใน main.js
+// เราจะเรียกใช้ฟังก์ชันนี้เพียงครั้งเดียวใน app.js
 export function initGlobalDropdownListener() {
     document.addEventListener('click', (e) => {
         // --- Part 1: Handle old-style dropdowns with .open class ---

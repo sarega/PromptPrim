@@ -322,3 +322,21 @@ body.dark-mode .theme-switcher-inline label:hover {
 body.dark-mode #model-count-status {
     color: #a0aec0;
 }
+
+/* --- [เพิ่มกฎนี้เข้าไป] --- */
+/* เมื่อ Composer ทำงาน ให้ซ่อน Input Bar หลักของ Chat ทิ้งไปเลย */
+.main-chat-area.composer-is-active .chat-input-wrapper {
+    display: none;
+}
+
+/* --- [โค้ดเดิมที่คุณมีอยู่แล้ว] --- */
+/* ใช้เพื่อซ่อนหน้าต่างแชทเมื่อ Composer เต็มจอ */
+.main-content-wrapper.composer-maximized .chat-messages,
+.main-content-wrapper.composer-maximized #resizer-row {
+    display: none;
+}
+
+.main-content-wrapper.composer-maximized .composer-panel {
+    height: 100%;
+    flex-grow: 1;
+}

@@ -6,6 +6,49 @@ import { stateManager } from '../../core/core.state.js';
 import { appendToComposer, exportComposerContent, updateComposerContent, loadComposerContent } from './composer.handlers.js';
 import { debounce } from '../../core/core.utils.js';
 
+// ดึง Element ที่ต้องใช้บ่อยๆ มาเก็บไว้ข้างนอก
+const composerPanel = document.getElementById('composer-panel');
+const mainContentWrapper = document.querySelector('.main-content-wrapper');
+const mainChatArea = document.querySelector('.main-chat-area');
+const mobileToggleBtn = document.getElementById('mobile-composer-toggle');
+
+/**
+ * ฟังก์ชันกลางสำหรับควบคุมสถานะของ Composer ทั้งหมด
+ * @param {'collapsed' | 'normal' | 'maximized'} newState สถานะที่ต้องการให้เป็น
+ */
+export function setComposerState(newState) {
+    if (!composerPanel || !mainContentWrapper || !mainChatArea) return;
+
+    // --- Reset สถานะทั้งหมดก่อน ---
+    composerPanel.classList.remove('collapsed');
+    mainContentWrapper.classList.remove('composer-maximized');
+    mainChatArea.classList.remove('composer-is-active');
+    if (mobileToggleBtn) mobileToggleBtn.classList.remove('is-open');
+
+    // --- ตั้งค่าสถานะใหม่ตามที่ได้รับมา ---
+    switch (newState) {
+        case 'collapsed':
+            composerPanel.classList.add('collapsed');
+            // ไม่ต้อง add 'composer-is-active' เพื่อให้ Input Bar ของ Chat กลับมา
+            break;
+
+        case 'normal':
+            // composerPanel ไม่มี class อะไรเป็นพิเศษ
+            mainChatArea.classList.add('composer-is-active'); // ซ่อน Input Bar ของ Chat
+            if (mobileToggleBtn) mobileToggleBtn.classList.add('is-open');
+            break;
+
+        case 'maximized':
+            mainContentWrapper.classList.add('composer-maximized');
+            mainChatArea.classList.add('composer-is-active'); // ซ่อน Input Bar ของ Chat
+            if (mobileToggleBtn) mobileToggleBtn.classList.add('is-open');
+            break;
+    }
+    localStorage.setItem('promptPrimComposerState', newState);
+    // ประกาศ Event บอกส่วนอื่นๆ ของแอป (สำคัญมากสำหรับ Resizer)
+    stateManager.bus.publish('composer:visibilityChanged');
+}
+
 // --- Helper Functions for Toolbar ---
 
 function populateColorPalette() {
@@ -77,15 +120,38 @@ export function setContent(htmlContent) {
  */
 export function initComposerUI() {
     // 1. Get DOM Elements (ดึง Element ทั้งหมดมาก่อน)
-    const composerPanel = document.getElementById('composer-panel');
     const contentArea = document.querySelector('#composer-editor .composer-content-area');
-    const mobileToggleBtn = document.getElementById('mobile-composer-toggle'); // <-- ประกาศตัวแปรที่นี่
 
     // --- ส่วนอื่นๆ ของฟังก์ชันยังคงเหมือนเดิม ---
     const composerEditorWrapper = document.getElementById('composer-editor');
     const composerToolsArea = document.querySelector('.composer-tools-area');
     const collapseBtn = document.getElementById('composer-collapse-btn');
     const expandBtn = document.getElementById('composer-expand-btn');
+
+    // --- Logic ใหม่สำหรับปุ่มขยาย (Fullscreen) ---
+    if (expandBtn) {
+        expandBtn.addEventListener('click', () => {
+            // ปุ่มนี้ทำหน้าที่สลับระหว่าง Normal <-> Maximized
+            const isMaximized = mainContentWrapper.classList.contains('composer-maximized');
+            setComposerState(isMaximized ? 'normal' : 'maximized');
+        });
+    }
+
+    // --- Logic ใหม่สำหรับปุ่มย่อ (Collapse) ---
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', () => {
+            // ปุ่มนี้ทำหน้าที่ "ปิด" สถานเดียว ไม่ว่าจะมาจาก State ไหนก็ตาม
+            setComposerState('collapsed');
+        });
+    }
+    // --- Logic สำหรับปุ่ม Mobile (ถ้ามี) ---
+    if (mobileToggleBtn) {
+        mobileToggleBtn.addEventListener('click', () => {
+            const isCollapsed = composerPanel.classList.contains('collapsed');
+            setComposerState(isCollapsed ? 'normal' : 'collapsed');
+        });
+    }
+
     const exportBtn = document.getElementById('export-composer-btn');
 
     if (!composerPanel || !contentArea) {
@@ -132,7 +198,6 @@ export function initComposerUI() {
     stateManager.bus.subscribe('project:loaded', loadComposerContent);
     stateManager.bus.subscribe('session:loaded', loadComposerContent);
     stateManager.bus.subscribe('composer:append', appendToComposer);
-    stateManager.bus.subscribe('ui:toggleComposer', toggleComposerVisibility);
 
     // 3. Setup Event Listeners
     // [FIX #2] ทำให้เมื่อคลิกที่ Composer จะเป็น Paragraph (<p>) โดยอัตโนมัติ
@@ -192,7 +257,7 @@ export function initComposerUI() {
                 if (command) {
                     let value = target.dataset.value || null;
                     if (command === 'formatBlock' && value) value = `<${value}>`;
-                    document.execCommand(command, false, value);
+                    document.execCommand(command, false, value); // <-- มันทำงานให้เราตรงนี้!
                 }
             }
             updateToolbarState();
@@ -200,12 +265,12 @@ export function initComposerUI() {
     }
 
     // Action buttons
-    if (exportBtn) exportBtn.addEventListener('click', exportComposerContent);
-    if (collapseBtn) collapseBtn.addEventListener('click', toggleComposerVisibility);
-    if (expandBtn) expandBtn.addEventListener('click', () => {
-        const isMaximized = composerPanel.style.flexBasis && parseInt(composerPanel.style.flexBasis, 10) > window.innerHeight * 0.5;
-        composerPanel.style.flexBasis = isMaximized ? '35vh' : '90vh';
-    });
+    // if (exportBtn) exportBtn.addEventListener('click', exportComposerContent);
+    // if (collapseBtn) collapseBtn.addEventListener('click', toggleComposerVisibility);
+    // if (expandBtn) expandBtn.addEventListener('click', () => {
+    //     const isMaximized = composerPanel.style.flexBasis && parseInt(composerPanel.style.flexBasis, 10) > window.innerHeight * 0.5;
+    //     composerPanel.style.flexBasis = isMaximized ? '35vh' : '90vh';
+    // });
     
     console.log("✅ Composer UI Initialized with definitive patches.");
 }
