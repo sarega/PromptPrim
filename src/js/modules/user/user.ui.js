@@ -1,4 +1,4 @@
-// สร้างไฟล์ใหม่ที่: src/js/modules/user/user.ui.js
+// file: src/js/modules/user/user.ui.js
 
 import { stateManager } from '../../core/core.state.js';
 import { toggleDropdown, showCustomAlert } from '../../core/core.ui.js'; 

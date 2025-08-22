@@ -4,10 +4,15 @@ export default {
     "./index.html",
     "./app.html",
     "./admin.html",
-    "./src/**/*.{js,ts,jsx,tsx}", // <-- บรรทัดนี้สำคัญมาก
+    "./public/**/*.html",
+    "./src/**/*.{html,js,jsx,ts,tsx}",
+    "./src/js/react-components/**/*.{js,jsx}",
   ],
   theme: {
     extend: {},
   },
   plugins: [],
-}
+  corePlugins: { preflight: false },
+  prefix: "tw-",
+  safelist: [{ pattern: /^tw-.*/ }],
+};

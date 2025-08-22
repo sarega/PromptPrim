@@ -5,6 +5,7 @@
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
 import { callLLM, callSystemLLM } from '../../core/core.api.js'; 
 import { showCustomAlert } from '../../core/core.ui.js'
+import { persistProjectMetadata } from '../project/project.handlers.js'; // [✅ Import]
 
 export async function generateAgentProfile() {
     const enhancerPromptText = document.getElementById('enhancer-prompt-input').value.trim();
@@ -195,4 +196,24 @@ export function deleteAgentPreset(agentNameToDelete) {
         stateManager.bus.publish('agent:listChanged');
         stateManager.bus.publish('entity:selected', project.activeEntity);
     }
+}
+
+export async function saveInlineAgentConfig(configData) {
+    const project = stateManager.getProject();
+    if (!project) return;
+
+    // เราจะเก็บ config ไว้ใน globalSettings เพื่อให้ใช้ได้ทั้งโปรเจกต์
+    if (!project.globalSettings) {
+        project.globalSettings = {};
+    }
+    project.globalSettings.inlineAgentConfig = configData;
+
+    // สั่งบันทึกข้อมูล Metadata (ซึ่งรวม globalSettings) ลง DB ทันที
+    await persistProjectMetadata(project);
+    
+    // ตั้งค่า 'dirty' สำหรับการ save file
+    stateManager.updateAndPersistState();
+
+    showCustomAlert('Inline Agent configuration saved!', 'Success');
+    console.log('Saved Inline Agent Config:', configData);
 }

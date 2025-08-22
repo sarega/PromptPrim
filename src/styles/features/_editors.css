@@ -1376,9 +1376,12 @@ body.dark-mode #agent-editor-modal textarea {
   display: flex;
 }
 
-/* ชั้นของหน้าคอนเฟิร์ม/alert */
-/* #alert-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 10050;     
-} */
+/* เพิ่มสไตล์สำหรับ Pending Highlight */
+.ProseMirror mark[data-pending="true"] {
+  background-color: rgba(250, 245, 148, 0.5); /* สีเหลืองโปร่งแสง */
+  color: inherit;
+  border-radius: 2px;
+}
+body.dark-mode .ProseMirror mark[data-pending="true"] {
+    background-color: rgba(180, 145, 0, 0.6);
+}

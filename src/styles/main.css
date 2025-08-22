@@ -4,11 +4,6 @@
    This file imports all other partials in the correct order.
    =============================================== */
 
-   /* src/styles/main.css */
-
-@import './tailwind.css'; /* <-- นำเข้า Tailwind เป็นฐาน */
-
-
 /* 1. Abstracts - Variables, functions, mixins. */
 @import './abstracts/_variables.css';
 
@@ -52,8 +47,6 @@
 @import './features/_settings-panel.css';
 @import './features/_model-manager.css'; /* <-- เพิ่มบรรทัดนี้ */
 @import './features/_editors.css';
-
-/* @import './landing.css'; */
 
 
 .streaming-code-preview {
@@ -186,4 +179,12 @@ body.dark-mode .dropzone-overlay {
     border-color: var(--primary-color);
 }
 
-
+/* 
+html, body {
+  background: var(--app-bg, #0b0b0e);
+  color: var(--text-color, #e5e7eb);
+} */
+/* #app, .app-wrapper, #main-chat-panel {
+  background: inherit;
+  color: inherit;
+} */

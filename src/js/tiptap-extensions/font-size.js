@@ -1,3 +1,4 @@
+/* file: src/js/tiptap-extensions/font-size.js */
 import { Extension } from '@tiptap/core';
 
 export const FontSize = Extension.create({

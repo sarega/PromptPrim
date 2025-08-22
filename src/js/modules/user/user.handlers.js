@@ -1,4 +1,4 @@
-// [REVISED & COMPLETE] src/js/modules/user/user.handlers.js
+// file: src/js/modules/user/user.handlers.js
 
 import * as UserService from './user.service.js';
 import { stateManager } from '../../core/core.state.js';
