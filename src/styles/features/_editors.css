@@ -1385,3 +1385,50 @@ body.dark-mode #agent-editor-modal textarea {
 body.dark-mode .ProseMirror mark[data-pending="true"] {
     background-color: rgba(180, 145, 0, 0.6);
 }
+
+
+
+/* --- [เพิ่ม] สไตล์สำหรับ User Chunk (InstructionNode) --- */
+
+.ProseMirror [data-type="instruction-chunk"] {
+  background-color: #eef2ff; /* สีฟ้าอ่อนสำหรับ Light Mode */
+  border: 1px solid #c7d2fe;
+  border-left: 3px solid #6366f1; /* เส้นขอบซ้ายสีน้ำเงินเข้ม */
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 1em 0;
+}
+
+/* --- สไตล์สำหรับ Dark Mode --- */
+body.dark-mode .ProseMirror [data-type="instruction-chunk"] {
+  background-color: #2c3e50; /* สีน้ำเงิน-เทาเข้มสำหรับ Dark Mode */
+  border-color: #4a5568;
+  border-left-color: #818cf8;
+}
+
+/* --- [เพิ่ม] สไตล์สำหรับ AI Chunk (SuggestionNode) --- */
+
+/* สไตล์ตอนที่ยังเป็น 'pending' (สีเหลือง) */
+.ProseMirror [data-type="suggestion-chunk"][data-status="pending"] {
+  background-color: rgba(250, 245, 148, 0.3); /* สีเหลืองโปร่งแสง */
+  border: 1px dashed #eab308;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 1em 0;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* สไตล์ตอนที่เปลี่ยนเป็น 'accepted' (จะกลมกลืนไปกับเนื้อหาปกติ) */
+.ProseMirror [data-type="suggestion-chunk"][data-status="accepted"] {
+  background-color: transparent;
+  border-color: transparent;
+  padding: 0;
+  margin: 1em 0;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* --- สไตล์สำหรับ Dark Mode --- */
+body.dark-mode .ProseMirror [data-type="suggestion-chunk"][data-status="pending"] {
+  background-color: rgba(180, 145, 0, 0.4);
+  border-color: #a16207;
+}

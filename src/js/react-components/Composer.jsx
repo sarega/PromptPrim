@@ -4,23 +4,26 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+import { stateManager } from '../core/core.state.js';
+import * as AgentHandlers from '../modules/agent/agent.handlers.js';
+import ConfigureInlineAgentModal from './ConfigureInlineAgentModal.jsx';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import Blockquote from '@tiptap/extension-blockquote';
 import Highlight from '@tiptap/extension-highlight';
 import { FontSize } from '../tiptap-extensions/font-size.js';
-import { exportComposerContent } from '../modules/composer/composer.handlers.js';
-import ConfigureInlineAgentModal from './ConfigureInlineAgentModal.jsx';
-import * as AgentHandlers from '../modules/agent/agent.handlers.js';
-import { stateManager } from '../core/core.state.js';
-import ComposerContextMenu from './ComposerContextMenu.jsx';
-import { Hotkey } from '../tiptap-extensions/hotkey.js';
-import { invokeAgent } from '../modules/agent/agent.engine.js';
 import { PendingHighlight } from '../tiptap-extensions/pending-highlight.js';
 import ProcessingIndicator from './ProcessingIndicator.jsx';
+import { Hotkey } from '../tiptap-extensions/hotkey.js';
+import { invokeAgent } from '../modules/agent/agent.engine.js';
+import ComposerContextMenu from './ComposerContextMenu.jsx';
 import InlineAgentInspector from './InlineAgentInspector.jsx';
+import { InstructionNode } from '../tiptap-extensions/InstructionNode.js';
+import { SuggestionNode } from '../tiptap-extensions/SuggestionNode.js';
 
 // ---------------------------------------------------------
 
@@ -179,32 +182,24 @@ const ComposerToolbar = ({ editor, onCollapse, onToggleMaximize, isMaximized, on
 
 // --- Component หลัก ---
 export default function Composer({ initialContent, onContentChange, onCollapse, onToggleMaximize, isMaximized, onExport, onReady }) {
-  const [menuState, setMenuState] = useState({ visible: false, x: 0, y: 0 });
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasPending, setHasPending] = useState(false);
+    const [menuState, setMenuState] = useState({ visible: false, x: 0, y: 0 });
+    const [loadingState, setLoadingState] = useState({ isLoading: false });
+    const [hasPending, setHasPending] = useState(false);
+    const [inspectorState, setInspectorState] = useState({ isVisible: false, systemPrompt: '', actionPrompt: '', userText: '' });
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
 
-  const handleAcceptSuggestion = (editorInstance) => {
-    if (!editorInstance) return;
-    console.log("✅ Accepting suggestion...");
-    editorInstance.chain().focus().unsetPendingHighlight().run();
-    setHasPending(false);
-  };
+    // --- Functions สำหรับจัดการ Decisions ---
+    const handleAcceptSuggestion = (editorInstance) => {
+        if (!editorInstance) return;
+        // ใช้ command `acceptSuggestion` ที่เราสร้างไว้ใน Node
+        editorInstance.chain().focus().acceptSuggestion().run();
+    };
 
-  const handleRejectSuggestion = (editorInstance) => {
-    if (!editorInstance) return;
-    console.log("❌ Rejecting suggestion...");
-    // หา Mark ที่มีชื่อ 'pendingHighlight' แล้วลบข้อความที่อยู่ใน Mark นั้น
-    editorInstance.chain().focus().deleteRange({ from: editorInstance.state.selection.from, to: editorInstance.state.selection.to }).run();
-    // หรือถ้าจะให้ซับซ้อนกว่า คือการ revert กลับไปเป็นข้อความเดิม (ต้องเก็บ state ไว้ก่อน)
-    // สำหรับตอนนี้ ลบทิ้งไปก่อน
-    setHasPending(false);
-  };
-  const [inspectorState, setInspectorState] = useState({
-    isVisible: false,
-    systemPrompt: '',
-    actionPrompt: '',
-    userText: '',
-  });
+    const handleRejectSuggestion = (editorInstance) => {
+        if (!editorInstance) return;
+        // ใช้ command `rejectSuggestion`
+        editorInstance.chain().focus().rejectSuggestion().run();
+    };
 
   const editor = useEditor({
     extensions: [
@@ -216,145 +211,116 @@ export default function Composer({ initialContent, onContentChange, onCollapse, 
       Color,
       FontSize,
       PendingHighlight,
+      InstructionNode,
+      SuggestionNode,
+      // Underline, 
+      // Blockquote,
+
       Hotkey.configure({
         shortcuts: [
-          {
-            hotkey: '\\',
-            command: ({ editor: e }) => invokeAgent({ action: 'continue', editor: e }),
-          },
-          {
-            hotkey: '=',
-            command: ({ editor: e }) => handleAcceptSuggestion(e), // [✅ แก้ไข]
-          },
+          { hotkey: '\\', command: ({ editor: e }) => invokeAgent({ action: 'continue', editor: e }) },
+          { hotkey: '=', command: ({ editor: e }) => handleAcceptSuggestion(e) },
+          { hotkey: 'Mod-Shift-i', command: ({ editor: e }) => e.chain().focus().setInstructionNode().run() },
         ]
       }),
     ],
 
-    editorProps: {
-      handleDOMEvents: {
-        contextmenu: (view, event) => {
-          event.preventDefault(); // ป้องกันเมนูของ Browser เปิดขึ้นมา
-          
-          // บันทึกตำแหน่งที่คลิก และสั่งให้เมนูแสดงผล
-          setMenuState({
-            visible: true,
-            x: event.clientX,
-            y: event.clientY,
-          });
-
-          return true; // บอก TipTap ว่าเราจัดการ Event นี้แล้ว
-        },
-      },
-    },
     content: initialContent || '',
-    onUpdate: ({ editor }) => onContentChange(editor.getHTML()),
-    onTransaction: ({ editor }) => {
-      // อัปเดตสถานะ Pending ทุกครั้งที่มีการเปลี่ยนแปลง
-      setHasPending(editor.isActive('pendingHighlight'));
-    },
-    onSelectionUpdate: ({ editor }) => {
-      setHasPending(editor.isActive('pendingHighlight'));
-    }
-  });
+        onUpdate: ({ editor }) => onContentChange(editor.getHTML()),
+        onTransaction: ({ editor }) => {
+            setHasPending(editor.isActive('suggestionNode', { 'data-status': 'pending' }));
+        },
+        onSelectionUpdate: ({ editor }) => {
+            setHasPending(editor.isActive('suggestionNode', { 'data-status': 'pending' }));
+        },
+        editorProps: {
+            handleDOMEvents: {
+                contextmenu: (view, event) => {
+                    event.preventDefault();
+                    setMenuState({ visible: true, x: event.clientX, y: event.clientY });
+                    return true;
+                },
+            },
+        },
+    });
 
-  // [เพิ่ม] useEffect สำหรับรับ Event จาก Engine
-  useEffect(() => {
-    const handlePromptUpdate = (data) => {
-      setInspectorState(prev => ({ ...prev, ...data }));
-    };
-    const unsubscribe = stateManager.bus.subscribe('composer:promptConstructed', handlePromptUpdate);
-    return () => unsubscribe();
-  }, []);
-  // [เพิ่ม] useEffect สำหรับดักฟัง Event การ Loading
-  useEffect(() => {
-    const handleLoading = ({ isLoading }) => {
-      setIsLoading(isLoading);
-    };
-    const unsubscribe = stateManager.bus.subscribe('composer:setLoading', handleLoading);
-    return () => unsubscribe();
-  }, []);
-
-  // [เพิ่ม] ฟังก์ชันสำหรับปิดเมนู
-  const handleCloseMenu = () => {
-    setMenuState({ ...menuState, visible: false });
-  };
-  
-  // [เพิ่ม] useEffect สำหรับดักจับการคลิกเพื่อปิดเมนู
-  useEffect(() => {
-    if (menuState.visible) {
-      document.addEventListener('click', handleCloseMenu);
-    }
-    return () => {
-      document.removeEventListener('click', handleCloseMenu);
-    };
-  }, [menuState.visible]);
-  
-  useEffect(() => {
-    if (!editor) return;
-    const isContentDifferent = editor.getHTML() !== initialContent;
-    if (isContentDifferent) {
-      editor.commands.setContent(initialContent || '', false);
-    }
-  }, [initialContent, editor]);
-
-  useEffect(() => {
-      if (editor && onReady) {
-        // ประกาศความสามารถของเราออกไปให้โลกภายนอกรู้
-        const api = {
-          appendContent: (htmlContent) => {
-            if (!editor) return;
-            // ตรวจสอบว่าถ้า editor มีเนื้อหาอยู่แล้ว ให้เพิ่มเส้นคั่นก่อน
-            if (editor.getText().trim().length > 0) {
-              editor.chain().focus().insertContent('<hr>').run();
-            }
-            // เพิ่มเนื้อหาใหม่เข้าไป และเลื่อน cursor ไปท้ายสุด
-            editor.chain().focus().insertContent(htmlContent).run();
-          },
+    useEffect(() => {
+        const handlePromptUpdate = (data) => setInspectorState(prev => ({ ...prev, ...data }));
+        const handleLoading = ({ isLoading }) => setLoadingState({ isLoading });
+        const unsubPrompt = stateManager.bus.subscribe('composer:promptConstructed', handlePromptUpdate);
+        const unsubLoading = stateManager.bus.subscribe('composer:setLoading', handleLoading);
+        return () => {
+            unsubPrompt();
+            unsubLoading();
         };
-        // เรียกใช้ onReady เพื่อส่ง API ของเราออกไป
-        onReady(api);
-      }
-    }, [editor, onReady]); // ให้ทำงานเมื่อ editor พร้อม
+    }, []);
 
-  return (
-    <div id="composer-panel" className="composer-panel tw-relative">
-      <ComposerToolbar
-        editor={editor}                  // ⬅️ ส่ง editor ให้ Toolbar
-        onCollapse={onCollapse}
-        onToggleMaximize={onToggleMaximize}
-        isMaximized={isMaximized}
-          onExport={() => {
-          const html = editor?.getHTML() || '';
-          const text = editor?.getText() || '';
-          exportComposerContent({ html, text });   // ⬅️ ส่งเนื้อหาเข้า handler
-          }}
-        onToggleInspector={() => setInspectorState(prev => ({ ...prev, isVisible: !prev.isVisible }))}
-      />
-      <EditorContent editor={editor} className="composer-editor" />
-      {isLoading && <ProcessingIndicator />}
+    const handleCloseMenu = () => {
+        setMenuState({ ...menuState, visible: false });
+    };
 
-      {menuState.visible && (
-        <ComposerContextMenu
-          x={menuState.x}
-          y={menuState.y}
-          hasPendingSuggestion={hasPending} // [✅ ส่ง State]
-          onSelectAction={(action) => {
-            const actionKey = action.toLowerCase();
-            if (['accept', 'reject', 'rerun', 'keep all'].includes(actionKey)) {
-              if (actionKey === 'accept') handleAcceptSuggestion(editor);
-              if (actionKey === 'reject') handleRejectSuggestion(editor);
-              // TODO: Add Rerun logic
-            } else {
-              invokeAgent({ action: actionKey.replace('...', ''), editor });
-            }
-            handleCloseMenu();
-          }}
-        />
-      )}
-      <InlineAgentInspector 
-        {...inspectorState}
-        onClose={() => setInspectorState(prev => ({ ...prev, isVisible: false }))}
-      />
-    </div>
-  );
+    useEffect(() => {
+        if (menuState.visible) {
+            document.addEventListener('click', handleCloseMenu, { once: true });
+        }
+        return () => document.removeEventListener('click', handleCloseMenu);
+    }, [menuState.visible]);
+
+    useEffect(() => {
+        if (editor && initialContent !== undefined && editor.getHTML() !== initialContent) {
+            editor.commands.setContent(initialContent || '', false);
+        }
+    }, [initialContent, editor]);
+
+    useEffect(() => {
+        if (editor && onReady) {
+            const api = {
+                appendContent: (htmlContent) => {
+                    if (!editor) return;
+                    if (editor.getText().trim().length > 0) editor.chain().focus().insertContent('<hr>').run();
+                    editor.chain().focus().insertContent(htmlContent).run();
+                },
+            };
+            onReady(api);
+        }
+    }, [editor, onReady]);
+
+    return (
+        <div id="composer-panel" className="composer-panel tw-relative">
+            <ComposerToolbar
+                editor={editor}
+                onCollapse={onCollapse}
+                onToggleMaximize={onToggleMaximize}
+                isMaximized={isMaximized}
+                onExport={onExport}
+                onToggleInspector={() => setInspectorState(prev => ({ ...prev, isVisible: !prev.isVisible }))}
+            />
+            <EditorContent editor={editor} className="composer-editor" />
+
+            {loadingState.isLoading && <ProcessingIndicator />}
+
+            {menuState.visible && (
+                <ComposerContextMenu
+                    x={menuState.x}
+                    y={menuState.y}
+                    hasPendingSuggestion={hasPending}
+                    onSelectAction={(action) => {
+                        const actionKey = action.toLowerCase();
+                        if (['accept', 'reject', 'rerun'].includes(actionKey)) {
+                            if (actionKey === 'accept') handleAcceptSuggestion(editor);
+                            if (actionKey === 'reject') handleRejectSuggestion(editor);
+                        } else {
+                            invokeAgent({ action: actionKey.replace('...', ''), editor });
+                        }
+                        handleCloseMenu();
+                    }}
+                />
+            )}
+
+            <InlineAgentInspector
+                {...inspectorState}
+                onClose={() => setInspectorState(prev => ({ ...prev, isVisible: false }))}
+            />
+        </div>
+    );
 }
