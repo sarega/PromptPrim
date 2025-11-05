@@ -314,12 +314,33 @@ export const StudioForm = ({ models, onSubmit, status }) => {
                 const fileUrl = await KieAIService.uploadFileStream(file, 'images/user-uploads');
                 setParams((p) => ({ ...p, image_url_input: fileUrl }));
             } catch (err) {
-                alert('Upload failed: ' + (err?.message || 'Unknown error'));
-                // Clear the preview and reset the URL input
+                let errorMessage = 'Upload failed: ';
+                if (err?.response?.status === 413) {
+                    errorMessage += 'File size exceeds 5MB limit';
+                } else if (err?.response?.status === 415) {
+                    errorMessage += 'Unsupported file type (JPEG/PNG only)';
+                } else {
+                    errorMessage += err?.message || 'Server connection failed';
+                }
+                
+                alert(errorMessage);
+                // Clear preview and reset inputs
                 setImagePreview(null);
-                setParams((p) => ({ ...p, image_url_input: '' }));
+                setParams(p => ({
+                    ...p,
+                    image_url_input: '',
+                    // Reset additional upload-related state
+                    customMode: false,
+                    instrumental: false
+                }));
+                console.error('File upload error:', err);
             }
         };
+        // Validate file before reading
+        if (!file.type.startsWith('image/')) {
+            alert('Only image files are allowed (JPEG, PNG)');
+            return;
+        }
         reader.readAsDataURL(file);
     }, []);
 
@@ -385,35 +406,35 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         const newModel = KieAI_MODELS.find((m) => m.id === newId);
 
         setSelectedId(newId);
-        // Reset image preview
-        handleRemoveImage();
+        // Reset image preview and clear file input
+        setImagePreview(null);
+        setParams(p => ({
+            ...p,
+            // Reset all model-specific parameters
+            camera_fixed: false,
+            enable_safety_checker: true,
+            negative_prompt: '',
+            enable_prompt_expansion: false,
+            image_url_input: '',
+            // Audio parameters
+            customMode: false,
+            instrumental: false,
+            style: '',
+            title: '',
+            negativeTags: '',
+            callBackUrl: '',
+            // Preserve only these core parameters
+            resolution: '1080p',
+            duration: 5,
+            aspect_ratio: '16:9',
+            seed: -1,
+            // Apply model-specific defaults last
+            ...(newModel?.modelApiId ? getModelDefaults(newModel.modelApiId) : {})
+        }));
 
-        // Determine defaults and limits for the selected model
-        const defaults = newModel?.modelApiId ? getModelDefaults(newModel.modelApiId) : {};
+        // Update limits based on new model
         const newLimits = newModel?.modelApiId ? getModelLimits(newModel.modelApiId) : {};
-        // Set default params, preserving manual overrides only if still valid
-        setParams((prev) => {
-            // When switching models, drop any lingering modelId from the
-            // parameter state.  If a modelId property remains in params it may
-            // override the newly selected model when handleSubmit spreads
-            // params over the request body.  We explicitly omit modelId here.
-            const { modelId: _ignored, ...rest } = prev || {};
-            return {
-                ...rest,
-                camera_fixed: false,
-                enable_safety_checker: true,
-                negative_prompt: '',
-                enable_prompt_expansion: false,
-                image_url_input: '',
-                customMode: false,
-                instrumental: false,
-                style: '',
-                title: '',
-                negativeTags: '',
-                callBackUrl: '',
-                ...defaults,
-            };
-        });
+        setLimits(newLimits);
         setLimits(newLimits);
     };
     
@@ -848,28 +869,65 @@ export default function PhotoStudioWorkspace({ agentName, models, onGenerate }) 
     const handleConvertToWav = useCallback(async (id) => {
         const target = results.find((r) => r.id === id);
         if (!target || target.type !== 'audio') return;
-        // Show status to user
-        setStatus({ status: 'loading', message: 'Submitting WAV conversion...' });
+        
         try {
-            // Submit conversion and poll for completion
+            setStatus({ status: 'loading', message: 'Starting WAV conversion...' });
+            
+            // Check if conversion is already in progress
+            if (target.conversionPending) {
+                throw new Error('Conversion already in progress');
+            }
+
+            // Update result with pending state
+            const updatedPending = results.map(r =>
+                r.id === id ? { ...r, conversionPending: true } : r
+            );
+            setResults(updatedPending);
+
             const wavTaskId = await SunoService.convertToWav(target.id, target.audioId);
-            setStatus({ status: 'loading', message: 'Converting to WAV...' });
-            const wavUrl = await SunoService.pollWavConversion(wavTaskId);
-            // Prepare updated results array
-            const updated = results.map((r) => (r.id === id ? { ...r, wavUrl } : r));
-            // Update state
+            setStatus({ status: 'loading', message: 'Processing audio...' });
+            
+            // Add timeout safety (5 minutes)
+            const wavUrl = await Promise.race([
+                SunoService.pollWavConversion(wavTaskId),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Conversion timeout - try again later')), 300000)
+                )
+            ]);
+
+            const updated = results.map(r =>
+                r.id === id ? { ...r, wavUrl, conversionPending: false } : r
+            );
+            
             setResults(updated);
-            setStatus({ status: 'success', message: 'WAV conversion complete!' });
+            setStatus({ status: 'success', message: 'WAV ready!' });
+            
             // Persist session
-            const project = stateManager.getProject();
-            const projectId = project?.id || 'default';
-            saveStudioSession(projectId, {
+            saveStudioSession(stateManager.getProject()?.id || 'default', {
                 form: lastFormRef.current,
                 pendingTasks: pendingRef.current,
                 results: updated,
-            }).catch(() => {});
+            }).catch(console.error);
+
         } catch (err) {
-            setStatus({ status: 'error', message: err.message || 'WAV conversion failed' });
+            console.error('WAV conversion failed:', err);
+            const errorMessage = err.response?.data?.error?.includes('Invalid audio')
+                ? 'Invalid audio format - must be MP3'
+                : err.message.includes('timeout')
+                ? 'Conversion timed out'
+                : 'Conversion failed - please try again';
+                
+            setStatus({
+                status: 'error',
+                message: errorMessage,
+                retryId: id // Store ID for potential retry
+            });
+            
+            // Reset pending state
+            const updated = results.map(r =>
+                r.id === id ? { ...r, conversionPending: false } : r
+            );
+            setResults(updated);
         }
     }, [results]);
 
@@ -984,39 +1042,101 @@ export default function PhotoStudioWorkspace({ agentName, models, onGenerate }) 
 
     // On mount, load any saved session from IndexedDB
     useEffect(() => {
-        (async () => {
-            const project = stateManager.getProject();
-            const projectId = project?.id || 'default';
-            const saved = await loadStudioSession(projectId);
-            if (!saved) return;
-            // Restore results
-            if (Array.isArray(saved.results) && saved.results.length) {
-                setResults(saved.results);
-            }
-            // Restore form: publish event to StudioForm to update internal state
-            if (saved.form) {
-                lastFormRef.current = saved.form;
-                stateManager.bus.publish('studio:restoreForm', saved.form);
-            }
-            // Resume pending tasks
-            if (Array.isArray(saved.pendingTasks) && saved.pendingTasks.length) {
-                pendingRef.current = saved.pendingTasks;
-                for (const t of saved.pendingTasks) {
-                    try {
-                        const res = await KieAIService.resumePolling(t.taskId, t.meta);
-                        // Publish result via bus
-                        stateManager.bus.publish('kieai:newResult', {
-                            id: res.taskId,
-                            type: 'video',
-                            prompt: saved.form?.prompt || '',
-                            url: res.url,
-                        });
-                    } catch (e) {
-                        console.warn('Resume polling failed', e);
+        let isMounted = true;
+        
+        const loadSession = async () => {
+            try {
+                const project = stateManager.getProject();
+                const projectId = project?.id || 'default';
+                const saved = await loadStudioSession(projectId);
+                
+                if (!isMounted || !saved) return;
+
+                // Validate session structure
+                const isValidSession =
+                    (Array.isArray(saved.results) || saved.results === undefined) &&
+                    (typeof saved.form === 'object' || saved.form === undefined) &&
+                    (Array.isArray(saved.pendingTasks) || saved.pendingTasks === undefined);
+                
+                if (!isValidSession) {
+                    throw new Error('Invalid session format');
+                }
+
+                // Batch updates to prevent multiple renders
+                batchUpdates(() => {
+                    if (saved.results?.length) {
+                        setResults(saved.results.filter(r =>
+                            r?.id && (r.type === 'audio' || r.type === 'video' || r.type === 'image')
+                        ));
                     }
+
+                    if (saved.form) {
+                        lastFormRef.current = saved.form;
+                        stateManager.bus.publish('studio:restoreForm', {
+                            ...saved.form,
+                            params: {
+                                ...getModelDefaults(saved.form.modelId),
+                                ...saved.form.params
+                            }
+                        });
+                    }
+
+                    if (saved.pendingTasks?.length) {
+                        pendingRef.current = saved.pendingTasks.filter(t =>
+                            t?.taskId && t?.meta?.durationSec
+                        );
+                    }
+                });
+
+                // Resume pending tasks with concurrency control
+                if (pendingRef.current.length) {
+                    const MAX_CONCURRENT_TASKS = 3;
+                    const taskQueue = [...pendingRef.current];
+                    
+                    const processTask = async () => {
+                        while (taskQueue.length > 0 && isMounted) {
+                            const t = taskQueue.shift();
+                            try {
+                                const res = await KieAIService.resumePolling(t.taskId, t.meta);
+                                if (isMounted) {
+                                    stateManager.bus.publish('kieai:newResult', {
+                                        id: res.taskId,
+                                        type: 'video',
+                                        prompt: t.meta.prompt || '',
+                                        url: res.url,
+                                    });
+                                }
+                            } catch (e) {
+                                console.warn('Resume polling failed for task:', t.taskId, e);
+                                if (isMounted) {
+                                    setStatus({
+                                        status: 'error',
+                                        message: `Failed to resume task ${t.taskId.slice(0,6)}...`
+                                    });
+                                }
+                            }
+                        }
+                    };
+
+                    // Start concurrent workers
+                    Array.from({length: MAX_CONCURRENT_TASKS}).forEach(processTask);
+                }
+            } catch (e) {
+                console.error('Session load failed:', e);
+                if (isMounted) {
+                    setStatus({
+                        status: 'error',
+                        message: 'Corrupted session data - starting fresh'
+                    });
+                    // Reset to clean state
+                    setResults([]);
+                    pendingRef.current = [];
                 }
             }
-        })();
+        };
+
+        loadSession();
+        return () => { isMounted = false; };
     }, []);
 
     // Navigate back to chat/composer using the header buttons.  These handlers

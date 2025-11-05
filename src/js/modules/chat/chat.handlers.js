@@ -265,7 +265,18 @@ export async function sendMessage() {
             speaker: 'You', timestamp: Date.now()
         };
 
-        session.history.push(userMessage);
+        // Initialize history array if undefined
+        if (!Array.isArray(session.history)) {
+            session.history = [];
+        }
+        
+        // Validate message before adding to history
+        if (userMessage.content && userMessage.role) {
+            session.history.push(userMessage);
+        } else {
+            console.error('Attempted to add invalid message to history:', userMessage);
+            throw new Error('Cannot add malformed message to chat history');
+        }
 
         if (session.name === 'New Chat' && session.history.length === 1) {
             triggerAutoNameGeneration(session);

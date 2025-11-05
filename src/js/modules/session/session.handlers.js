@@ -47,20 +47,23 @@ export function createNewChatSession() {
     const newSession = {
         id: `sid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         name: 'New Chat',
-        history: [],
+        history: [], // Explicit initialization
         composerContent: "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
         pinned: false,
         archived: false,
         linkedEntity: { ...activeEntity },
-        summaryState: { activeSummaryId: null, summarizedUntilIndex: -1 },
-        // [ADD THIS] เพิ่ม State สำหรับ Group Chat
+        summaryState: {
+            activeSummaryId: null,
+            summarizedUntilIndex: -1
+        }, // Comma required between object properties
         groupChatState: {
             isRunning: false,
             awaitsUserInput: false,
             turnQueue: [],
             currentJob: null,
+            jobQueue: [],
             error: null
         }
     };
