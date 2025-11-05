@@ -34,12 +34,12 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/app-T3PbqtMN.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-CZ1bi666.js">
+  <script type="module" crossorigin src="/PromptPrim/assets/app-B_-Zlz-M.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-P4M3NOTa.js">
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/client-CZ2o165L.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-CfeBpHrk.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-raxAgy0k.css">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-C9KcY-35.css">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-I7WTXQrw.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-BYs4NNVE.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-BcWzgBxE.css">
 </head>
 <body class="admin-page">
     <div id="dropzone-overlay" class="dropzone-overlay">
@@ -126,6 +126,20 @@
 
                 <!-- ส่วนกลาง: Entity Selector และปุ่มเปิด Studio -->
                 <div class="header-center">
+                    <button id="switch-to-chat-btn" class="menu-toggle-btn active" title="Switch to Chat">
+                        <span class="material-symbols-outlined">chat</span>
+                    </button>
+                    
+                    <button id="switch-to-photo-btn" class="menu-toggle-btn" title="Switch to Visual Studio">
+                        <span class="material-symbols-outlined">camera_roll</span>
+                    </button>
+
+                    <button id="switch-to-composer-btn" class="menu-toggle-btn" title="Switch to Composer Editor">
+                        <span class="material-symbols-outlined">edit_square</span>
+                    </button>
+
+                    <div class="header-center-divider tw-mx-3 tw-h-5 tw-w-px tw-bg-gray-300 dark:tw-bg-gray-600"></div>
+
                     <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
                         <select id="entitySelector" class="hidden"></select>
                         <div id="custom-entity-selector-trigger" class="custom-select-trigger">
@@ -213,6 +227,9 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="kieai-studio-workspace" class="workspace hidden">
+                            <div id="photo-studio-root"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -255,6 +272,9 @@
                     </div>
                 </div>
 
+                <div id="kieai-studio-workspace" class="workspace hidden">
+                    <div id="photo-studio-root"></div>
+                </div>
             </div>
 
             <!-- [ย้ายมานี่] STATUS BAR -->
@@ -329,7 +349,12 @@
                             <label for="ollamaBaseUrl">Ollama Base URL</label>
                             <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434" autocomplete="url">
                         </div>
-                        
+                        <div class="form-group" id="kieai-key-group">
+                            <label for="kieAiApiKey">Kie.ai Image/Video API Key</label>
+                            <input type="password" id="kieAiApiKey" autocomplete="off">
+                            <p class="modal-warning">Required for Image/Video Generation Agents.</p>
+                        </div>
+
                         <button type="button" id="load-models-btn" class="btn btn-small">Load/Refresh Model List</button>
                     </div>
                 </div>
