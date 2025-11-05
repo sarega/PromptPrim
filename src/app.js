@@ -11,7 +11,8 @@ import './styles/main.css';
 import './styles/layout/_loading.css';
 import './styles/layout/_right-sidebar.css';
 
-// Core Modules
+import { mountPhotoStudio, unmountPhotoStudio, initKieAiUI } from './js/modules/kieai/kieai.ui.js';// Core Modules
+
 import { stateManager } from './js/core/core.state.js';
 import { setupLayout } from './js/core/core.layout.js';
 import { loadAllProviderModels } from './js/core/core.api.js';
@@ -47,8 +48,8 @@ import * as UserHandlers from './js/modules/user/user.handlers.js';
 import * as ModelManagerUI from './js/modules/models/model-manager.ui.js';
 import * as GroupChat from './js/modules/chat/chat.group.js';
 import * as AccountUI from './js/modules/account/account.ui.js';
-
-
+import * as KieAIHandlers from './js/modules/kieai/kieai.handlers.js'; 
+import * as KieAI_UI from './js/modules/kieai/kieai.ui.js';
 
 // --- State for Lazy Initialization ---
 let isStudioInitialized = false;
@@ -201,6 +202,20 @@ function setupEventSubscriptions() {
         } catch (error) {
             console.error("Could not set composer state on session load:", error);
         }
+
+        // Always switch to chat view after loading a session.  Without this
+        // override the linked entity (e.g. a KieAI agent) would re‑mount the
+        // photo studio immediately, causing the application to start on the
+        // visual studio unintentionally.  Hiding the photo studio here
+        // guarantees the chat workspace is the default visible page on session load.
+        try {
+            KieAI_UI.unmountPhotoStudio();
+        } catch (_) {
+            // ignore if unavailable
+        }
+        // Reset header active classes to ensure chat is highlighted
+        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('switch-to-chat-btn')?.classList.add('active');
     });
 
     
@@ -325,9 +340,106 @@ function setupEventSubscriptions() {
         // เรียก "เครื่องจักร" ให้เริ่มทำงานกับ Job ที่เพิ่งสร้าง
         GroupChat.processQueue(project, session, group);
     });
+    // [✅ NEW: Subscribe สำหรับ Kie.ai Generation Request]
+    bus.subscribe('kieai:generate', KieAIHandlers.handleGenerationRequest);
+
+    //
+    // Subscribe header button clicks.  Each handler is responsible for
+    // transitioning between the three primary workspaces (chat, photo
+    // studio and composer) and updating the header active state.
+    // When switching away from composer we always collapse it so that it
+    // does not continue to occupy vertical space in the interface.
     
+    document.getElementById('switch-to-photo-btn')?.addEventListener('click', () => {
+        // Collapse the composer completely when entering the photo studio.
+        try {
+            setComposerState('collapsed');
+        } catch (_) {
+            // ignore if unavailable
+        }
+        // Let the application know we selected the visual studio agent.  Use the new
+        // agent name "Visual Studio" so that the photo studio logic
+        // recognizes it correctly and displays the correct heading.
+        stateManager.bus.publish('entity:select', { type: 'agent', name: 'Visual Studio' });
+        // Highlight the photo button and remove highlights from the others.
+        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('switch-to-photo-btn')?.classList.add('active');
+    });
+
+    document.getElementById('switch-to-chat-btn')?.addEventListener('click', () => {
+        // Collapse composer to free up space for chat
+        try {
+            setComposerState('collapsed');
+        } catch (_) {
+            // ignore if unavailable
+        }
+        // Ensure any photo studio view is closed
+        KieAI_UI.unmountPhotoStudio();
+        // Load the current chat session
+        const project = stateManager.getProject();
+        SessionHandlers.loadChatSession(project.activeSessionId);
+        // Highlight the chat button and remove highlights from the others.
+        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('switch-to-chat-btn')?.classList.add('active');
+    });
+
+    document.getElementById('switch-to-composer-btn')?.addEventListener('click', () => {
+        // When opening the composer we want a clean slate: hide the photo
+        // studio and maximize the composer panel.
+        KieAI_UI.unmountPhotoStudio();
+        try {
+            ComposerUI.setComposerState('maximized');
+        } catch (_) {
+            // fallback to the named import if namespace call fails
+            try {
+                setComposerState('maximized');
+            } catch (_) {
+                // ignore
+            }
+        }
+        // Highlight the composer button and remove highlights from the others.
+        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('switch-to-composer-btn')?.classList.add('active');
+    });
+    
+    // [✅ CRITICAL FIX: แก้ไข logic สลับหน้าใน entity:selected]
+    bus.subscribe('entity:selected', (payload) => {
+        const { type, name } = payload;
+        // Determine whether the selected entity should mount the photo studio.  In addition to
+        // recognising Kie.ai models (Wan, Seedance, etc.), include the new Visual Studio agent
+        // name so that it also triggers the photo studio view.  Without this, renaming the
+        // agent would break the mounting logic.
+        const isKieAIAgent = type === 'agent' && (
+            name.includes('Image') ||
+            name.includes('Video') ||
+            name.includes('KieAI') ||
+            name.includes('Wan') ||
+            name.includes('Seedance') ||
+            name.includes('Visual')
+        );
+        
+        // 1. จัดการ Workspace
+        if (isKieAIAgent) {
+            KieAI_UI.mountPhotoStudio(name); 
+        } else {
+            // [✅ FIX: ใช้ KieAI_UI.unmountPhotoStudio() แทน StudioUI]
+            KieAI_UI.unmountPhotoStudio();
+        }
+
+        // 2. จัดการปุ่ม Active State
+        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+        if (isKieAIAgent) {
+             document.getElementById('switch-to-photo-btn')?.classList.add('active');
+        } else {
+             document.getElementById('switch-to-chat-btn')?.classList.add('active');
+        }
+    });
+    
+
     console.log("✅ Central Event Bus ready.");
 }
+
+
 
 // // --- Application Entry Point ---
 
@@ -337,7 +449,7 @@ function initializeUI() {
     setupLayout();
     initRightSidebarToggle();
     initGlobalDropdownListener();
-
+    KieAI_UI.initKieAiUI();   
     ProjectUI.initProjectUI();
     SessionUI.initSessionUI();
     ChatUI.initChatUI();
@@ -352,9 +464,8 @@ function initializeUI() {
     ChatHandlers.initMessageInteractions();
     UserUI.initUserProfileUI();
     AccountUI.initAccountUI();
-
+    
     document.getElementById('import-settings-input')?.addEventListener('change', UserHandlers.handleSettingsFileSelect);
-
 
     console.log("✅ All UI modules initialized.");
 }
@@ -365,6 +476,17 @@ function initializeUI() {
 document.addEventListener('DOMContentLoaded', async () => {
     const loadingOverlay = document.getElementById('loading-overlay');
     try {
+        // Always start with a collapsed composer on first load.  Clearing any
+        // persisted composer state prevents previously maximized or normal
+        // states from being restored automatically, which would otherwise
+        // cause the composer to appear when opening the app.
+        try {
+            localStorage.removeItem('promptPrimComposerState');
+            localStorage.removeItem('promptPrimComposerHeight');
+        } catch (_) {
+            // ignore if localStorage is unavailable
+        }
+
         await UserService.initUserSettings();
         // --- [CRITICAL FIX] ---
         const currentUser = UserService.getCurrentUserProfile();
@@ -430,5 +552,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadingOverlay.querySelector('p').textContent = `A critical error occurred: ${error.message}`;
     }
 });
+
+
+// [✅ NEW: Init Mobile Gestures]
+initMobileGestures();
+
 window.UserService = UserService; // Expose for debugging
 // window.stateManager = stateManager; // << เพิ่มบรรทัดนี้เข้าไป

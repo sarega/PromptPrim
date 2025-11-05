@@ -28,7 +28,8 @@
 @import './layout/_main-area.css';
 @import './layout/_studio.css';
 @import './layout/_composer-panel.css';
-
+/* [✅ NEW Kie.ai Styles] */
+@import './layout/_photostudio.css';
 
 /* 5. Features - Styles for specific application features. */
 @import './features/_chat.css';

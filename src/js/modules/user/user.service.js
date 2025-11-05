@@ -87,7 +87,8 @@ function createDefaultUser(userId, userName, email, plan, initialCredits = 0) {
         logs: [{ timestamp: Date.now(), action: `Account created with ${plan} plan.` }],
         activityLog: [],
         apiSettings: { openrouterKey: "", ollamaBaseUrl: "http://localhost:11434" },
-        appSettings: { activeModelPreset: 'my_first_preset' }
+        appSettings: { activeModelPreset: 'my_first_preset' },
+        kieAiApiKey: "" // [✅ NEW] เพิ่ม Key ใหม่
     };
     if (plan !== 'master') {
         user.modelPresets = { 'my_first_preset': { name: 'My First Preset', modelIds: [] } };
@@ -327,10 +328,21 @@ function checkGracePeriod(user) {
 export function getSystemApiSettings() {
     // [FIX] Find the admin by their constant ID.
     const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
-    return adminUser?.apiSettings || { openrouterKey: '', ollamaBaseUrl: '' };
+    return adminUser?.apiSettings || { openrouterKey: '', ollamaBaseUrl: '', kieAiApiKey: '' };
 }
 
 // --- Specific Getters and Setters ---
+// [✅ NEW: Getter สำหรับ Kie.ai Key]
+export function getKieAiApiKey() {
+    const profile = getCurrentUserProfile();
+    const adminUser = userDatabase.find(u => u.userId === 'user_master');
+
+    if (profile?.plan === 'master') {
+        return profile.apiSettings?.kieAiApiKey || '';
+    }
+    // ใช้ Key ของ Admin เป็น Fallback สำหรับ Free/Pro users
+    return adminUser?.apiSettings?.kieAiApiKey || '';
+}
 
 export function getApiKey() {
     const profile = getCurrentUserProfile(); // Gets the currently logged-in user

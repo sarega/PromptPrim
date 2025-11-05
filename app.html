@@ -120,6 +120,20 @@
 
                 <!-- ส่วนกลาง: Entity Selector และปุ่มเปิด Studio -->
                 <div class="header-center">
+                    <button id="switch-to-chat-btn" class="menu-toggle-btn active" title="Switch to Chat">
+                        <span class="material-symbols-outlined">chat</span>
+                    </button>
+                    
+                    <button id="switch-to-photo-btn" class="menu-toggle-btn" title="Switch to Visual Studio">
+                        <span class="material-symbols-outlined">camera_roll</span>
+                    </button>
+
+                    <button id="switch-to-composer-btn" class="menu-toggle-btn" title="Switch to Composer Editor">
+                        <span class="material-symbols-outlined">edit_square</span>
+                    </button>
+
+                    <div class="header-center-divider tw-mx-3 tw-h-5 tw-w-px tw-bg-gray-300 dark:tw-bg-gray-600"></div>
+
                     <div id="custom-entity-selector-wrapper" class="custom-select-wrapper">
                         <select id="entitySelector" class="hidden"></select>
                         <div id="custom-entity-selector-trigger" class="custom-select-trigger">
@@ -207,6 +221,9 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="kieai-studio-workspace" class="workspace hidden">
+                            <div id="photo-studio-root"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -249,6 +266,9 @@
                     </div>
                 </div>
 
+                <div id="kieai-studio-workspace" class="workspace hidden">
+                    <div id="photo-studio-root"></div>
+                </div>
             </div>
 
             <!-- [ย้ายมานี่] STATUS BAR -->
@@ -323,7 +343,12 @@
                             <label for="ollamaBaseUrl">Ollama Base URL</label>
                             <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434" autocomplete="url">
                         </div>
-                        
+                        <div class="form-group" id="kieai-key-group">
+                            <label for="kieAiApiKey">Kie.ai Image/Video API Key</label>
+                            <input type="password" id="kieAiApiKey" autocomplete="off">
+                            <p class="modal-warning">Required for Image/Video Generation Agents.</p>
+                        </div>
+
                         <button type="button" id="load-models-btn" class="btn btn-small">Load/Refresh Model List</button>
                     </div>
                 </div>

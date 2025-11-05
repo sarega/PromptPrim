@@ -550,6 +550,19 @@ export async function selectEntity(type, name) {
     stateManager.setStagedEntity(null, false);
 
     const project = stateManager.getProject();
+    // Expanded detection of Kie.ai / Visual Studio agents.  Treat any agent
+    // name that contains KieAI, Veo, Flux, Visual, Wan or Seedance as a
+    // photo-studio-capable agent.  This allows the renamed "Visual Studio"
+    // agent to be handled like the original KieAI Visual Studio.
+    const isKieAIAgent = type === 'agent' && (
+        name.includes('KieAI') ||
+        name.includes('Veo') ||
+        name.includes('Flux') ||
+        name.includes('Visual') ||
+        name.includes('Wan') ||
+        name.includes('Seedance')
+    );
+
     project.activeEntity = { type, name };
     const activeSession = project.chatSessions.find(s => s.id === project.activeSessionId);
 
@@ -566,6 +579,8 @@ export async function selectEntity(type, name) {
     
     // [FIX] เพิ่มการส่งสัญญาณให้ Session List วาดใหม่
     stateManager.bus.publish('session:listChanged');
+    // [✅ NEW: ส่ง isKieAI Flag]
+    stateManager.bus.publish('entity:selected', { type, name, isKieAI: isKieAIAgent });
 }
 
 export function handleStudioItemClick({ type, name }) {
