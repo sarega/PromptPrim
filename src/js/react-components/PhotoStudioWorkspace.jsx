@@ -36,9 +36,9 @@ const FileDropZone = React.memo(({ onFileDrop, imagePreviewUrl, removeImage }) =
         return (
             <div className="tw-relative tw-p-2 tw-bg-slate-600 tw-rounded-lg tw-flex tw-justify-center">
                 <img src={imagePreviewUrl} alt="Upload Preview" className="tw-max-h-40 tw-rounded-md tw-shadow-lg" />
-                <button 
-                    type="button" 
-                    onClick={removeImage} 
+                <button
+                    type="button"
+                    onClick={removeImage}
                     className="tw-absolute tw-top-0 tw-right-0 tw-bg-red-500 hover:tw-bg-red-600 tw-text-white tw-rounded-full tw-w-6 tw-h-6 tw-flex tw-items-center tw-justify-center tw-text-sm"
                 >
                     &times;
@@ -55,11 +55,11 @@ const FileDropZone = React.memo(({ onFileDrop, imagePreviewUrl, removeImage }) =
             onDrop={handleDrop}
             className={`tw-border-2 tw-border-dashed tw-rounded-lg tw-p-6 tw-text-center tw-cursor-pointer tw-block tw-transition ${isDragging ? 'tw-border-cyan-400 tw-bg-slate-600' : 'tw-border-slate-500 tw-bg-slate-700'}`}
         >
-            <input 
-                type="file" 
-                id="i2v-file-upload" 
-                className="tw-hidden" 
-                accept="image/*" 
+            <input
+                type="file"
+                id="i2v-file-upload"
+                className="tw-hidden"
+                accept="image/*"
                 onChange={handleFileSelect}
             />
             <span className="material-symbols-outlined tw-text-4xl tw-text-gray-400">cloud_upload</span>
@@ -69,28 +69,206 @@ const FileDropZone = React.memo(({ onFileDrop, imagePreviewUrl, removeImage }) =
 });
 
 // ==========================================
+// 1b. Helper Component: MultiImageUpload (Drag & Drop UI for Multiple Images)
+// ==========================================
+const MultiImageUpload = React.memo(({ images, onImagesChange, maxImages = 14 }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const fileInputRef = React.useRef(null);
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+    
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+    
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            addFiles(Array.from(e.dataTransfer.files));
+        }
+    };
+    
+    const handleFileSelect = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            addFiles(Array.from(e.target.files));
+        }
+    };
+
+    const addFiles = (newFiles) => {
+        // Filter valid image files
+        const validFiles = newFiles.filter(file =>
+            file.type.startsWith('image/')
+        );
+
+        if (validFiles.length === 0) {
+            alert('Please select valid image files (JPEG, PNG, WEBP)');
+            return;
+        }
+
+        // Check if adding would exceed max
+        const currentCount = images.length;
+        const availableSlots = maxImages - currentCount;
+        
+        if (availableSlots <= 0) {
+            alert(`Maximum ${maxImages} images allowed`);
+            return;
+        }
+
+        const filesToAdd = validFiles.slice(0, availableSlots);
+        
+        if (filesToAdd.length < validFiles.length) {
+            alert(`Only adding ${filesToAdd.length} images to stay within ${maxImages} image limit`);
+        }
+
+        // Create preview URLs for new files
+        const newImageData = filesToAdd.map(file => ({
+            file,
+            preview: URL.createObjectURL(file),
+            id: `${Date.now()}-${Math.random()}`
+        }));
+
+        onImagesChange([...images, ...newImageData]);
+    };
+
+    const removeImage = (id) => {
+        const imageToRemove = images.find(img => img.id === id);
+        if (imageToRemove?.preview) {
+            URL.revokeObjectURL(imageToRemove.preview);
+        }
+        onImagesChange(images.filter(img => img.id !== id));
+    };
+
+    const removeAll = () => {
+        images.forEach(img => {
+            if (img.preview) URL.revokeObjectURL(img.preview);
+        });
+        onImagesChange([]);
+    };
+
+    return (
+        <div className="tw-space-y-3">
+            {/* Header with Remove All button */}
+            {images.length > 0 && (
+                <div className="tw-flex tw-justify-between tw-items-center">
+                    <label className="tw-text-sm tw-font-medium tw-text-red-400">image_urls *</label>
+                    <button
+                        type="button"
+                        onClick={removeAll}
+                        className="tw-text-xs tw-text-red-400 hover:tw-text-red-300 tw-bg-slate-600 hover:tw-bg-slate-500 tw-px-3 tw-py-1 tw-rounded"
+                    >
+                        Remove All
+                    </button>
+                </div>
+            )}
+
+            {/* Image Previews */}
+            {images.map((imageData) => (
+                <div key={imageData.id} className="tw-bg-slate-600 tw-rounded-lg tw-p-4">
+                    <div className="tw-flex tw-items-start tw-justify-between tw-mb-2">
+                        <div className="tw-flex tw-items-center tw-gap-2 tw-text-gray-300">
+                            <span className="material-symbols-outlined tw-text-lg">image</span>
+                            <span className="tw-text-sm">File {images.indexOf(imageData) + 1}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => removeImage(imageData.id)}
+                            className="tw-text-xs tw-text-red-400 hover:tw-text-red-300 tw-bg-slate-700 hover:tw-bg-slate-600 tw-px-2 tw-py-1 tw-rounded"
+                        >
+                            Remove
+                        </button>
+                    </div>
+                    <div className="tw-flex tw-justify-center tw-bg-slate-700 tw-rounded tw-p-2">
+                        <img
+                            src={imageData.preview}
+                            alt={`Upload ${images.indexOf(imageData) + 1}`}
+                            className="tw-max-h-48 tw-rounded tw-object-contain"
+                        />
+                    </div>
+                </div>
+            ))}
+
+            {/* Add More Files Button */}
+            {images.length < maxImages && (
+                <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`tw-border-2 tw-border-dashed tw-rounded-lg tw-transition ${
+                        isDragging
+                            ? 'tw-border-cyan-400 tw-bg-slate-600'
+                            : 'tw-border-slate-500 tw-bg-slate-700'
+                    }`}
+                >
+                    <label
+                        htmlFor="multi-image-upload"
+                        className="tw-block tw-p-6 tw-text-center tw-cursor-pointer"
+                    >
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            id="multi-image-upload"
+                            className="tw-hidden"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            onChange={handleFileSelect}
+                        />
+                        <span className="material-symbols-outlined tw-text-3xl tw-text-gray-400">add_circle</span>
+                        <p className="tw-text-gray-400 tw-text-sm tw-mt-2">
+                            Add more files ({images.length}/{maxImages})
+                        </p>
+                        <p className="tw-text-gray-500 tw-text-xs tw-mt-1">
+                            Upload an image file to use as input for the API
+                        </p>
+                    </label>
+                </div>
+            )}
+        </div>
+    );
+});
+
+// ==========================================
 // 2. Helper Component: Model Specific Inputs
 // ==========================================
-const renderModelSpecificInputs = (selectedModel, params, setParams, imagePreviewUrl, handleFileDrop, handleRemoveImage) => {
+const renderModelSpecificInputs = (selectedModel, params, setParams, imagePreviewUrl, handleFileDrop, handleRemoveImage, multiImages, setMultiImages) => {
     // Determine the underlying model ID (string) safely.  Use optional chaining
     // so that undefined selections do not cause runtime errors.  If no
     // selection is available, default to an empty string for substring checks.
         const modelId = selectedModel?.id || '';
         // A Wan 2.5 model contains the substring "wan2.5" in its identifier.
         const isWan25 = modelId.includes('wan2.5');
+        // Wan 2.6 models
+        const isWan26 = modelId.includes('wan-2-6');
         // Detect audio models exclusively by their `type` property.  Relying on
         // string substrings like 'suno' can lead to false positives if future
         // models happen to include that substring.  The `type` field defined on
         // each model is the authoritative indicator for audio.
         const isAudio = selectedModel?.type === 'audio';
+        // Detect image models
+        const isImage = selectedModel?.type === 'image';
+        // Detect image edit models (need file upload)
+        const isImageEdit = isImage && modelId.includes('edit');
         // Identify any image-to-video model (both Wan and Seedance) by checking
         // for this substring in the model ID.  However, never treat an audio
         // model as image-to-video even if the ID accidentally contains that
         // substring.  This resolves a bug where the UI still requested an
         // image URL when an audio model was selected.
         const isI2V = !isAudio && modelId.includes('image-to-video');
+        // Identify video-to-video models (Wan 2.6 only)
+        const isV2V = !isAudio && modelId.includes('video-to-video');
         // Treat all Seedance V1 models (Pro/Lite, T2V or I2V) as Seedance.
         const isSeedance = modelId.includes('v1-pro') || modelId.includes('v1-lite');
+        // Check if this is Seedream 4.5 Edit (max 14 images) or older models (max 10 images)
+        const isSeedream45Edit = modelId.includes('seedream4.5-edit') || modelId.includes('4.5-edit');
+        const maxImages = isSeedream45Edit ? 14 : 10;
 
     return (
         <>
@@ -161,6 +339,60 @@ const renderModelSpecificInputs = (selectedModel, params, setParams, imagePrevie
                         imagePreviewUrl={imagePreviewUrl}
                         removeImage={handleRemoveImage}
                     />
+                </div>
+            )}
+
+            {/* Video-to-Video models: require video URL */}
+            {isV2V && !isAudio && (
+                <div className="form-group">
+                    <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Input Video (Public URL)</label>
+                    <input
+                        type="text"
+                        value={params.video_url_input || ''}
+                        onChange={(e) => setParams(p => ({ ...p, video_url_input: e.target.value }))}
+                        className="tw-w-full tw-p-2 tw-rounded-md tw-bg-slate-600 tw-text-white"
+                        placeholder="Paste Public Video URL here (e.g., https://example.com/video.mp4)"
+                    />
+                    <p className="tw-text-xs tw-text-gray-400 tw-mt-1">
+                        Supported formats: MP4, MOV, MKV (max 10MB)
+                    </p>
+                </div>
+            )}
+
+            {/* Image Edit models: require image file upload with preview and drag-drop support */}
+            {isImageEdit && (
+                <div className="form-group">
+                    <MultiImageUpload
+                        images={multiImages}
+                        onImagesChange={setMultiImages}
+                        maxImages={maxImages}
+                    />
+                    <p className="tw-text-xs tw-text-gray-400 tw-mt-2">
+                        Supported formats: JPEG, PNG, WEBP (each file ≤ 10MB)
+                    </p>
+                </div>
+            )}
+
+            {/* Image models: Quality selector (2K or 4K) */}
+            {isImage && (modelId.includes('4.5') || modelId.includes('edit')) && (
+                <div className="form-group">
+                    <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Quality</label>
+                    <div className="tw-flex tw-gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setParams(p => ({ ...p, quality: 'basic' }))}
+                            className={`tw-flex-1 tw-py-1.5 tw-rounded-md tw-text-sm ${params.quality === 'basic' ? 'tw-bg-cyan-500 tw-text-white' : 'tw-bg-slate-600 tw-text-gray-300 hover:tw-bg-slate-500'}`}
+                        >
+                            Basic (2K)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setParams(p => ({ ...p, quality: 'high' }))}
+                            className={`tw-flex-1 tw-py-1.5 tw-rounded-md tw-text-sm ${params.quality === 'high' ? 'tw-bg-cyan-500 tw-text-white' : 'tw-bg-slate-600 tw-text-gray-300 hover:tw-bg-slate-500'}`}
+                        >
+                            High (4K)
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -235,6 +467,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         seed: -1,
         enable_safety_checker: true,
         image_url_input: '',
+        video_url_input: '',
         // Audio-specific defaults
         customMode: false,
         instrumental: false,
@@ -271,6 +504,18 @@ export const StudioForm = ({ models, onSubmit, status }) => {
 
     // [File State] Use a single preview state to show the uploaded image locally while uploading
     const [imagePreview, setImagePreview] = useState(null);
+    
+    // [Multi-Image State] For Seedream Edit models that support multiple images
+    const [multiImages, setMultiImages] = useState([]);
+    
+    // Cleanup preview URLs when component unmounts
+    useEffect(() => {
+        return () => {
+            multiImages.forEach(img => {
+                if (img.preview) URL.revokeObjectURL(img.preview);
+            });
+        };
+    }, [multiImages]);
 
     // [Derived State - Guarded Access]
     const selectedModel = useMemo(() => {
@@ -293,12 +538,17 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         // any future audio models are correctly flagged.  `selectedModel` will
         // always be defined because it falls back to the first model in the list.
         const isAudio = selectedModel?.type === 'audio';
+        // Detect image models
+        const isImage = selectedModel?.type === 'image';
         // Determine whether the current selection is an image‑to‑video model.
         // Always return false for audio models even if the selectedId happens
         // to contain the substring 'image-to-video'.  This avoids the bug where
         // audio models were treated as I2V and required an image URL.
         const isI2V = !isAudio && selectedId.includes('image-to-video');
+        // Detect video-to-video models (Wan 2.6 only)
+        const isV2V = !isAudio && selectedId.includes('video-to-video');
         const isWan25 = selectedId.includes('wan2.5');
+        const isWan26 = selectedId.includes('wan-2-6');
         const isSeedance = selectedId.includes('v1-pro') || selectedId.includes('v1-lite');
     const isLoading = status.status === 'loading';
     
@@ -364,9 +614,36 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             });
             return;
         }
+        // For image models, pass image-specific parameters
+        if (isImage) {
+            const { modelId: _unusedModelId, ...safeParams } = params;
+            
+            // For image edit models, convert multiImages array to FileList for image_files
+            const isImageEdit = selectedId.includes('edit');
+            if (isImageEdit && multiImages.length > 0) {
+                // Create a DataTransfer object to build a FileList
+                const dataTransfer = new DataTransfer();
+                multiImages.forEach(img => {
+                    dataTransfer.items.add(img.file);
+                });
+                safeParams.image_files = dataTransfer.files;
+            }
+            
+            onSubmit({
+                modelId: selectedId,
+                prompt,
+                ...safeParams,
+            });
+            return;
+        }
         // Validation for any I2V model (video)
         if (isI2V && (!params.image_url_input || !params.image_url_input.startsWith('http'))) {
             alert('I2V requires a valid public image URL (e.g., https://example.com/pic.jpg).');
+            return;
+        }
+        // Validation for V2V models
+        if (isV2V && (!params.video_url_input || !params.video_url_input.startsWith('http'))) {
+            alert('V2V requires a valid public video URL (e.g., https://example.com/video.mp4).');
             return;
         }
         // Construct final params: convert resolution/duration/seed to correct types for video models
@@ -408,6 +685,13 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         setSelectedId(newId);
         // Reset image preview and clear file input
         setImagePreview(null);
+        
+        // Clear multi-image uploads and revoke object URLs
+        multiImages.forEach(img => {
+            if (img.preview) URL.revokeObjectURL(img.preview);
+        });
+        setMultiImages([]);
+        
         setParams(p => ({
             ...p,
             // Reset all model-specific parameters
@@ -416,6 +700,8 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             negative_prompt: '',
             enable_prompt_expansion: false,
             image_url_input: '',
+            video_url_input: '',
+            image_files: null,
             // Audio parameters
             customMode: false,
             instrumental: false,
@@ -440,12 +726,12 @@ export const StudioForm = ({ models, onSubmit, status }) => {
     
     // [Render Sub Components via Memoization]
     const renderSpecificInputs = useMemo(() => {
-        return renderModelSpecificInputs(selectedModel, params, setParams, imagePreview, handleFileDrop, handleRemoveImage);
-    }, [selectedModel, params, imagePreview, handleFileDrop, handleRemoveImage]);
+        return renderModelSpecificInputs(selectedModel, params, setParams, imagePreview, handleFileDrop, handleRemoveImage, multiImages, setMultiImages);
+    }, [selectedModel, params, imagePreview, handleFileDrop, handleRemoveImage, multiImages]);
 
     const renderResolutionOptions = useMemo(() => {
-        // Audio models have no resolution setting
-        if (isAudio) return null;
+        // Audio and image models have no resolution setting
+        if (isAudio || isImage) return null;
         const availableResolutions = limits.resolution || (isWan25 ? ['720p', '1080p'] : ['480p', '720p', '1080p']);
         return (
             <div className="form-group">
@@ -464,11 +750,11 @@ export const StudioForm = ({ models, onSubmit, status }) => {
                 </div>
             </div>
         );
-    }, [isWan25, params.resolution, limits.resolution, isAudio]);
+    }, [isWan25, params.resolution, limits.resolution, isAudio, isImage]);
 
     const renderDurationOptions = useMemo(() => {
-        // Audio models have no duration setting
-        if (isAudio) return null;
+        // Audio and image models have no duration setting
+        if (isAudio || isImage) return null;
         const durations = limits.duration || [5, 10];
         return (
             <div className="form-group">
@@ -487,11 +773,16 @@ export const StudioForm = ({ models, onSubmit, status }) => {
                 </div>
             </div>
         );
-    }, [params.duration, limits.duration, isAudio]);
+    }, [params.duration, limits.duration, isAudio, isImage]);
 
     const renderAspectRatioOptions = useMemo(() => {
         // Audio models have no aspect ratio setting
+        // Image models have aspect ratio but it's handled in model-specific inputs
         if (isAudio) return null;
+        // For image models, aspect ratio is shown in the quality section
+        if (isImage) return null;
+        // I2V and V2V models don't use aspect ratio
+        if (isI2V || isV2V) return null;
         const options = ['16:9', '21:9', '4:3', '1:1', '3:4', '9:16'];
         return (
             <div className="form-group">
@@ -505,7 +796,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
                 </select>
             </div>
         );
-    }, [params.aspect_ratio, isAudio]);
+    }, [params.aspect_ratio, isAudio, isImage, isI2V, isV2V]);
 
     // --- JSON Debugging ---
     // Provide a toggle to view the fully constructed payload that will be sent
@@ -546,15 +837,22 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         const payload = {
             resolution: String(params.resolution) || (limits.resolution?.[0] || '1080p'),
             duration: String(params.duration) || '5',
-            seed: Number(params.seed) || -1,
         };
+        // Only include seed for models that support it (not Wan 2.6)
+        if (!isWan26) {
+            payload.seed = Number(params.seed) || -1;
+        }
         // For text-to-video models include aspect ratio
-        if (!isI2V) {
+        if (!isI2V && !isV2V) {
             payload.aspect_ratio = params.aspect_ratio || '16:9';
         }
         // For image-to-video models include image_url
         if (isI2V) {
             payload.image_url = params.image_url_input || '';
+        }
+        // For video-to-video models include video_url
+        if (isV2V) {
+            payload.video_url = params.video_url_input || '';
         }
         // Model-specific extras
         if (isWan25) {
@@ -613,28 +911,31 @@ export const StudioForm = ({ models, onSubmit, status }) => {
 
             {/* 4. Aspect Ratio & Resolution */}
             <div className="tw-grid tw-grid-cols-2 tw-gap-4">
-                {/* For I2V models, skip aspect ratio selection */}
-                {!isI2V && renderAspectRatioOptions}
+                {/* For I2V and V2V models, skip aspect ratio selection */}
+                {!isI2V && !isV2V && renderAspectRatioOptions}
                 {renderResolutionOptions}
             </div>
 
             {/* 5. Duration & Seed */}
-            {/* Hide duration and seed for audio models */}
-            {!isAudio && (
+            {/* Hide duration and seed for audio and image models */}
+            {!isAudio && !isImage && (
                 <div className="tw-grid tw-grid-cols-2 tw-gap-4">
                     {renderDurationOptions}
-                    <div className="form-group">
-                        <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Seed (-1 for Random)</label>
-                        <input
-                            type="number"
-                            value={params.seed}
-                            onChange={(e) => setParams(p => ({ ...p, seed: parseInt(e.target.value, 10) || -1 }))}
-                            className="tw-w-full tw-p-2 tw-rounded-md tw-bg-slate-600 tw-text-white"
-                            placeholder="-1"
-                            min="-1"
-                            max="2147483647"
-                        />
-                    </div>
+                    {/* Wan 2.6 models don't support seed parameter */}
+                    {!isWan26 && (
+                        <div className="form-group">
+                            <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Seed (-1 for Random)</label>
+                            <input
+                                type="number"
+                                value={params.seed}
+                                onChange={(e) => setParams(p => ({ ...p, seed: parseInt(e.target.value, 10) || -1 }))}
+                                className="tw-w-full tw-p-2 tw-rounded-md tw-bg-slate-600 tw-text-white"
+                                placeholder="-1"
+                                min="-1"
+                                max="2147483647"
+                            />
+                        </div>
+                    )}
                 </div>
             )}
             

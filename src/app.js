@@ -180,9 +180,22 @@ function setupEventSubscriptions() {
     bus.subscribe('session:loaded', ({ session }) => {
         // --- ส่วนที่ 1: วาด Chat UI ทั้งหมด (เหมือนเดิม) ---
         ChatUI.updateChatTitle(session.name);
-        ChatUI.renderMessages(); 
+        ChatUI.renderMessages();
         SessionUI.renderSessionList();
-        stateManager.bus.publish('entity:selected', session.linkedEntity);
+        
+        // [FIX] Only publish entity:selected if we're not preventing auto-mount
+        // This prevents the photo studio from re-mounting when user clicks "Back to Chat"
+        const preventAutoMount = stateManager.getState().preventPhotoStudioAutoMount;
+        if (!preventAutoMount) {
+            stateManager.bus.publish('entity:selected', session.linkedEntity);
+        } else {
+            // Still update the activeEntity in state, just don't trigger workspace switch
+            const project = stateManager.getProject();
+            if (session.linkedEntity) {
+                project.activeEntity = { ...session.linkedEntity };
+                stateManager.setProject(project);
+            }
+        }
 
         // --- ส่วนที่ 2: จัดการสถานะ Composer (ส่วนที่เพิ่มเข้ามา) ---
         try {
@@ -375,9 +388,19 @@ function setupEventSubscriptions() {
         }
         // Ensure any photo studio view is closed
         KieAI_UI.unmountPhotoStudio();
+        
+        // [FIX] Set a flag to prevent auto-mounting photo studio when loading the session
+        stateManager.setState('preventPhotoStudioAutoMount', true);
+        
         // Load the current chat session
         const project = stateManager.getProject();
         SessionHandlers.loadChatSession(project.activeSessionId);
+        
+        // Clear the flag after a short delay to allow session loading to complete
+        setTimeout(() => {
+            stateManager.setState('preventPhotoStudioAutoMount', false);
+        }, 100);
+        
         // Highlight the chat button and remove highlights from the others.
         document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
         document.getElementById('switch-to-chat-btn')?.classList.add('active');
@@ -405,33 +428,33 @@ function setupEventSubscriptions() {
     // [✅ CRITICAL FIX: แก้ไข logic สลับหน้าใน entity:selected]
     bus.subscribe('entity:selected', (payload) => {
         const { type, name } = payload;
-        // Determine whether the selected entity should mount the photo studio.  In addition to
-        // recognising Kie.ai models (Wan, Seedance, etc.), include the new Visual Studio agent
-        // name so that it also triggers the photo studio view.  Without this, renaming the
-        // agent would break the mounting logic.
+        
+        // [FIX] Check if we should prevent auto-mounting (e.g., when user explicitly clicks "Back to Chat")
+        const preventAutoMount = stateManager.getState().preventPhotoStudioAutoMount;
+        
+        // [FIX] Be more specific about which agents trigger Photo Studio
+        // Only exact match for "Visual Studio" or agents with KieAI/Wan/Seedance in their names
         const isKieAIAgent = type === 'agent' && (
-            name.includes('Image') ||
-            name.includes('Video') ||
+            name === 'Visual Studio' ||
             name.includes('KieAI') ||
             name.includes('Wan') ||
             name.includes('Seedance') ||
-            name.includes('Visual')
+            name.includes('Veo') ||
+            name.includes('Flux')
         );
         
         // 1. จัดการ Workspace
-        if (isKieAIAgent) {
-            KieAI_UI.mountPhotoStudio(name); 
-        } else {
+        if (isKieAIAgent && !preventAutoMount) {
+            KieAI_UI.mountPhotoStudio(name);
+            // Highlight the photo button when mounting
+            document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('switch-to-photo-btn')?.classList.add('active');
+        } else if (!preventAutoMount) {
             // [✅ FIX: ใช้ KieAI_UI.unmountPhotoStudio() แทน StudioUI]
             KieAI_UI.unmountPhotoStudio();
-        }
-
-        // 2. จัดการปุ่ม Active State
-        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-        if (isKieAIAgent) {
-             document.getElementById('switch-to-photo-btn')?.classList.add('active');
-        } else {
-             document.getElementById('switch-to-chat-btn')?.classList.add('active');
+            // Highlight chat button when unmounting
+            document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('switch-to-chat-btn')?.classList.add('active');
         }
     });
     

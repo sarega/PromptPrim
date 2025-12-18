@@ -9,6 +9,10 @@ import { showCustomAlert } from '../../core/core.ui.js';
 
 // [✅ FIXED: Model Definitions ตามเอกสาร Wan และสมมติฐานสำหรับ Wan 2.5]
 export const KieAI_MODELS = [
+    // Wan 2.6 models - Latest video generation models
+    { id: 'video/wan-2-6-text-to-video',  name: 'Wan 2.6 T2V',          type: 'video', modelApiId: 'wan/2-6-text-to-video' },
+    { id: 'video/wan-2-6-image-to-video', name: 'Wan 2.6 I2V',          type: 'video', modelApiId: 'wan/2-6-image-to-video' },
+    { id: 'video/wan-2-6-video-to-video', name: 'Wan 2.6 V2V',          type: 'video', modelApiId: 'wan/2-6-video-to-video' },
     // Model ID สำหรับ UI → Model ID ที่ API ต้องการ
     { id: 'video/wan2.5-text-to-video',  name: 'WAN 2.5 T2V',          type: 'video', modelApiId: 'wan/2-5-text-to-video' },
     { id: 'video/wan2.5-image-to-video', name: 'WAN 2.5 I2V',          type: 'video', modelApiId: 'wan/2-5-image-to-video' },
@@ -18,7 +22,15 @@ export const KieAI_MODELS = [
     { id: 'video/v1-pro-image-to-video',  name: 'Seedance V1 Pro I2V',  type: 'video', modelApiId: 'bytedance/v1-pro-image-to-video' },
     { id: 'video/v1-lite-image-to-video', name: 'Seedance V1 Lite I2V', type: 'video', modelApiId: 'bytedance/v1-lite-image-to-video' },
 
-    // ==== Suno (Music) Models ==== 
+    
+    // ==== Seedream (Image) Models ====
+    // Seedream models use the unified Market createTask endpoint.
+    { id: 'image/seedream4.0-text-to-image', name: 'Seedream 4.0 T2I', type: 'image', modelApiId: 'bytedance/seedream-v4-text-to-image' },
+    { id: 'image/seedream4.5-text-to-image', name: 'Seedream 4.5 T2I', type: 'image', modelApiId: 'seedream/4.5-text-to-image' },
+    { id: 'image/seedream4-edit', name: 'Seedream V4 Edit', type: 'image', modelApiId: 'bytedance/seedream-v4-edit' },
+    { id: 'image/seedream4.5-edit', name: 'Seedream 4.5 Edit', type: 'image', modelApiId: 'seedream/4.5-edit' },
+
+// ==== Suno (Music) Models ==== 
     // These models use the Suno API to generate audio tracks from text prompts.
     // Each entry specifies the model version to use (e.g. V3_5, V4_5, V5).  The
     // modelApiId field stores the version so that handlers can access it.
@@ -31,6 +43,23 @@ export const KieAI_MODELS = [
 
 // Registry defining defaults and parameter limits per model endpoint
 export const MODEL_REGISTRY = {
+    'wan/2-6-text-to-video': {
+        // WAN 2.6 text-to-video supports 5, 10, or 15 second durations
+        defaults: { duration: 5, resolution: '1080p' },
+        limits:   { duration: [5, 10, 15], resolution: ['720p', '1080p'] },
+    },
+    'wan/2-6-image-to-video': {
+        // WAN 2.6 image-to-video supports 5, 10, or 15 second durations
+        defaults: { duration: 5, resolution: '1080p' },
+        limits:   { duration: [5, 10, 15], resolution: ['720p', '1080p'] },
+        requires: ['image_urls'],
+    },
+    'wan/2-6-video-to-video': {
+        // WAN 2.6 video-to-video supports 5 or 10 second durations (not 15)
+        defaults: { duration: 5, resolution: '1080p' },
+        limits:   { duration: [5, 10], resolution: ['720p', '1080p'] },
+        requires: ['video_urls'],
+    },
     'wan/2-5-text-to-video': {
         // WAN 2.5 models support only 5 or 10 second durations【216777337928515†L37-L41】.
         defaults: { duration: 5, resolution: '720p', aspect_ratio: '16:9' },
@@ -65,7 +94,33 @@ export const MODEL_REGISTRY = {
         requires: ['image_url'],
     },
 
-    // ==== Suno Model Registry ====
+    
+    // ==== Seedream V4 Edit (Image-to-Image) ====
+    'bytedance/seedream-v4-edit': {
+        defaults: { image_size: 'square_hd', image_resolution: '1K', max_images: 1 },
+        limits:   {
+            image_size: ['square', 'square_hd', 'portrait_4_3', 'portrait_3_2', 'portrait_16_9',
+                         'landscape_4_3', 'landscape_3_2', 'landscape_16_9', 'landscape_21_9'],
+            image_resolution: ['1K', '2K', '4K'],
+            max_images: [1, 2, 3, 4, 5, 6]
+        },
+        // Requires at least one image URL (up to 10) for edit mode.
+        requires: ['image_urls'],
+    },
+
+    // ==== Seedream 4.5 Edit (Image-to-Image) ====
+    'seedream/4.5-edit': {
+        defaults: { aspect_ratio: '1:1', quality: 'basic', max_images: 1 },
+        limits:   {
+            aspect_ratio: ['1:1', '4:3', '3:4', '16:9', '9:16', '2:3', '3:2', '21:9'],
+            quality: ['basic', 'high'], // basic = 2K, high = 4K
+            max_images: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+        },
+        // Requires at least one image (up to 14), each <= 10MB
+        requires: ['image_urls'],
+    },
+
+// ==== Suno Model Registry ====
     // Each Suno model defines default values for the music generation parameters.  The
     // `model` property indicates the version of the Suno API to use.  No limits
     // are enforced for string parameters in this registry.
@@ -134,7 +189,14 @@ export async function handleGenerationRequest(params) {
         enable_prompt_expansion,
         camera_fixed,
         enable_safety_checker,
-        // Audio-specific parameters
+        enableSafetyChecker,
+                // Image-specific parameters
+        image_size,
+        image_resolution,
+        max_images,
+        aspect_ratio,
+        quality,
+// Audio-specific parameters
         customMode,
         instrumental,
         model,
@@ -154,6 +216,11 @@ export async function handleGenerationRequest(params) {
             modelId?.toLowerCase().includes('suno') ||
             modelId?.toLowerCase().startsWith('audio/') ||
             (modelInfo && modelInfo.type === 'audio');
+
+        const isImage =
+            modelId?.toLowerCase().startsWith('image/') ||
+            (modelInfo && modelInfo.type === 'image');
+
 
         // If the model definition is missing, warn and return (except for audio, which we still handle).
         if (!modelInfo && !isAudio) {
@@ -233,56 +300,195 @@ export async function handleGenerationRequest(params) {
             return;
         }
 
+        
+        // --- Handle Image Generation (Seedream via Market createTask) ---
+        if (isImage) {
+            // Build input payload for Seedream models.
+            // Seedream4.0 expects: prompt, image_size, image_resolution, max_images.
+            // Seedream4.5 expects: prompt, aspect_ratio, quality.
+            const registry = MODEL_REGISTRY[modelInfo.modelApiId] || {};
+            const defaults = registry.defaults || {};
+
+            const inputPayload = { prompt };
+
+            if (modelInfo.modelApiId === 'bytedance/seedream-v4-text-to-image') {
+                inputPayload.image_size = (image_size || defaults.image_size || 'square_hd');
+                inputPayload.image_resolution = (image_resolution || defaults.image_resolution || '1K');
+                inputPayload.max_images = Number(max_images || defaults.max_images || 1);
+            } else if (modelInfo.modelApiId === 'seedream/4.5-text-to-image') {
+                inputPayload.aspect_ratio = (aspect_ratio || defaults.aspect_ratio || '1:1');
+                inputPayload.quality = (quality || defaults.quality || 'basic');
+            } else if (modelInfo.modelApiId === 'bytedance/seedream-v4-edit') {
+                // Seedream V4 Edit (I2I): requires image_urls[] (max 10). Optionally upload local Files via File Upload API.
+                let urls = [];
+                const providedUrls = params.image_urls || params.imageUrls || null;
+                const providedFiles = params.image_files || params.imageFiles || null;
+
+                // Upload local files if provided (preferred)
+                if (providedFiles && (providedFiles instanceof FileList || Array.isArray(providedFiles))) {
+                    const filesArr = Array.from(providedFiles);
+                    if (filesArr.length < 1) throw new Error('Seedream V4 Edit requires at least 1 image.');
+                    if (filesArr.length > 10) throw new Error('Seedream V4 Edit supports up to 10 images.');
+                    for (const f of filesArr) {
+                        if (!(f instanceof File)) continue;
+                        if (f.size > 10 * 1024 * 1024) throw new Error('Each image must be <= 10MB.');
+                        const okType = ['image/jpeg','image/png','image/webp'].includes(f.type);
+                        if (!okType) throw new Error('Supported formats: JPEG, PNG, WEBP.');
+                        const u = await KieAIService.uploadFileStream(f, 'seedream-edit');
+                        urls.push(u);
+                    }
+                } else if (Array.isArray(providedUrls)) {
+                    urls = providedUrls.filter(Boolean);
+                }
+
+                if (!urls.length) throw new Error('Seedream V4 Edit requires image_urls (or image_files).');
+
+                inputPayload.image_urls = urls;
+                inputPayload.image_size = (image_size || defaults.image_size || 'square_hd');
+                inputPayload.image_resolution = (image_resolution || defaults.image_resolution || '1K');
+                inputPayload.max_images = Number(max_images || defaults.max_images || 1);
+                if (seed !== undefined && seed !== null && seed !== -1) {
+                    inputPayload.seed = Number(seed);
+                }
+            } else if (modelInfo.modelApiId === 'seedream/4.5-edit') {
+                // Seedream 4.5 Edit (I2I): requires image_urls[] (max 14). Upload local Files via File Upload API.
+                let urls = [];
+                const providedUrls = params.image_urls || params.imageUrls || null;
+                const providedFiles = params.image_files || params.imageFiles || null;
+
+                // Upload local files if provided (preferred)
+                if (providedFiles && (providedFiles instanceof FileList || Array.isArray(providedFiles))) {
+                    const filesArr = Array.from(providedFiles);
+                    if (filesArr.length < 1) throw new Error('Seedream 4.5 Edit requires at least 1 image.');
+                    if (filesArr.length > 14) throw new Error('Seedream 4.5 Edit supports up to 14 images.');
+                    for (const f of filesArr) {
+                        if (!(f instanceof File)) continue;
+                        if (f.size > 10 * 1024 * 1024) throw new Error('Each image must be <= 10MB.');
+                        const okType = ['image/jpeg','image/png','image/webp'].includes(f.type);
+                        if (!okType) throw new Error('Supported formats: JPEG, PNG, WEBP.');
+                        const u = await KieAIService.uploadFileStream(f, 'seedream-4.5-edit');
+                        urls.push(u);
+                    }
+                } else if (Array.isArray(providedUrls)) {
+                    urls = providedUrls.filter(Boolean);
+                }
+
+                if (!urls.length) throw new Error('Seedream 4.5 Edit requires image_urls (or image_files).');
+
+                inputPayload.image_urls = urls;
+                inputPayload.aspect_ratio = (aspect_ratio || defaults.aspect_ratio || '1:1');
+                inputPayload.quality = (quality || defaults.quality || 'basic'); // basic=2K, high=4K
+                if (seed !== undefined && seed !== null && seed !== -1) {
+                    inputPayload.seed = Number(seed);
+                }
+            } else {
+                // Fallback: pass-through common fields if present
+                if (image_size) inputPayload.image_size = image_size;
+                if (image_resolution) inputPayload.image_resolution = image_resolution;
+                if (max_images !== undefined) inputPayload.max_images = Number(max_images);
+                if (aspect_ratio) inputPayload.aspect_ratio = aspect_ratio;
+                if (quality) inputPayload.quality = quality;
+            }
+
+            const imageResult = await KieAIService.executeGenerationTask(
+                modelInfo.modelApiId,
+                inputPayload,
+                (message) => stateManager.bus.publish('kieai:statusUpdate', { status: 'loading', message }),
+                { taskContext: {} },
+            );
+
+            stateManager.bus.publish('kieai:statusUpdate', { status: 'success', message: 'Image generation complete!' });
+            
+            // Publish image result in the same format as video results so PhotoStudioWorkspace can display it
+            stateManager.bus.publish('kieai:newResult', {
+                id: imageResult.taskId,
+                type: 'image',
+                prompt,
+                url: imageResult.url,
+                resultJson: imageResult.resultJson,
+            });
+            
+            return imageResult;
+        }
+
+        // --- Handle Video Generation (WAN and Seedance) ---
         const isWan25 = modelId.includes('wan2.5');
+        const isWan26 = modelId.includes('wan-2-6');
+        const isWan = isWan25 || isWan26;
         // detect any image-to-video model (Wan or Seedance) but never treat an
         // audio model as I2V.  This prevents errors requiring image URLs for
         // music generation tasks.
         const isI2V = !isAudio && modelId.includes('image-to-video');
+        // detect video-to-video models (Wan 2.6 only)
+        const isV2V = !isAudio && modelId.includes('video-to-video');
         // detect any Seedance V1 model (both T2V and I2V)
         const isSeedance = modelId.includes('v1-pro') || modelId.includes('v1-lite');
 
-        // Build base input payload
-        const inputPayload = {
+        // Build base input payload for video
+        const videoPayload = {
             prompt: prompt,
             resolution: String(resolution) || '720p',
             duration: String(duration) || '5',
-            seed: Number(seed) || -1,
         };
+        
+        // Only add seed for models that support it (not Wan 2.6)
+        if (!isWan26) {
+            videoPayload.seed = Number(seed) || -1;
+        }
+        
         // aspect_ratio only applies to text-to-video models
-        if (!isI2V) {
-            inputPayload.aspect_ratio = params.aspect_ratio || '16:9';
+        if (!isI2V && !isV2V) {
+            videoPayload.aspect_ratio = params.aspect_ratio || '16:9';
         }
 
-        // 1. Handle Image URL for any I2V model (Wan or Seedance)
+        // 1. Handle Image URL for I2V models
         if (isI2V) {
             const urlToUse = image_url_input?.trim();
             if (!urlToUse || !urlToUse.startsWith('http')) {
-                // Throw error to prompt user to provide a proper image URL
                 throw new Error('I2V requires a valid public image URL.');
             }
-            inputPayload.image_url = urlToUse;
+            
+            // Wan 2.6 uses image_urls array, older models use image_url
+            if (isWan26) {
+                videoPayload.image_urls = [urlToUse];
+            } else {
+                videoPayload.image_url = urlToUse;
+            }
         }
         
-        // 2. Add model-specific parameters
-        if (isWan25) {
-            if (negative_prompt) inputPayload.negative_prompt = negative_prompt;
-            inputPayload.enable_prompt_expansion = enable_prompt_expansion || false;
+        // 2. Handle Video URL for V2V models (Wan 2.6 only)
+        if (isV2V) {
+            const videoUrlToUse = params.video_url_input?.trim();
+            if (!videoUrlToUse || !videoUrlToUse.startsWith('http')) {
+                throw new Error('V2V requires a valid public video URL.');
+            }
+            videoPayload.video_urls = [videoUrlToUse];
         }
+        
+        // 3. Add model-specific parameters
+        if (isWan25) {
+            if (negative_prompt) videoPayload.negative_prompt = negative_prompt;
+            videoPayload.enable_prompt_expansion = enable_prompt_expansion || false;
+        }
+        // Wan 2.6 models don't support negative_prompt or enable_prompt_expansion
+        // They have simpler parameters (just prompt, duration, resolution, and media URLs)
+        
         // For Seedance models (Pro and Lite, both T2V and I2V) include camera and safety flags
         if (isSeedance) {
-            inputPayload.camera_fixed = camera_fixed || false;
+            videoPayload.camera_fixed = camera_fixed || false;
             // The safety checker is always enabled by default; allow override via UI
-            inputPayload.enable_safety_checker = enable_safety_checker !== undefined ? enable_safety_checker : true;
+            const esc = (enable_safety_checker !== undefined) ? enable_safety_checker : (enableSafetyChecker !== undefined ? enableSafetyChecker : undefined);
+            videoPayload.enable_safety_checker = esc !== undefined ? esc : true;
         }
 
-        // 3. Call Service with context for dynamic polling
+        // 4. Call Service with context for dynamic polling
         const result = await KieAIService.executeGenerationTask(
             modelInfo.modelApiId,
-            inputPayload,
+            videoPayload,
             (message) => stateManager.bus.publish('kieai:statusUpdate', { status: 'loading', message }),
             {
                 taskContext: {
-                    // Default to 5 seconds when unspecified; both T2V and I2V models support only 5 or 10 seconds.
+                    // Default to 5 seconds when unspecified. Wan 2.6 supports 5, 10, 15s; older models 5 or 10s.
                     durationSec: Number(duration) || Number(params.duration) || 5,
                     resolution: String(resolution) || '720p',
                 },
@@ -291,7 +497,7 @@ export async function handleGenerationRequest(params) {
 
         stateManager.bus.publish('kieai:statusUpdate', { status: 'success', message: 'Generation Complete!' });
         
-        // 4. Publish Result
+        // 5. Publish Result
         stateManager.bus.publish('kieai:newResult', {
             id: result.taskId,
             type: 'video', 

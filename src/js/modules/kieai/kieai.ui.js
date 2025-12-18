@@ -8,8 +8,14 @@ const WORKSPACE_ID = 'kieai-studio-workspace';
 const MOUNT_ID = 'photo-studio-root';
 
 const KieAI_MODELS = [
+    { id: 'video/wan-2-6-text-to-video', name: 'Wan 2.6 T2V', type: 'video' },
+    { id: 'video/wan-2-6-image-to-video', name: 'Wan 2.6 I2V', type: 'video' },
+    { id: 'video/wan-2-6-video-to-video', name: 'Wan 2.6 V2V', type: 'video' },
     { id: 'image/4o-image', name: 'GPT-4o Image', type: 'image' },
     { id: 'image/flux-kontext', name: 'Flux Kontext', type: 'image' },
+    { id: 'image/seedream4.0-text-to-image', name: 'Seedream 4.0 T2I', type: 'image' },
+    { id: 'image/seedream4.5-text-to-image', name: 'Seedream 4.5 T2I', type: 'image' },
+    { id: 'image/seedream4.5-edit', name: 'Seedream 4.5 Edit', type: 'image' },
     { id: 'video/wan2.5-image-to-video', name: 'Wan 2.5 I2V', type: 'video' },
     { id: 'video/v1-pro-text-to-video', name: 'Seedance V1 Pro T2V', type: 'video' },
     { id: 'video/v1-lite-text-to-video', name: 'Seedance V1 Lite T2V', type: 'video' },
