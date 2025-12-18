@@ -94,6 +94,24 @@ export const MODEL_REGISTRY = {
         requires: ['image_url'],
     },
 
+    // ==== Seedream V4 Text-to-Image ====
+    'bytedance/seedream-v4-text-to-image': {
+        defaults: { image_size: 'square_hd', image_resolution: '1K' },
+        limits: {
+            image_size: ['square', 'square_hd', 'portrait_4_3', 'portrait_3_2', 'portrait_16_9',
+                         'landscape_4_3', 'landscape_3_2', 'landscape_16_9', 'landscape_21_9'],
+            image_resolution: ['1K', '2K', '4K']
+        }
+    },
+
+    // ==== Seedream 4.5 Text-to-Image ====
+    'seedream/4.5-text-to-image': {
+        defaults: { aspect_ratio: '1:1', quality: 'basic' },
+        limits: {
+            aspect_ratio: ['1:1', '4:3', '3:4', '16:9', '9:16', '2:3', '3:2', '21:9'],
+            quality: ['basic', 'high']
+        }
+    },
     
     // ==== Seedream V4 Edit (Image-to-Image) ====
     'bytedance/seedream-v4-edit': {

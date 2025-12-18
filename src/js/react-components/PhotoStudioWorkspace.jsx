@@ -373,7 +373,80 @@ const renderModelSpecificInputs = (selectedModel, params, setParams, imagePrevie
                 </div>
             )}
 
-            {/* Image models: Quality selector (2K or 4K) */}
+            {/* Image models: Image Size selector (for Seedream 4.0/V4 models) */}
+            {isImage && (modelId.includes('seedream4.0') || modelId.includes('seedream-v4')) && !modelId.includes('edit') && (
+                <div className="form-group">
+                    <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Image Size</label>
+                    <select
+                        value={params.image_size || 'square_hd'}
+                        onChange={(e) => setParams(p => ({ ...p, image_size: e.target.value }))}
+                        className="tw-w-full tw-p-2 tw-rounded-md tw-bg-slate-600 tw-text-white"
+                    >
+                        <option value="square">Square</option>
+                        <option value="square_hd">Square HD</option>
+                        <option value="portrait_4_3">Portrait 4:3</option>
+                        <option value="portrait_3_2">Portrait 3:2</option>
+                        <option value="portrait_16_9">Portrait 16:9</option>
+                        <option value="landscape_4_3">Landscape 4:3</option>
+                        <option value="landscape_3_2">Landscape 3:2</option>
+                        <option value="landscape_16_9">Landscape 16:9</option>
+                        <option value="landscape_21_9">Landscape 21:9</option>
+                    </select>
+                </div>
+            )}
+
+            {/* Image models: Aspect Ratio selector (for Seedream 4.5 models only) */}
+            {isImage && modelId.includes('4.5') && (
+                <div className="form-group">
+                    <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Aspect Ratio</label>
+                    <select
+                        value={params.aspect_ratio || '1:1'}
+                        onChange={(e) => setParams(p => ({ ...p, aspect_ratio: e.target.value }))}
+                        className="tw-w-full tw-p-2 tw-rounded-md tw-bg-slate-600 tw-text-white"
+                    >
+                        <option value="1:1">1:1 (Square)</option>
+                        <option value="4:3">4:3 (Landscape)</option>
+                        <option value="3:4">3:4 (Portrait)</option>
+                        <option value="16:9">16:9 (Widescreen)</option>
+                        <option value="9:16">9:16 (Vertical)</option>
+                        <option value="2:3">2:3 (Portrait)</option>
+                        <option value="3:2">3:2 (Landscape)</option>
+                        <option value="21:9">21:9 (Ultra-wide)</option>
+                    </select>
+                </div>
+            )}
+
+            {/* Image models: Image Resolution selector (for Seedream V4 models) */}
+            {isImage && (modelId.includes('seedream4.0') || modelId.includes('seedream-v4')) && !modelId.includes('edit') && (
+                <div className="form-group">
+                    <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Image Resolution</label>
+                    <div className="tw-flex tw-gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setParams(p => ({ ...p, image_resolution: '1K' }))}
+                            className={`tw-flex-1 tw-py-1.5 tw-rounded-md tw-text-sm ${params.image_resolution === '1K' ? 'tw-bg-cyan-500 tw-text-white' : 'tw-bg-slate-600 tw-text-gray-300 hover:tw-bg-slate-500'}`}
+                        >
+                            1K
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setParams(p => ({ ...p, image_resolution: '2K' }))}
+                            className={`tw-flex-1 tw-py-1.5 tw-rounded-md tw-text-sm ${params.image_resolution === '2K' ? 'tw-bg-cyan-500 tw-text-white' : 'tw-bg-slate-600 tw-text-gray-300 hover:tw-bg-slate-500'}`}
+                        >
+                            2K
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setParams(p => ({ ...p, image_resolution: '4K' }))}
+                            className={`tw-flex-1 tw-py-1.5 tw-rounded-md tw-text-sm ${params.image_resolution === '4K' ? 'tw-bg-cyan-500 tw-text-white' : 'tw-bg-slate-600 tw-text-gray-300 hover:tw-bg-slate-500'}`}
+                        >
+                            4K
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Image models: Quality selector (2K or 4K) - for Seedream 4.5 models */}
             {isImage && (modelId.includes('4.5') || modelId.includes('edit')) && (
                 <div className="form-group">
                     <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Quality</label>
@@ -463,11 +536,14 @@ export const StudioForm = ({ models, onSubmit, status }) => {
     const [params, setParams] = useState({
         resolution: '1080p',
         duration: 5,
-        aspect_ratio: '16:9',
+        aspect_ratio: '1:1', // Default for Seedream 4.5 models; video models use '16:9'
         seed: -1,
         enable_safety_checker: true,
         image_url_input: '',
         video_url_input: '',
+        quality: 'basic', // Default for Seedream 4.5 models
+        image_size: 'square_hd', // Default for Seedream V4 models
+        image_resolution: '1K', // Default for Seedream V4 models
         // Audio-specific defaults
         customMode: false,
         instrumental: false,
@@ -692,6 +768,10 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         });
         setMultiImages([]);
         
+        // Determine the appropriate default aspect ratio based on model type
+        const isImageModel = newModel?.type === 'image';
+        const defaultAspectRatio = isImageModel ? '1:1' : '16:9';
+        
         setParams(p => ({
             ...p,
             // Reset all model-specific parameters
@@ -712,15 +792,17 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             // Preserve only these core parameters
             resolution: '1080p',
             duration: 5,
-            aspect_ratio: '16:9',
+            aspect_ratio: defaultAspectRatio,
             seed: -1,
+            quality: 'basic',
+            image_size: 'square_hd',
+            image_resolution: '1K',
             // Apply model-specific defaults last
             ...(newModel?.modelApiId ? getModelDefaults(newModel.modelApiId) : {})
         }));
 
         // Update limits based on new model
         const newLimits = newModel?.modelApiId ? getModelLimits(newModel.modelApiId) : {};
-        setLimits(newLimits);
         setLimits(newLimits);
     };
     
