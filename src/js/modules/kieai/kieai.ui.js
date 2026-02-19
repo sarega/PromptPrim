@@ -106,15 +106,11 @@ export function initKieAiUI() {
     if (apiKeyInput) {
         // โหลดค่า Key ที่บันทึกไว้ใน User Profile
         const profile = UserService.getCurrentUserProfile();
-        apiKeyInput.value = profile.apiSettings?.kieAiApiKey || '';
+        apiKeyInput.value = profile?.apiSettings?.kieAiApiKey || '';
 
         // บันทึก Key ทันทีที่ผู้ใช้พิมพ์
         apiKeyInput.addEventListener('input', () => {
-            const user = UserService.getCurrentUserProfile();
-            if (user) {
-                user.apiSettings.kieAiApiKey = apiKeyInput.value;
-                UserService.saveFullUserProfile(user);
-            }
+            UserService.updateApiSettings({ kieAiApiKey: apiKeyInput.value });
         });
     }
 }

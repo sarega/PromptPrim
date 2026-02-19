@@ -10,6 +10,7 @@ import { initThemeSwitcher } from '../../core/core.theme.js';
 function updateUserProfileDisplay() {
     const profile = UserService.getCurrentUserProfile();
     if (!profile) return;
+    const isMaster = UserService.isMasterProfile(profile);
 
     const nameSpan = document.querySelector('#user-profile-menu .user-name');
     const planSpan = document.querySelector('#user-profile-menu .user-plan');
@@ -24,7 +25,7 @@ function updateUserProfileDisplay() {
         let statusText = 'Unknown';
         let statusClass = 'status-blocked';
 
-        if (profile.plan === 'master') {
+        if (isMaster) {
             statusText = (profile.planStatus === 'active') ? 'Master Plan' : 'Subscription Expired';
             statusClass = (profile.planStatus === 'active') ? 'status-master' : 'status-blocked';
         } else if (profile.plan === 'pro') {
@@ -48,7 +49,7 @@ function updateUserProfileDisplay() {
     }
 
     if (creditItem && creditSpan) {
-        if (profile.plan === 'master') {
+        if (isMaster) {
             creditItem.style.display = 'none';
         } else {
             creditItem.style.display = 'flex';

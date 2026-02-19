@@ -6,10 +6,13 @@
 import { stateManager } from '../../core/core.state.js';
 import { estimateTokens, getContextData }  from '../../modules/chat/chat.handlers.js'; // <--- แก้ไขบรรทัดนี้
 import { debounce } from '../../core/core.utils.js'; 
-import { getFullSystemPrompt } from '../../core/core.api.js';
+import { buildPayloadMessages, getFullSystemPrompt } from '../../core/core.api.js';
 import * as UserService from '../user/user.service.js'; // <-- Add this import
 import * as ChatHandlers from './chat.handlers.js';
 import { updateAppStatus } from '../../core/core.ui.js';
+
+let latestContextDebuggerSnapshot = null;
+let contextDebuggerSelectedTurn = null;
 
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
@@ -124,6 +127,516 @@ function addCopyToCodeBlocks(contentElement) {
   });
 }
 
+function extractTextFromAnyContent(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content.map(part => {
+            if (part?.type === 'text') return part.text || '';
+            if (part?.type === 'image_url') return '[image]';
+            return '';
+        }).filter(Boolean).join('\n');
+    }
+    if (content && typeof content === 'object' && typeof content.text === 'string') {
+        return content.text;
+    }
+    return '';
+}
+
+function resolveDebuggerAgentName(project, session) {
+    if (session?.groupChatState?.isRunning && session?.groupChatState?.currentJob?.agentName) {
+        return session.groupChatState.currentJob.agentName;
+    }
+
+    const activeEntity = project?.activeEntity;
+    if (activeEntity?.type === 'agent' && activeEntity.name) {
+        return activeEntity.name;
+    }
+    if (activeEntity?.type === 'group' && activeEntity.name) {
+        const group = project.agentGroups?.[activeEntity.name];
+        if (group?.moderatorAgent) return group.moderatorAgent;
+    }
+
+    if (session?.linkedEntity?.type === 'agent' && session?.linkedEntity?.name) {
+        return session.linkedEntity.name;
+    }
+    if (session?.linkedEntity?.type === 'group' && session?.linkedEntity?.name) {
+        const group = project.agentGroups?.[session.linkedEntity.name];
+        if (group?.moderatorAgent) return group.moderatorAgent;
+    }
+
+    return Object.keys(project?.agentPresets || {})[0] || '';
+}
+
+function buildContextDebuggerSnapshot() {
+    const project = stateManager.getProject();
+    if (!project) return null;
+
+    const session = (project.chatSessions || []).find(item => item.id === project.activeSessionId);
+    if (!session) return null;
+
+    const folder = session.folderId
+        ? (project.chatFolders || []).find(item => item.id === session.folderId) || null
+        : null;
+
+    const agentName = resolveDebuggerAgentName(project, session);
+    const payloadMeta = { __collect: true };
+    const payloadMessages = buildPayloadMessages(session.history || [], agentName, payloadMeta);
+    const payloadTokenEstimate = estimateTokens(JSON.stringify(payloadMessages || []));
+    const contextData = getContextData();
+
+    const turns = (session.history || []).map((message, index) => {
+        const text = extractTextFromAnyContent(message?.content || '');
+        return {
+            index,
+            role: message?.role || 'unknown',
+            speaker: message?.speaker || '',
+            timestamp: message?.timestamp || null,
+            text,
+            tokenEstimate: estimateTokens(text || JSON.stringify(message?.content || '')),
+            hasRag: Boolean(message?.rag),
+            hasFolderContext: Boolean(message?.folderContext),
+            rag: message?.rag || null,
+            folderContext: message?.folderContext || null
+        };
+    });
+
+    return {
+        generatedAt: Date.now(),
+        project,
+        session,
+        folder,
+        payloadMessages,
+        payloadMeta,
+        payloadTokenEstimate,
+        contextData,
+        turns
+    };
+}
+
+function formatDebuggerNumber(value) {
+    return Number.isFinite(value) ? value.toLocaleString() : '-';
+}
+
+function renderContextDebuggerSummary(snapshot) {
+    const sessionNameEl = document.getElementById('context-debugger-session-name');
+    const folderModeEl = document.getElementById('context-debugger-folder-mode');
+    const folderBudgetEl = document.getElementById('context-debugger-folder-budget');
+    const ragBudgetEl = document.getElementById('context-debugger-rag-budget');
+    const payloadMetaEl = document.getElementById('context-debugger-payload-meta');
+
+    if (!sessionNameEl || !folderModeEl || !folderBudgetEl || !ragBudgetEl || !payloadMetaEl) return;
+
+    const contextMode = snapshot.session?.contextMode === 'session_only' ? 'Session only' : 'Folder aware';
+    const folderName = snapshot.folder?.name || 'Main list';
+    const folderMeta = snapshot.payloadMeta?.folderContext || null;
+    const ragMeta = snapshot.payloadMeta?.rag || null;
+
+    sessionNameEl.textContent = snapshot.session?.name || 'Untitled';
+    folderModeEl.textContent = `${contextMode} • ${folderName}`;
+
+    if (folderMeta) {
+        if (folderMeta.enabled === false) {
+            folderBudgetEl.textContent = `Disabled • ${normalizeFolderContextReason(folderMeta.reason)}`;
+        } else {
+            folderBudgetEl.textContent = `${formatDebuggerNumber(folderMeta.usedTokens)} / ${formatDebuggerNumber(folderMeta.budgetTokens)} tokens • ${formatDebuggerNumber(folderMeta.usedSessionCount)}/${formatDebuggerNumber(folderMeta.maxSharedSessions)} sessions`;
+        }
+    } else {
+        folderBudgetEl.textContent = 'No folder context';
+    }
+
+    if (ragMeta) {
+        if (ragMeta.enabled === false) {
+            ragBudgetEl.textContent = `Disabled • ${normalizeRagDebugReason(ragMeta.reason)}`;
+        } else {
+            const settings = ragMeta.settings || {};
+            ragBudgetEl.textContent = `${formatDebuggerNumber(ragMeta.totalUsedTokens)} / ${formatDebuggerNumber(settings.maxContextTokens)} tokens • ${formatDebuggerNumber(ragMeta.usedChunks?.length || 0)}/${formatDebuggerNumber(ragMeta.totalCandidateChunks)} chunks`;
+        }
+    } else {
+        ragBudgetEl.textContent = 'No RAG metadata';
+    }
+
+    payloadMetaEl.textContent = `${formatDebuggerNumber(snapshot.payloadMessages?.length || 0)} messages • ~${formatDebuggerNumber(snapshot.payloadTokenEstimate)} tokens`;
+}
+
+function renderContextDebuggerTurns(snapshot) {
+    const list = document.getElementById('context-debugger-turn-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    if (!Array.isArray(snapshot.turns) || snapshot.turns.length === 0) {
+        list.innerHTML = '<p class="no-items-message">No turns in this session.</p>';
+        return;
+    }
+
+    snapshot.turns.forEach(turn => {
+        const item = document.createElement('div');
+        item.className = 'context-debugger-turn-item';
+        if (turn.index === contextDebuggerSelectedTurn) {
+            item.classList.add('active');
+        }
+        item.dataset.turnIndex = String(turn.index);
+
+        const roleLabel = turn.role === 'assistant'
+            ? (turn.speaker ? `assistant • ${turn.speaker}` : 'assistant')
+            : turn.role;
+        const titleText = (turn.text || '(no text)').replace(/\s+/g, ' ').slice(0, 120);
+        const markers = [
+            turn.hasFolderContext ? 'folder-context' : '',
+            turn.hasRag ? 'rag' : ''
+        ].filter(Boolean).join(', ');
+
+        item.innerHTML = `
+            <div class="context-debugger-turn-item-role">#${turn.index + 1} • ${roleLabel}</div>
+            <div class="context-debugger-turn-item-title">${titleText}</div>
+            <div class="context-debugger-turn-item-meta">~${formatDebuggerNumber(turn.tokenEstimate)} tokens${markers ? ` • ${markers}` : ''}</div>
+        `;
+
+        list.appendChild(item);
+    });
+}
+
+function renderContextDebuggerTurnDetail(snapshot) {
+    const detailContainer = document.getElementById('context-debugger-turn-detail');
+    const assemblyContainer = document.getElementById('context-debugger-assembly');
+    if (!detailContainer || !assemblyContainer) return;
+
+    const turn = snapshot.turns.find(item => item.index === contextDebuggerSelectedTurn) || null;
+    if (!turn) {
+        detailContainer.innerHTML = '<p class="context-debugger-empty">Select a turn to inspect detail.</p>';
+    } else {
+        const lines = [
+            `Turn #${turn.index + 1}`,
+            `Role: ${turn.role}${turn.speaker ? ` (${turn.speaker})` : ''}`,
+            `Timestamp: ${turn.timestamp ? new Date(turn.timestamp).toLocaleString('th-TH') : '-'}`,
+            `Approx tokens: ${formatDebuggerNumber(turn.tokenEstimate)}`,
+            ''
+        ];
+
+        if (turn.folderContext) {
+            lines.push('Folder Context (turn metadata):');
+            lines.push(`- Reason: ${turn.folderContext.reason || '-'}`);
+            lines.push(`- Budget: ${formatDebuggerNumber(turn.folderContext.usedTokens)} / ${formatDebuggerNumber(turn.folderContext.budgetTokens)} tokens`);
+            lines.push(`- Sessions: ${formatDebuggerNumber(turn.folderContext.usedSessionCount)} / ${formatDebuggerNumber(turn.folderContext.maxSharedSessions)}`);
+            lines.push('');
+        }
+
+        if (turn.rag) {
+            const settings = turn.rag.settings || {};
+            lines.push('RAG (turn metadata):');
+            lines.push(`- Source: ${settings.scopeSource || '-'}`);
+            lines.push(`- Scope: ${settings.scopeMode || '-'}`);
+            lines.push(`- Reason: ${turn.rag.reason || '-'}`);
+            lines.push(`- Budget: ${formatDebuggerNumber(turn.rag.totalUsedTokens)} / ${formatDebuggerNumber(settings.maxContextTokens)} tokens`);
+            lines.push(`- Chunks: ${formatDebuggerNumber(turn.rag.usedChunks?.length || 0)} / ${formatDebuggerNumber(turn.rag.totalCandidateChunks)}`);
+            if (Array.isArray(turn.rag.usedChunks) && turn.rag.usedChunks.length > 0) {
+                lines.push('- Selected chunks:');
+                turn.rag.usedChunks.forEach((chunk, idx) => {
+                    lines.push(`  ${idx + 1}. ${chunk.fileName || 'Unknown'} #chunk${Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex + 1 : 1} • score ${chunk.score || 0}`);
+                });
+            }
+            lines.push('');
+        }
+
+        lines.push('Turn content:');
+        lines.push(turn.text || '(no text)');
+
+        detailContainer.innerHTML = '';
+        const detailPre = document.createElement('pre');
+        detailPre.textContent = lines.join('\n');
+        detailContainer.appendChild(detailPre);
+    }
+
+    const assemblyLines = [];
+    assemblyLines.push(`Generated at: ${new Date(snapshot.generatedAt).toLocaleString('th-TH')}`);
+    assemblyLines.push(`Agent: ${snapshot.contextData?.agentNameForDisplay || '-'}`);
+    assemblyLines.push(`Model: ${snapshot.contextData?.model || '-'}`);
+    assemblyLines.push(`System prompt tokens (approx): ${formatDebuggerNumber(estimateTokens(snapshot.contextData?.finalSystemPrompt || ''))}`);
+    assemblyLines.push(`Payload messages: ${formatDebuggerNumber(snapshot.payloadMessages?.length || 0)} (~${formatDebuggerNumber(snapshot.payloadTokenEstimate)} tokens)`);
+    assemblyLines.push('');
+
+    if (snapshot.payloadMeta?.folderContext) {
+        const folderCtx = snapshot.payloadMeta.folderContext;
+        assemblyLines.push('Folder Context (current assembly):');
+        assemblyLines.push(`- Reason: ${folderCtx.reason || '-'}`);
+        assemblyLines.push(`- Folder: ${folderCtx.folderName || '-'}`);
+        assemblyLines.push(`- Budget: ${formatDebuggerNumber(folderCtx.usedTokens)} / ${formatDebuggerNumber(folderCtx.budgetTokens)} tokens`);
+        assemblyLines.push(`- Sessions: ${formatDebuggerNumber(folderCtx.usedSessionCount)} / ${formatDebuggerNumber(folderCtx.maxSharedSessions)}`);
+        if (Array.isArray(folderCtx.usedSessions) && folderCtx.usedSessions.length > 0) {
+            folderCtx.usedSessions.forEach((item, index) => {
+                const relevanceLabel = Number.isFinite(Number(item.relevanceScore))
+                    ? ` • rel ${Number(item.relevanceScore).toFixed(3)}`
+                    : '';
+                assemblyLines.push(`  ${index + 1}. ${item.sessionName || item.sessionId || '-'} • ${item.source || '-'}${relevanceLabel} • ~${formatDebuggerNumber(item.tokenEstimate)} tokens`);
+            });
+        }
+        assemblyLines.push('');
+    }
+
+    if (snapshot.payloadMeta?.rag) {
+        const rag = snapshot.payloadMeta.rag;
+        const settings = rag.settings || {};
+        assemblyLines.push('RAG (current assembly):');
+        assemblyLines.push(`- Source: ${settings.scopeSource || '-'}`);
+        assemblyLines.push(`- Scope: ${settings.scopeMode || '-'}`);
+        assemblyLines.push(`- Reason: ${rag.reason || '-'}`);
+        assemblyLines.push(`- Budget: ${formatDebuggerNumber(rag.totalUsedTokens)} / ${formatDebuggerNumber(settings.maxContextTokens)} tokens`);
+        assemblyLines.push(`- Chunks: ${formatDebuggerNumber(rag.usedChunks?.length || 0)} / ${formatDebuggerNumber(rag.totalCandidateChunks)}`);
+        if (Array.isArray(rag.usedChunks) && rag.usedChunks.length > 0) {
+            rag.usedChunks.forEach((chunk, index) => {
+                assemblyLines.push(`  ${index + 1}. ${chunk.fileName || 'Unknown'} #chunk${Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex + 1 : 1} • score ${chunk.score || 0}`);
+            });
+        }
+        assemblyLines.push('');
+    }
+
+    assemblyLines.push('Payload roles:');
+    (snapshot.payloadMessages || []).forEach((message, index) => {
+        const text = extractTextFromAnyContent(message.content || '');
+        const role = message.name ? `${message.role} (${message.name})` : message.role;
+        assemblyLines.push(`- [${index + 1}] ${role} • ~${formatDebuggerNumber(estimateTokens(text || JSON.stringify(message.content || '')))} tokens`);
+    });
+
+    assemblyContainer.textContent = assemblyLines.join('\n');
+}
+
+function renderContextDebugger(snapshot) {
+    if (!snapshot) {
+        const sessionNameEl = document.getElementById('context-debugger-session-name');
+        const folderModeEl = document.getElementById('context-debugger-folder-mode');
+        const folderBudgetEl = document.getElementById('context-debugger-folder-budget');
+        const ragBudgetEl = document.getElementById('context-debugger-rag-budget');
+        const payloadMetaEl = document.getElementById('context-debugger-payload-meta');
+        const turnList = document.getElementById('context-debugger-turn-list');
+        const turnDetail = document.getElementById('context-debugger-turn-detail');
+        const assembly = document.getElementById('context-debugger-assembly');
+        sessionNameEl && (sessionNameEl.textContent = '-');
+        folderModeEl && (folderModeEl.textContent = '-');
+        folderBudgetEl && (folderBudgetEl.textContent = '-');
+        ragBudgetEl && (ragBudgetEl.textContent = '-');
+        payloadMetaEl && (payloadMetaEl.textContent = '-');
+        turnList && (turnList.innerHTML = '<p class="no-items-message">No active session.</p>');
+        turnDetail && (turnDetail.innerHTML = '<p class="context-debugger-empty">No active session.</p>');
+        assembly && (assembly.textContent = 'No active session.');
+        return;
+    }
+    if (!Number.isFinite(contextDebuggerSelectedTurn)) {
+        contextDebuggerSelectedTurn = snapshot.turns.length > 0 ? snapshot.turns.length - 1 : null;
+    }
+    renderContextDebuggerSummary(snapshot);
+    renderContextDebuggerTurns(snapshot);
+    renderContextDebuggerTurnDetail(snapshot);
+}
+
+function isContextDebuggerVisible() {
+    const page = document.getElementById('context-debugger-page');
+    return Boolean(page && !page.classList.contains('hidden'));
+}
+
+function setContextDebuggerVisible(visible) {
+    const page = document.getElementById('context-debugger-page');
+    const contentColumns = document.getElementById('content-columns-wrapper');
+    const statusPanel = document.getElementById('status-panel');
+    if (!page || !contentColumns || !statusPanel) return;
+
+    page.classList.toggle('hidden', !visible);
+    contentColumns.classList.toggle('hidden', visible);
+    statusPanel.classList.toggle('hidden', visible);
+}
+
+export function showContextDebugger() {
+    const page = document.getElementById('context-debugger-page');
+    if (!page) return;
+    latestContextDebuggerSnapshot = buildContextDebuggerSnapshot();
+    contextDebuggerSelectedTurn = null;
+    renderContextDebugger(latestContextDebuggerSnapshot);
+    setContextDebuggerVisible(true);
+}
+
+export function hideContextDebugger() {
+    setContextDebuggerVisible(false);
+}
+
+function refreshContextDebugger() {
+    if (!isContextDebuggerVisible()) {
+        return;
+    }
+    latestContextDebuggerSnapshot = buildContextDebuggerSnapshot();
+    renderContextDebugger(latestContextDebuggerSnapshot);
+}
+
+function normalizeRagDebugReason(reason = '') {
+    switch (reason) {
+        case 'ok':
+            return 'Retrieved context successfully.';
+        case 'empty_query':
+            return 'No suitable query text was found in recent history.';
+        case 'no_index':
+            return 'Knowledge index is empty.';
+        case 'scope_has_no_chunks':
+            return 'Current session scope has no indexed chunks.';
+        case 'no_similarity_match':
+            return 'No chunk matched the query similarity threshold.';
+        case 'budget_limited':
+            return 'Context budget prevented any chunk from being included.';
+        case 'folder_rag_disabled':
+            return 'Folder auto RAG is disabled in Folder Settings.';
+        default:
+            return reason || 'No retrieval diagnostics available.';
+    }
+}
+
+function normalizeFolderContextReason(reason = '') {
+    switch (reason) {
+        case 'ok':
+            return 'shared context included';
+        case 'session_only':
+            return 'session-only mode';
+        case 'no_active_session':
+            return 'no active session';
+        case 'no_folder':
+            return 'session has no folder';
+        case 'missing_folder':
+            return 'folder not found';
+        case 'no_related_sessions':
+            return 'no related sessions';
+        case 'no_context_snippets':
+            return 'no usable snippets';
+        case 'budget_limited':
+            return 'budget limited';
+        case 'folder_auto_disabled':
+            return 'auto shared context disabled in folder settings';
+        default:
+            return reason || 'not available';
+    }
+}
+
+function openKnowledgeSidebar() {
+    const rightSidebar = document.getElementById('studio-panel');
+    const overlay = document.getElementById('right-sidebar-overlay');
+    const appWrapper = document.querySelector('.app-wrapper');
+    if (!rightSidebar) return;
+
+    const isMobile = window.innerWidth <= 900;
+    if (isMobile) {
+        rightSidebar.classList.add('open');
+        overlay?.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    } else {
+        rightSidebar.classList.remove('collapsed');
+        appWrapper?.classList.remove('with-right-collapsed');
+        appWrapper?.classList.remove('right-sidebar-collapsed');
+    }
+}
+
+function createRagDebugElements(ragData, folderContext = null) {
+    if ((!ragData || typeof ragData !== 'object') && !folderContext) return null;
+
+    const safeRagData = ragData && typeof ragData === 'object' ? ragData : {};
+    const usedChunks = Array.isArray(safeRagData.usedChunks) ? safeRagData.usedChunks : [];
+
+    const debugPanel = document.createElement('div');
+    debugPanel.className = 'rag-debug-panel hidden';
+
+    const summary = document.createElement('div');
+    summary.className = 'rag-debug-summary';
+    const query = safeRagData.queryText ? `"${safeRagData.queryText}"` : 'N/A';
+    const scope = safeRagData.settings?.scopeMode || safeRagData.scopeMode || 'all';
+    const topK = safeRagData.settings?.retrievalTopK || 0;
+    const maxTokens = safeRagData.settings?.maxContextTokens || 0;
+    const source = safeRagData.settings?.scopeSource || 'session';
+    const used = usedChunks.length;
+    const candidates = Number.isFinite(safeRagData.totalCandidateChunks) ? safeRagData.totalCandidateChunks : 0;
+    const usedTokens = Number.isFinite(safeRagData.totalUsedTokens) ? safeRagData.totalUsedTokens : 0;
+    summary.textContent = `Query: ${query} | Source: ${source} | Scope: ${scope} | Top-K: ${topK} | Budget: ${maxTokens} | Used: ${used}/${candidates} chunks (${usedTokens} tokens)`;
+
+    const reason = document.createElement('div');
+    reason.className = 'rag-debug-reason';
+    reason.textContent = normalizeRagDebugReason(safeRagData.reason);
+
+    debugPanel.append(summary, reason);
+
+    if (folderContext && typeof folderContext === 'object') {
+        const folderInfo = document.createElement('div');
+        folderInfo.className = 'rag-debug-reason';
+        const folderName = folderContext.folderName || 'N/A';
+        const usedSessions = Number.isFinite(folderContext.usedSessionCount) ? folderContext.usedSessionCount : 0;
+        const candidateSessions = Number.isFinite(folderContext.candidateCount) ? folderContext.candidateCount : 0;
+        const budget = Number.isFinite(folderContext.budgetTokens) ? folderContext.budgetTokens : 0;
+        const usedFolderTokens = Number.isFinite(folderContext.usedTokens) ? folderContext.usedTokens : 0;
+        folderInfo.textContent = `Folder context: ${folderName} | Sessions: ${usedSessions}/${candidateSessions} | Budget: ${usedFolderTokens}/${budget} tokens (${normalizeFolderContextReason(folderContext.reason)})`;
+        debugPanel.appendChild(folderInfo);
+    }
+
+    if (usedChunks.length > 0) {
+        const list = document.createElement('div');
+        list.className = 'rag-debug-list';
+
+        usedChunks.forEach((chunk, index) => {
+            const row = document.createElement('div');
+            row.className = 'rag-debug-item';
+
+            const fileName = chunk.fileName || 'Unknown file';
+            const chunkNo = Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex + 1 : 1;
+            const score = Number.isFinite(chunk.score) ? chunk.score.toFixed(3) : '0.000';
+            const title = document.createElement('div');
+            title.className = 'rag-debug-item-title';
+            title.textContent = `[${index + 1}] ${fileName} #chunk${chunkNo} • score ${score}`;
+
+            const excerpt = document.createElement('div');
+            excerpt.className = 'rag-debug-item-excerpt';
+            excerpt.textContent = chunk.excerpt || '';
+
+            row.append(title, excerpt);
+            list.appendChild(row);
+        });
+
+        debugPanel.appendChild(list);
+    }
+
+    if (usedChunks.length === 0) {
+        return { sourceStrip: null, debugPanel };
+    }
+
+    const sourceStrip = document.createElement('div');
+    sourceStrip.className = 'rag-source-strip';
+
+    const sourceTitle = document.createElement('span');
+    sourceTitle.className = 'rag-source-title';
+    sourceTitle.textContent = 'Sources:';
+    sourceStrip.appendChild(sourceTitle);
+
+    const seen = new Set();
+    usedChunks.forEach(chunk => {
+        const fileName = chunk.fileName || 'Unknown file';
+        const chunkNo = Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex + 1 : 1;
+        const chunkIndex = Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex : 0;
+        const label = `${fileName} #chunk${chunkNo}`;
+        const uniqueKey = `${chunk.fileId || fileName}::${chunkIndex}`;
+        if (seen.has(uniqueKey)) return;
+        seen.add(uniqueKey);
+
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'rag-source-chip';
+        chip.textContent = label;
+        chip.title = 'Open source chunk in Knowledge Files';
+        chip.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openKnowledgeSidebar();
+            stateManager.bus.publish('knowledge:focusChunk', {
+                fileId: chunk.fileId || '',
+                fileName,
+                chunkIndex: Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex : 0
+            });
+        });
+        sourceStrip.appendChild(chip);
+    });
+
+    return { sourceStrip, debugPanel };
+}
+
 function createMessageElement(message, index, session) {
     const { role, content, speaker, isLoading, isError, isSummary } = message;
     const project = stateManager.getProject();
@@ -207,6 +720,7 @@ function createMessageElement(message, index, session) {
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         msgDiv.appendChild(contentDiv);
+        let ragUi = null;
 
         // ✅ [THE FIX - PART 1] สร้างเป้าหมายสำหรับ streaming เสมอ
         const streamingContentSpan = document.createElement('span');
@@ -222,6 +736,7 @@ function createMessageElement(message, index, session) {
                 if (role === 'assistant') {
                     streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
                     enhanceCodeBlocks(streamingContentSpan);
+                    ragUi = createRagDebugElements(message.rag, message.folderContext);
                 } else if (role === 'user') {
                     // ... (Logic การ render ของ User bubble เหมือนเดิม)
                     if (Array.isArray(content)) {
@@ -250,6 +765,14 @@ function createMessageElement(message, index, session) {
         }
 
         contentDiv.appendChild(streamingContentSpan);
+
+        if (!isLoading && role === 'assistant' && ragUi?.sourceStrip) {
+            msgDiv.appendChild(ragUi.sourceStrip);
+        }
+
+        if (!isLoading && role === 'assistant' && ragUi?.debugPanel) {
+            msgDiv.appendChild(ragUi.debugPanel);
+        }
         
         if (isLoading || isError) {
             const actions = document.createElement('div');
@@ -279,6 +802,18 @@ function createMessageElement(message, index, session) {
             btnCopy.onclick = (event) => stateManager.bus.publish('chat:copyMessage', { index, event });
             actions.appendChild(btnCopy);
             if (role === 'assistant') {
+                if (ragUi?.debugPanel) {
+                    const btnRagDebug = document.createElement('button');
+                    btnRagDebug.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>dataset</span>`;
+                    btnRagDebug.title = 'RAG Debug';
+                    btnRagDebug.onclick = (event) => {
+                        event.stopPropagation();
+                        ragUi.debugPanel.classList.toggle('hidden');
+                        btnRagDebug.classList.toggle('active', !ragUi.debugPanel.classList.contains('hidden'));
+                    };
+                    actions.appendChild(btnRagDebug);
+                }
+
                 const btnRegenerate = document.createElement('button');
                 btnRegenerate.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>refresh</span>`;
                 btnRegenerate.title = 'Regenerate';
@@ -381,6 +916,7 @@ export function renderMessages() {
     }
 
     scrollToBottom();
+    refreshContextDebugger();
 }
 
 export function showStreamingTarget(index) {
@@ -487,8 +1023,10 @@ function initChatActionMenu() {
         menu.innerHTML = '';
         menu.innerHTML = `
             <a href="#" data-action="open-composer"><span class="material-symbols-outlined">edit_square</span> Composer</a>
+            <a href="#" data-action="chat:contextDebugger"><span class="material-symbols-outlined">dataset</span> Context Debugger</a>
             <a href="#" data-action="chat:summarize"><span class="material-symbols-outlined">psychology</span> Summarize</a>
             <a href="#" data-action="upload-file"><span class="material-symbols-outlined">attach_file</span> Upload files</a>
+            <a href="#" data-action="knowledge:upload"><span class="material-symbols-outlined">library_books</span> Upload to Knowledge</a>
         `;
         const project = stateManager.getProject();
         const session = project.chatSessions.find(s => s.id === project.activeSessionId);
@@ -513,8 +1051,14 @@ function initChatActionMenu() {
                 case 'chat:summarize':
                     stateManager.bus.publish('chat:summarize');
                     break;
+                case 'chat:contextDebugger':
+                    showContextDebugger();
+                    break;
                 case 'upload-file':
                     document.getElementById('file-input')?.click();
+                    break;
+                case 'knowledge:upload':
+                    stateManager.bus.publish('knowledge:upload');
                     break;
                 case 'chat:clearSummary':
                     stateManager.bus.publish('chat:clearSummaryContext', { index: -1 }); // Special index
@@ -711,8 +1255,21 @@ export function initChatUI() {
 
     document.getElementById('sendBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:sendMessage'));
     document.getElementById('stopBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:stopGeneration'));
-    document.getElementById('context-inspector-trigger-btn')?.addEventListener('click', showContextInspector);
+    document.getElementById('context-inspector-trigger-btn')?.addEventListener('click', showContextDebugger);
     document.querySelector('#context-inspector-modal .btn-secondary')?.addEventListener('click', hideContextInspector);
+    document.getElementById('context-debugger-back-btn')?.addEventListener('click', hideContextDebugger);
+    document.getElementById('context-debugger-refresh-btn')?.addEventListener('click', refreshContextDebugger);
+    document.getElementById('context-debugger-turn-list')?.addEventListener('click', (event) => {
+        const item = event.target.closest('.context-debugger-turn-item[data-turn-index]');
+        if (!item || !latestContextDebuggerSnapshot) return;
+        contextDebuggerSelectedTurn = Number(item.dataset.turnIndex);
+        renderContextDebugger(latestContextDebuggerSnapshot);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && isContextDebuggerVisible()) {
+            hideContextDebugger();
+        }
+    });
     
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {

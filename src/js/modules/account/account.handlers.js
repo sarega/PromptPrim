@@ -2,7 +2,6 @@
 
 import * as UserService from '../user/user.service.js';
 import { showCustomAlert } from '../../core/core.ui.js';
-import { renderAccountModal } from './account.ui.js'; // We'll need this to refresh the modal
 
 /**
  * Handles the user's request to change their own plan.
@@ -11,6 +10,10 @@ import { renderAccountModal } from './account.ui.js'; // We'll need this to refr
 export function handlePlanChange(newPlan) {
     const currentUser = UserService.getCurrentUserProfile();
     if (!currentUser) return;
+    if (UserService.isMasterProfile(currentUser)) {
+        showCustomAlert('Master profile plan is fixed and cannot be changed here.', 'Plan Locked');
+        return;
+    }
 
     if (confirm(`Are you sure you want to switch to the ${newPlan} plan?`)) {
         console.log(`HANDLER: Changing plan for ${currentUser.userId} to ${newPlan}`);

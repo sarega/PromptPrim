@@ -277,7 +277,7 @@ export function populatePresetSelector(selectorId) {
     const selector = document.getElementById(selectorId);
     if (!selector) return;
 
-    const presets = UserService.getModelPresets();
+    const presets = UserService.getUserModelPresets();
     selector.innerHTML = '<option value="">-- Select a Preset --</option>';
     
     for (const key in presets) {

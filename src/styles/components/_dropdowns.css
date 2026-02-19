@@ -32,6 +32,19 @@
     display: block;
 }
 
+.dropdown.open.portal-open > .dropdown-content {
+    display: none;
+}
+
+.dropdown-content.dropdown-content-portal {
+    position: fixed;
+    display: block;
+    margin-top: 0;
+    z-index: 5000;
+    max-height: min(70vh, 460px);
+    overflow: auto;
+}
+
 /* [FIXED] Added top and margin-top to correctly position left-aligned dropdowns */
 .dropdown.align-left .dropdown-content {
     left: 0;
@@ -217,6 +230,22 @@
     transition: background-color 0.2s ease;
 }
 
+.searchable-option-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.searchable-option-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.searchable-option-title {
+    display: block;
+}
+
 .searchable-option-item:hover {
     background-color: #f0f4f8;
 }
@@ -225,6 +254,54 @@
     display: block;
     color: #718096;
     font-size: 0.8rem;
+}
+
+.searchable-option-item.searchable-option-empty {
+    cursor: default;
+    color: #718096;
+}
+
+.searchable-option-item.searchable-option-empty:hover {
+    background-color: transparent;
+}
+
+.searchable-option-hint {
+    padding: 6px 12px 4px;
+    font-size: 0.72rem;
+    color: #718096;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.searchable-option-section-title {
+    padding: 8px 12px 4px;
+    font-size: 0.72rem;
+    color: #718096;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.searchable-option-pin {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border: 1px solid #cbd5e0;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #4a5568;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.searchable-option-pin:hover {
+    border-color: #94a3b8;
+    background: #eef2f7;
+}
+
+.searchable-option-pin.is-pinned {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    background: rgba(56, 161, 105, 0.12);
 }
 
 /* Dark Mode */
@@ -237,6 +314,29 @@ body.dark-mode .searchable-option-item:hover {
 }
 body.dark-mode .searchable-option-item small {
     color: #a0aec0;
+}
+body.dark-mode .searchable-option-item.searchable-option-empty {
+    color: #a0aec0;
+}
+body.dark-mode .searchable-option-hint {
+    color: #a0aec0;
+}
+body.dark-mode .searchable-option-section-title {
+    color: #a0aec0;
+}
+body.dark-mode .searchable-option-pin {
+    border-color: #4a5568;
+    background: #1f2937;
+    color: #cbd5e1;
+}
+body.dark-mode .searchable-option-pin:hover {
+    border-color: #64748b;
+    background: #334155;
+}
+body.dark-mode .searchable-option-pin.is-pinned {
+    border-color: var(--primary-color);
+    color: #ffffff;
+    background: rgba(66, 153, 225, 0.35);
 }
 
 /* Style for keyboard-navigated active option */

@@ -28,7 +28,9 @@ function mountOrUpdateComposer(content, isMaximized) {
             const currentIsMaximized = mainContentWrapper.classList.contains('composer-maximized');
             setComposerState(currentIsMaximized ? 'normal' : 'maximized');
         },
-        onExport: ({ html, text }) => {
+        onExport: (payload) => {
+            const html = typeof payload?.html === 'string' ? payload.html : '';
+            const text = typeof payload?.text === 'string' ? payload.text : '';
             ComposerHandlers.exportComposerContent({ html, text });
             stateManager.bus.publish('composer:export');
         },
@@ -57,7 +59,12 @@ export function setComposerState(newState) {
 
     const project = stateManager.getProject();
     const session = project?.chatSessions.find(s => s.id === project.activeSessionId);
-    const composerContent = session?.composerContent || '';
+    const rawComposerContent = session?.composerContent || '';
+    const composerContent = ComposerHandlers.normalizeComposerHtmlForStorage(rawComposerContent);
+    if (session && rawComposerContent !== composerContent) {
+        session.composerContent = composerContent;
+        stateManager.updateAndPersistState();
+    }
 
     switch (newState) {
         case 'collapsed':

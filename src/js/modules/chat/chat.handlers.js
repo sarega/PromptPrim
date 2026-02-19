@@ -123,6 +123,42 @@ export function estimateTokens(text) {
     return Math.round(text.length / 4);
 }
 
+function isValidEntitySelection(project, entity) {
+    if (!project || !entity || !entity.type || !entity.name) return false;
+    if (entity.type === 'agent') return Boolean(project.agentPresets?.[entity.name]);
+    if (entity.type === 'group') return Boolean(project.agentGroups?.[entity.name]);
+    return false;
+}
+
+function getFallbackEntity(project) {
+    const firstAgent = Object.keys(project?.agentPresets || {})[0];
+    if (firstAgent) return { type: 'agent', name: firstAgent };
+    const firstGroup = Object.keys(project?.agentGroups || {})[0];
+    if (firstGroup) return { type: 'group', name: firstGroup };
+    return null;
+}
+
+function ensureSessionEntity(project, session) {
+    const candidates = [session?.linkedEntity, project?.activeEntity, getFallbackEntity(project)];
+    const resolved = candidates.find(entity => isValidEntitySelection(project, entity));
+    if (!resolved) return { entity: null, changed: false };
+
+    const normalized = { type: resolved.type, name: resolved.name };
+    let changed = false;
+
+    if (!session.linkedEntity || session.linkedEntity.type !== normalized.type || session.linkedEntity.name !== normalized.name) {
+        session.linkedEntity = { ...normalized };
+        changed = true;
+    }
+
+    if (!project.activeEntity || project.activeEntity.type !== normalized.type || project.activeEntity.name !== normalized.name) {
+        project.activeEntity = { ...normalized };
+        changed = true;
+    }
+
+    return { entity: normalized, changed };
+}
+
 
 // [THE DEFINITIVE FIX]
 export function getContextData() {
@@ -202,18 +238,24 @@ export async function sendMessage() {
         }
     }
 
-    if (!project.activeEntity?.name) {
-        showCustomAlert("Please select an Agent or Group.", "Error");
-        return;
-    }
-    
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
     if (!session) return;
+    const { entity: resolvedEntity, changed: entityChanged } = ensureSessionEntity(project, session);
+    if (!resolvedEntity) {
+        showCustomAlert("No valid Agent or Group is available for this chat session.", "Error");
+        return;
+    }
+    if (entityChanged) {
+        stateManager.setProject(project);
+        stateManager.updateAndPersistState();
+        stateManager.bus.publish('entity:selected', { ...resolvedEntity });
+    }
 
     // --- [FIXED LOGIC STARTS HERE] ---
     // แสดงสถานะกำลังโหลดทันที
     stateManager.bus.publish('ui:toggleLoading', { isLoading: true });
     stateManager.bus.publish('status:update', { message: 'Processing images...', state: 'loading' });
+    let processingPhase = 'image_processing';
 
     try {
         const userMessageContent = [];
@@ -289,11 +331,17 @@ export async function sendMessage() {
         stateManager.bus.publish('ui:renderMessages');
         stateManager.updateAndPersistState();
 
-        if (project.activeEntity.type === 'agent') {
-            await sendSingleAgentMessage();
-        } else {
-            const group = project.agentGroups[project.activeEntity.name];
+        processingPhase = 'chat_generation';
+        if (resolvedEntity.type === 'agent') {
+            await sendSingleAgentMessage(resolvedEntity.name);
+        } else if (resolvedEntity.type === 'group') {
+            const group = project.agentGroups[resolvedEntity.name];
+            if (!group) {
+                throw new Error(`Group "${resolvedEntity.name}" was not found.`);
+            }
             await GroupChat.handleGroupChatTurn(project, session, group);
+        } else {
+            throw new Error('Unsupported session entity type.');
         }
 
     } catch (error) {
@@ -304,13 +352,16 @@ export async function sendMessage() {
             return;
         }
 
-        // 2. ถ้าเป็น Error อื่นๆ (เช่น โหลดรูปไม่ได้จริงๆ) ให้แสดง Alert ที่ถูกต้อง
-        console.error("Error during sendMessage (Image Processing):", error);
-        
-        const title = "Image Could Not Be Processed";
-        const recommendation = "For best results, please save the image to your device and use the '+' button to upload it directly.";
+        console.error(`Error during sendMessage (${processingPhase}):`, error);
         const technicalDetails = `Details: ${error.message}`;
-        const fullMessage = `${recommendation}\n\n---\n${technicalDetails}`;
+        let title = "Message Could Not Be Sent";
+        let fullMessage = technicalDetails;
+
+        if (processingPhase === 'image_processing') {
+            title = "Image Could Not Be Processed";
+            const recommendation = "For best results, please save the image to your device and use the '+' button to upload it directly.";
+            fullMessage = `${recommendation}\n\n---\n${technicalDetails}`;
+        }
 
         showCustomAlert(fullMessage, title);
 
@@ -318,17 +369,20 @@ export async function sendMessage() {
         attachedFiles = [];
         stateManager.bus.publish('ui:renderFilePreviews', { files: attachedFiles });
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false }); 
-        stateManager.bus.publish('status:update', { message: 'Image processing failed', state: 'error' });
+        stateManager.bus.publish('status:update', { message: 'Message send failed', state: 'error' });
     }
 }
 
-async function sendSingleAgentMessage() {
+async function sendSingleAgentMessage(forcedAgentName = null) {
     const project = stateManager.getProject();
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    if (!session || project.activeEntity.type !== 'agent') return;
+    if (!session) return;
 
-    const agentName = project.activeEntity.name;
+    const agentName = forcedAgentName || project.activeEntity.name;
     const agent = project.agentPresets[agentName];
+    if (!agent || !agent.model) {
+        throw new Error(`Agent "${agentName}" is missing or has no model configured.`);
+    }
 
     stateManager.bus.publish('status:update', { 
         message: `Responding with ${agent.model}...`, 
@@ -369,7 +423,8 @@ async function sendSingleAgentMessage() {
     }
 
     try {
-        const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName);
+        const payloadMeta = { __collect: true };
+        const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName, payloadMeta);
         const response = await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
         const calculatedCost = calculateCost(agent.model, response.usage);
 
@@ -398,6 +453,8 @@ async function sendSingleAgentMessage() {
             speaker: agentName, 
             isLoading: false,
             timestamp: Date.now(),
+            rag: payloadMeta.rag || null,
+            folderContext: payloadMeta.folderContext || null,
             stats: {
                 ...response.usage,
                 duration: response.duration,
@@ -415,20 +472,27 @@ async function sendSingleAgentMessage() {
 
     } catch (error) {
         // [DEFINITIVE FIX] This block now properly handles any error.
+        const placeholderIndex = session.history.findIndex(m => m.id === placeholderMessage.id);
         if (error.name !== 'AbortError') {
             const errorMessage = `Error: ${error.message}`;
             console.error("LLM Stream Error:", error);
             // Replace the placeholder with a proper error message object
-            session.history[assistantMsgIndex] = { 
-                ...placeholderMessage, 
-                content: errorMessage, 
-                isLoading: false, 
-                isError: true 
-            };
+            if (placeholderIndex > -1) {
+                session.history[placeholderIndex] = {
+                    ...placeholderMessage,
+                    content: errorMessage,
+                    isLoading: false,
+                    isError: true
+                };
+                ChatUI.renderMessages();
+            }
             stateManager.bus.publish('status:update', { message: 'An error occurred.', state: 'error' });
         } else {
             // If the user aborted, just remove the placeholder
-            session.history.splice(assistantMsgIndex, 1);
+            if (placeholderIndex > -1) {
+                session.history.splice(placeholderIndex, 1);
+                ChatUI.renderMessages();
+            }
             console.log("Stream aborted by user.");
         }
     } finally {
@@ -1056,4 +1120,3 @@ async function convertImageUrlToBase64(url) {
         throw new Error(`Failed to process image from URL: ${url}. It might be protected (403 Forbidden).`);
     }
 }
-

@@ -49,6 +49,25 @@ body.dark-mode textarea {
     color: var(--text-dark);
     border-color: #718096;
 }
+body.dark-mode .api-provider-switches {
+    background: #1f2937;
+    border-color: #4a5568;
+}
+body.dark-mode .api-provider-switch-title {
+    color: #e2e8f0;
+}
+body.dark-mode .api-provider-switch-desc {
+    color: #94a3b8;
+}
+body.dark-mode .api-toggle-track {
+    background: #475569;
+}
+body.dark-mode .api-toggle input:checked + .api-toggle-track {
+    background: #3b82f6;
+}
+body.dark-mode .api-toggle-track::before {
+    background: #e2e8f0;
+}
 body.dark-mode input:-webkit-autofill,
 body.dark-mode input:-webkit-autofill:hover,
 body.dark-mode input:-webkit-autofill:focus,
@@ -101,6 +120,23 @@ body.dark-mode .btn-icon { color: #a0aec0; }
 body.dark-mode .btn-icon:hover { background: #4a5568; color: var(--text-dark); }
 body.dark-mode .btn-secondary { background: #718096; color: #e2e8f0; }
 body.dark-mode .modal-box { background: #2d3748; }
+body.dark-mode .folder-settings-file-list {
+  background: #1f2937;
+  border-color: #4a5568;
+}
+body.dark-mode .folder-settings-file-item {
+  color: #e2e8f0;
+}
+body.dark-mode .folder-settings-toggle-row {
+  background: #1f2937;
+  border-color: #4a5568;
+}
+body.dark-mode .folder-settings-toggle-title {
+  color: #e2e8f0;
+}
+body.dark-mode .folder-settings-toggle-desc {
+  color: #94a3b8;
+}
 body.dark-mode #context-inspector-modal pre { background: #1a202c; border-color: #4a5568; color: #cbd5e0; }
 body.dark-mode #chat-actions-menu { background-color: #2d3748; border-color: #4a5568; }
 body.dark-mode #chat-actions-menu a { color: var(--text-dark); }
@@ -146,6 +182,129 @@ body.dark-mode #chatInput::placeholder { color: #a0aec0; }
 body.dark-mode #chat-actions-btn { color: #bdc1c6; }
 body.dark-mode .speaker-label { color: var(--primary-color); }
 body.dark-mode .file-preview-item { background-color: #2d3748; border-color: #4a5568; }
+body.dark-mode .knowledge-file-meta { color: #a0aec0; }
+body.dark-mode .knowledge-file-excerpt { color: #d3dce6; }
+body.dark-mode .knowledge-file-note { color: #fdba74; }
+body.dark-mode .knowledge-item.selected-for-rag { background-color: #12303d; border-color: #38bdf8; }
+body.dark-mode .knowledge-item.source-focused {
+    background-color: #0d2d3f;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 1px #0ea5e9 inset;
+}
+body.dark-mode .knowledge-item .btn-icon.is-active { color: #67e8f9 !important; }
+body.dark-mode .knowledge-focus-preview {
+    background: #0f172a;
+    border-color: #334155;
+}
+body.dark-mode .knowledge-focus-preview-title { color: #bfdbfe; }
+body.dark-mode .knowledge-focus-preview-text { color: #e2e8f0; }
+body.dark-mode .knowledge-control { color: #d1d5db; }
+body.dark-mode .knowledge-control input,
+body.dark-mode .knowledge-control select {
+  background-color: #1f2937;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+body.dark-mode .knowledge-scope-info { color: #cbd5e1; }
+body.dark-mode .rag-source-title { color: #cbd5e1; }
+body.dark-mode .rag-source-chip {
+  border-color: #2c4f75;
+  background: #10243d;
+  color: #c5e2ff;
+}
+body.dark-mode .rag-source-chip:hover {
+  border-color: #4d78a8;
+  background: #16304f;
+}
+body.dark-mode .rag-source-chip:focus-visible {
+  outline-color: #7dd3fc;
+}
+body.dark-mode .rag-debug-panel {
+  border-color: #3c4c63;
+  background: #1b2433;
+}
+body.dark-mode .rag-debug-summary { color: #e2e8f0; }
+body.dark-mode .rag-debug-reason { color: #94a3b8; }
+body.dark-mode .rag-debug-item {
+  border-color: #3f4c61;
+  background: #111827;
+}
+body.dark-mode .rag-debug-item-title { color: #dbeafe; }
+body.dark-mode .rag-debug-item-excerpt { color: #cbd5e1; }
+body.dark-mode .message-actions button.active {
+  background: #1d3557 !important;
+  color: #bfdbfe !important;
+}
+body.dark-mode .session-info-content pre {
+  background: #111827;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+body.dark-mode .context-debugger-card {
+  background: #1f2937;
+  border-color: #374151;
+}
+body.dark-mode .context-debugger-page {
+  background: #0f172a;
+}
+body.dark-mode .context-debugger-page-header {
+  background: #0b1220;
+  border-color: #334155;
+}
+body.dark-mode .context-debugger-page-title h3 {
+  color: #e2e8f0;
+}
+body.dark-mode #context-debugger-back-btn {
+  color: #cbd5e1;
+}
+body.dark-mode #context-debugger-back-btn:hover {
+  background: #1f2937;
+}
+body.dark-mode .context-debugger-card .label { color: #94a3b8; }
+body.dark-mode .context-debugger-card .value { color: #e2e8f0; }
+body.dark-mode .context-debugger-turns-panel,
+body.dark-mode .context-debugger-detail-panel {
+  background: #111827;
+  border-color: #374151;
+}
+body.dark-mode .context-debugger-turn-item {
+  background: #1f2937;
+  border-color: #374151;
+}
+body.dark-mode .context-debugger-turn-item.active {
+  background: #0f2842;
+  border-color: #38bdf8;
+}
+body.dark-mode .context-debugger-turn-item-role { color: #94a3b8; }
+body.dark-mode .context-debugger-turn-item-title { color: #e5e7eb; }
+body.dark-mode .context-debugger-turn-item-meta { color: #cbd5e1; }
+body.dark-mode .context-debugger-turn-detail,
+body.dark-mode .context-debugger-turn-detail pre,
+body.dark-mode #context-debugger-assembly {
+  background: #0b1220;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+body.dark-mode .context-debugger-empty { color: #94a3b8; }
+body.dark-mode .session-item-meta { color: #94a3b8; }
+body.dark-mode [data-session-drop-target].is-drop-target {
+  background: #0f2842;
+  outline-color: #38bdf8;
+}
+body.dark-mode .session-folder {
+  background: #1f2937;
+  border-color: #374151;
+}
+body.dark-mode .session-folder-summary { color: #e2e8f0; }
+body.dark-mode .session-folder-count {
+  background: #334155;
+  color: #e2e8f0;
+}
+body.dark-mode .folder-session-list {
+  background: #111827;
+  border-top-color: #374151;
+  border-left-color: #334155;
+}
 
 /* --- Item-specific styling for Dark Mode --- */
 body.dark-mode .sidebar .session-item.archived .item-name { color: #919191; }
@@ -267,12 +426,27 @@ body.dark-mode .speaker-info-wrapper .speaker-label {
 /*
   Fix for hyperlink color in Composer on Dark Theme
 */
-body.dark-mode #composer-editor .composer-content-area a {
+body.dark-mode .composer-editor {
+  color: var(--text-dark);
+}
+
+body.dark-mode .composer-editor .ProseMirror {
+  color: inherit;
+  caret-color: var(--text-dark);
+}
+
+body.dark-mode .composer-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8;
+}
+
+body.dark-mode #composer-editor .composer-content-area a,
+body.dark-mode .composer-editor .ProseMirror a {
   color: #90caf9; /* << ใช้สีฟ้าสว่างสีเดียวกันกับใน Bubble */
   text-decoration: underline;
 }
 
-body.dark-mode #composer-editor .composer-content-area a:hover {
+body.dark-mode #composer-editor .composer-content-area a:hover,
+body.dark-mode .composer-editor .ProseMirror a:hover {
   color: #bbdefb; /* << สีตอน hover ก็ใช้สีเดียวกัน */
 }
 

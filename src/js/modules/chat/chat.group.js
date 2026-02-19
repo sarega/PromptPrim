@@ -147,7 +147,8 @@ async function executeAgentTurn(project, session, agentName) {
     }
 
     const renderer = new LiveMarkdownRenderer(placeholderElement);
-    const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName);
+    const payloadMeta = { __collect: true };
+    const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName, payloadMeta);
 
     try {
         // ===== [หัวใจของการแก้ไข] =====
@@ -161,6 +162,8 @@ async function executeAgentTurn(project, session, agentName) {
             content: finalResponseText,
             isLoading: false,
             timestamp: Date.now(),
+            rag: payloadMeta.rag || null,
+            folderContext: payloadMeta.folderContext || null
         };
 
         // อัปเดต State ด้วย Message ที่สมบูรณ์

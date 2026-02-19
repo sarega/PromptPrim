@@ -39,11 +39,12 @@ async function initializeAdminPanel() {
     
     // [CRITICAL FIX] แก้ไขชื่อฟังก์ชันที่เรียกผิด
     const systemSettings = UserService.getSystemApiSettings(); 
+    const providerEnabled = systemSettings.providerEnabled || {};
     
     // [CRITICAL FIX] ส่งค่าที่ถูกต้องเข้าไปในฟังก์ชันโหลดโมเดล
     await loadAllProviderModels({ 
-        apiKey: systemSettings.openrouterKey, 
-        ollamaBaseUrl: systemSettings.ollamaBaseUrl,
+        apiKey: providerEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
+        ollamaBaseUrl: providerEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
         isUserKey: false 
     });
     
@@ -63,5 +64,4 @@ async function initializeAdminPanel() {
 }
 
 document.addEventListener('DOMContentLoaded', initializeAdminPanel);
-
 

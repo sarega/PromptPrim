@@ -21,13 +21,19 @@
         cursor: default;
     }
 
-    #status-panel.is-collapsed .status-right,
-    #status-panel.is-collapsed #context-inspector-trigger-btn {
+    #status-panel.is-collapsed .status-right {
         display: none;
     }
 
     #status-panel.is-collapsed .status-left {
         flex-grow: 1;
+    }
+
+    /* Keep Context Debugger trigger accessible even in collapsed mobile status bar */
+    #status-panel.is-collapsed #context-inspector-trigger-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 }
 

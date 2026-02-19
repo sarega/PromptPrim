@@ -9,6 +9,13 @@ import { populatePresetSelector, getFilteredModelsForDisplay } from '../models/m
 import * as UserService from '../user/user.service.js';
 import { createParameterEditor } from '../../components/parameter-editor.js';
 
+const AGENT_EMOJI_PICKER_ID = 'agent-emoji-picker';
+const AGENT_EMOJI_PICKER_HOST_ID = 'agent-emoji-picker-host';
+const AGENT_EMOJI_PICKER_HIDDEN_CLASS = 'emoji-picker-collapsed';
+const AGENT_EMOJI_PICKER_CDN = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js';
+
+let emojiPickerLibraryLoadPromise = null;
+
 // --- Private Helper Functions (Not Exported) ---
 function createAgentElement(name, preset) {
     const project = stateManager.getProject();
@@ -176,6 +183,75 @@ function updateEnhancerModelName() {
         enhancerModelSpan.textContent = 'N/A';
     }
 }
+
+function getAgentEmojiPickerElement() {
+    return document.getElementById(AGENT_EMOJI_PICKER_ID);
+}
+
+function ensureEmojiPickerLibraryLoaded() {
+    if (window.customElements?.get('emoji-picker')) {
+        return Promise.resolve(true);
+    }
+    if (emojiPickerLibraryLoadPromise) {
+        return emojiPickerLibraryLoadPromise;
+    }
+
+    emojiPickerLibraryLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = AGENT_EMOJI_PICKER_CDN;
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error('Could not load emoji picker library.'));
+        document.body.appendChild(script);
+    }).catch((error) => {
+        emojiPickerLibraryLoadPromise = null;
+        throw error;
+    });
+
+    return emojiPickerLibraryLoadPromise;
+}
+
+function applyEmojiPickerTheme(emojiPicker) {
+    if (!emojiPicker) return;
+    if (document.body.classList.contains('dark-mode')) {
+        emojiPicker.classList.add('dark');
+        emojiPicker.classList.remove('light');
+    } else {
+        emojiPicker.classList.add('light');
+        emojiPicker.classList.remove('dark');
+    }
+}
+
+function hideAgentEmojiPicker() {
+    const emojiPicker = getAgentEmojiPickerElement();
+    emojiPicker?.classList.add(AGENT_EMOJI_PICKER_HIDDEN_CLASS);
+}
+
+async function ensureAgentEmojiPicker(iconButton) {
+    await ensureEmojiPickerLibraryLoaded();
+    let emojiPicker = getAgentEmojiPickerElement();
+    if (!emojiPicker) {
+        const host = document.getElementById(AGENT_EMOJI_PICKER_HOST_ID);
+        if (!host) return null;
+
+        emojiPicker = document.createElement('emoji-picker');
+        emojiPicker.id = AGENT_EMOJI_PICKER_ID;
+        emojiPicker.className = `light ${AGENT_EMOJI_PICKER_HIDDEN_CLASS}`;
+        host.appendChild(emojiPicker);
+    }
+
+    if (emojiPicker.dataset.listenerAttached !== 'true') {
+        emojiPicker.addEventListener('emoji-click', (event) => {
+            const unicode = event?.detail?.emoji?.unicode;
+            if (!unicode) return;
+            iconButton.textContent = unicode;
+            hideAgentEmojiPicker();
+        });
+        emojiPicker.dataset.listenerAttached = 'true';
+    }
+
+    return emojiPicker;
+}
 // --- Main Exported Functions ---
 
 export function hideAgentEditor() {
@@ -184,6 +260,7 @@ export function hideAgentEditor() {
         editor.destroy();
         stateManager.setState('activeParameterEditor', null);
     }
+    hideAgentEmojiPicker();
     document.getElementById('agent-editor-modal').style.display = 'none';
     stateManager.setState('editingAgentName', null);
 }
@@ -347,37 +424,36 @@ export function initAgentUI() {
 
     // --- Emoji Picker Logic ---
     const iconButton = document.getElementById('agent-icon-button');
-    const emojiPicker = document.getElementById('agent-emoji-picker');
-
-    if (iconButton && emojiPicker) {
+    if (iconButton) {
         // เมื่อคลิกปุ่ม ให้แสดง/ซ่อน Picker
-        iconButton.addEventListener('click', (e) => {
+        iconButton.addEventListener('click', async (e) => {
             e.stopPropagation();
-            
-            // [CRITICAL FIX] ตรวจสอบ Theme ทุกครั้งที่เปิด Picker
-            if (document.body.classList.contains('dark-mode')) {
-                emojiPicker.classList.add('dark');
-                emojiPicker.classList.remove('light');
-            } else {
-                emojiPicker.classList.add('light');
-                emojiPicker.classList.remove('dark');
+            let emojiPicker = null;
+            try {
+                emojiPicker = await ensureAgentEmojiPicker(iconButton);
+            } catch (error) {
+                console.error(error);
+                showCustomAlert('Failed to load emoji picker. Please try again.', 'Error');
+                return;
             }
-
-            emojiPicker.classList.toggle('hidden');
-        });
-
-        // เมื่อเลือก Emoji
-        emojiPicker.addEventListener('emoji-click', event => {
-            if (event.detail.emoji) {
-                iconButton.textContent = event.detail.emoji.unicode;
-                emojiPicker.classList.add('hidden');
+            if (!emojiPicker) return;
+            applyEmojiPickerTheme(emojiPicker);
+            const shouldOpen = emojiPicker.classList.contains(AGENT_EMOJI_PICKER_HIDDEN_CLASS);
+            if (shouldOpen) {
+                requestAnimationFrame(() => {
+                    emojiPicker.classList.remove(AGENT_EMOJI_PICKER_HIDDEN_CLASS);
+                });
+            } else {
+                emojiPicker.classList.add(AGENT_EMOJI_PICKER_HIDDEN_CLASS);
             }
         });
 
         // Logic การปิดเมื่อคลิกที่อื่น (เหมือนเดิม)
         document.addEventListener('click', (e) => {
-            if (!emojiPicker.classList.contains('hidden') && !emojiPicker.contains(e.target) && e.target !== iconButton) {
-                emojiPicker.classList.add('hidden');
+            const emojiPicker = getAgentEmojiPickerElement();
+            if (!emojiPicker) return;
+            if (!emojiPicker.classList.contains(AGENT_EMOJI_PICKER_HIDDEN_CLASS) && !emojiPicker.contains(e.target) && e.target !== iconButton) {
+                emojiPicker.classList.add(AGENT_EMOJI_PICKER_HIDDEN_CLASS);
             }
         });
     }

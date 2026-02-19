@@ -6,7 +6,8 @@ import { showCustomAlert } from "../../core/core.ui.js";
 const USER_DB_KEY = 'promptPrimUserDatabase_v1';
 const BILLING_DB_KEY = 'promptPrimAdminBilling_v1';
 const MASTER_PRESETS_DB_KEY = 'promptPrimMasterPresets_v1'; // <-- NEW: Dedicated key for admin presets
-const ADMIN_USER_ID = 'user_master'; 
+export const ADMIN_USER_ID = 'user_master'; 
+const DEFAULT_PROVIDER_ENABLED = Object.freeze({ openrouter: true, ollama: true, kieai: true });
 
 let userDatabase = [];
 let masterPresets = {}; // <-- NEW: In-memory variable for admin presets
@@ -34,11 +35,17 @@ async function loadMasterPresets() {
     }
 }
 
+export function isMasterProfile(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return false;
+    return target.userId === ADMIN_USER_ID || target.plan === 'master';
+}
+
 export function getAllowedModelsForCurrentUser() {
     const user = getCurrentUserProfile();
     if (!user) return [];
 
-    if (user.plan === 'master') {
+    if (isMasterProfile(user)) {
         // [FIX] Master user reads from their own personal model list in the state
         return stateManager.getState().userProviderModels || [];
     }
@@ -66,7 +73,22 @@ export function getAllowedModelsForCurrentUser() {
 export function reloadDatabaseFromStorage() {
     const storedDb = localStorage.getItem(USER_DB_KEY);
     if (storedDb) {
-        userDatabase = JSON.parse(storedDb).map(user => JSON.parse(JSON.stringify(user)));
+        let needsSave = false;
+        userDatabase = JSON.parse(storedDb)
+            .map(user => JSON.parse(JSON.stringify(user)))
+            .map(user => {
+                const migrated = migrateUserObject(user);
+                if (migrated.needsSave) needsSave = true;
+                return migrated.user;
+            });
+
+        if (ensureAdminUserExists()) {
+            needsSave = true;
+        }
+
+        if (needsSave) {
+            localStorage.setItem(USER_DB_KEY, JSON.stringify(userDatabase));
+        }
         // Notify the app that settings have been updated
         stateManager.bus.publish('user:settingsUpdated', getCurrentUserProfile());
         console.log("Cross-tab sync: In-memory user database reloaded.");
@@ -86,9 +108,13 @@ function createDefaultUser(userId, userName, email, plan, initialCredits = 0) {
         subscriptionEndDate: null, // เพิ่ม property นี้
         logs: [{ timestamp: Date.now(), action: `Account created with ${plan} plan.` }],
         activityLog: [],
-        apiSettings: { openrouterKey: "", ollamaBaseUrl: "http://localhost:11434" },
-        appSettings: { activeModelPreset: 'my_first_preset' },
-        kieAiApiKey: "" // [✅ NEW] เพิ่ม Key ใหม่
+        apiSettings: {
+            openrouterKey: "",
+            ollamaBaseUrl: "http://localhost:11434",
+            kieAiApiKey: "",
+            providerEnabled: { ...DEFAULT_PROVIDER_ENABLED }
+        },
+        appSettings: { activeModelPreset: 'my_first_preset' }
     };
     if (plan !== 'master') {
         user.modelPresets = { 'my_first_preset': { name: 'My First Preset', modelIds: [] } };
@@ -130,29 +156,192 @@ function createDefaultUser(userId, userName, email, plan, initialCredits = 0) {
 //     return { user: newUser, needsSave: needsSave };
 // }
 
+function normalizeApiKey(rawValue) {
+    if (typeof rawValue !== 'string') return '';
+    const trimmed = rawValue.trim();
+    if (!trimmed) return '';
+    return trimmed.replace(/^Bearer\s+/i, '').trim();
+}
+
+function normalizeOllamaBaseUrl(rawValue) {
+    if (typeof rawValue !== 'string') return '';
+    let value = rawValue.trim();
+    if (!value) return '';
+    if (!/^https?:\/\//i.test(value)) {
+        value = `http://${value}`;
+    }
+    return value.replace(/\/+$/, '');
+}
+
+function normalizeProviderEnabled(rawValue) {
+    const source = (rawValue && typeof rawValue === 'object') ? rawValue : {};
+    return {
+        openrouter: source.openrouter !== false,
+        ollama: source.ollama !== false,
+        kieai: source.kieai !== false
+    };
+}
+
+function getNormalizedApiSettings(user) {
+    const apiSettings = (user?.apiSettings && typeof user.apiSettings === 'object') ? user.apiSettings : {};
+    const rawOllamaBaseUrl = apiSettings.ollamaBaseUrl ?? user?.ollamaBaseUrl;
+    return {
+        openrouterKey: normalizeApiKey(apiSettings.openrouterKey ?? user?.openrouterKey ?? user?.apiKey ?? ''),
+        ollamaBaseUrl: normalizeOllamaBaseUrl(rawOllamaBaseUrl === undefined ? 'http://localhost:11434' : rawOllamaBaseUrl),
+        kieAiApiKey: normalizeApiKey(apiSettings.kieAiApiKey ?? user?.kieAiApiKey ?? ''),
+        providerEnabled: normalizeProviderEnabled(apiSettings.providerEnabled ?? user?.apiProviderEnabled)
+    };
+}
+
+function ensureUserApiSettingsShape(user) {
+    if (!user || typeof user !== 'object') return false;
+
+    let changed = false;
+    if (!user.apiSettings || typeof user.apiSettings !== 'object') {
+        user.apiSettings = {};
+        changed = true;
+    }
+
+    const normalized = getNormalizedApiSettings(user);
+    if (user.apiSettings.openrouterKey !== normalized.openrouterKey) {
+        user.apiSettings.openrouterKey = normalized.openrouterKey;
+        changed = true;
+    }
+    if (user.apiSettings.ollamaBaseUrl !== normalized.ollamaBaseUrl) {
+        user.apiSettings.ollamaBaseUrl = normalized.ollamaBaseUrl;
+        changed = true;
+    }
+    if (user.apiSettings.kieAiApiKey !== normalized.kieAiApiKey) {
+        user.apiSettings.kieAiApiKey = normalized.kieAiApiKey;
+        changed = true;
+    }
+    const currentProviderEnabled = normalizeProviderEnabled(user.apiSettings.providerEnabled);
+    if (
+        currentProviderEnabled.openrouter !== normalized.providerEnabled.openrouter ||
+        currentProviderEnabled.ollama !== normalized.providerEnabled.ollama ||
+        currentProviderEnabled.kieai !== normalized.providerEnabled.kieai
+    ) {
+        user.apiSettings.providerEnabled = normalized.providerEnabled;
+        changed = true;
+    }
+
+    return changed;
+}
+
 function migrateUserObject(user) {
-    // This function can be simplified now due to the deep copy,
-    // but we'll keep it for ensuring new properties are added to old data.
-    if (!user.credits.tokenUsage) {
+    let needsSave = false;
+
+    if (!user || typeof user !== 'object') {
+        return { user, needsSave };
+    }
+
+    if (!user.credits || typeof user.credits !== 'object') {
+        user.credits = { current: 0, totalUsage: 0, totalRefilledUSD: 0, tokenUsage: { prompt: 0, completion: 0 }, totalUsedUSD: 0 };
+        needsSave = true;
+    }
+    if (!user.credits.tokenUsage || typeof user.credits.tokenUsage !== 'object') {
         user.credits.tokenUsage = { prompt: 0, completion: 0 };
+        needsSave = true;
     }
     if (!Array.isArray(user.activityLog)) {
         user.activityLog = [];
+        needsSave = true;
     }
-    return { user: user, needsSave: false }; // Simplified return
+
+    // Backward compatibility for legacy saved profiles.
+    if ((!user.apiSettings || typeof user.apiSettings !== 'object') && (user.apiKey || user.openrouterKey || user.ollamaBaseUrl || user.kieAiApiKey)) {
+        user.apiSettings = {};
+        needsSave = true;
+    }
+
+    if (ensureUserApiSettingsShape(user)) {
+        needsSave = true;
+    }
+
+    // Remove legacy duplicated keys after migration to avoid future ambiguity.
+    for (const legacyKey of ['apiKey', 'openrouterKey', 'ollamaBaseUrl', 'kieAiApiKey', 'apiProviderEnabled']) {
+        if (Object.prototype.hasOwnProperty.call(user, legacyKey)) {
+            delete user[legacyKey];
+            needsSave = true;
+        }
+    }
+
+    return { user, needsSave };
+}
+
+function bootstrapDefaultUsers() {
+    userDatabase = [
+        createDefaultUser('user_pro', 'Kaiwan (Pro)', 'kai@example.com', 'pro', 1000000),
+        createDefaultUser('user_free', 'Demo User (Free)', 'demo@example.com', 'free', 50000),
+        createDefaultUser(ADMIN_USER_ID, 'Admin (Master)', 'admin@example.com', 'master', 0)
+    ];
+    localStorage.setItem(USER_DB_KEY, JSON.stringify(userDatabase));
+}
+
+function ensureAdminUserExists() {
+    const adminUser = userDatabase.find(user => user?.userId === ADMIN_USER_ID);
+    if (!adminUser) {
+        userDatabase.push(createDefaultUser(ADMIN_USER_ID, 'Admin (Master)', 'admin@example.com', 'master', 0));
+        return true;
+    }
+
+    let changed = false;
+    if (adminUser.plan !== 'master') {
+        adminUser.plan = 'master';
+        changed = true;
+    }
+    if (adminUser.planStatus !== 'active') {
+        adminUser.planStatus = 'active';
+        changed = true;
+    }
+    if (!adminUser.userName) {
+        adminUser.userName = 'Admin (Master)';
+        changed = true;
+    }
+    if (!adminUser.email) {
+        adminUser.email = 'admin@example.com';
+        changed = true;
+    }
+    if (ensureUserApiSettingsShape(adminUser)) {
+        changed = true;
+    }
+    return changed;
 }
 
 function loadUserDatabase() {
     const storedDb = localStorage.getItem(USER_DB_KEY);
-    if (storedDb) {
-        userDatabase = JSON.parse(storedDb).map(user => JSON.parse(JSON.stringify(user)));
-    } else {
-        userDatabase = [
-            createDefaultUser('user_pro', 'Kaiwan (Pro)', 'kai@example.com', 'pro', 1000000),
-            createDefaultUser('user_free', 'Demo User (Free)', 'demo@example.com', 'free', 50000),
-            createDefaultUser(ADMIN_USER_ID, 'Admin (Master)', 'admin@example.com', 'master', 0)
-        ];
-        saveUserDatabase();
+    if (!storedDb) {
+        bootstrapDefaultUsers();
+        return;
+    }
+
+    try {
+        const parsed = JSON.parse(storedDb);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            console.warn("User database is empty or invalid. Rebuilding default users.");
+            bootstrapDefaultUsers();
+            return;
+        }
+
+        let needsSave = false;
+        userDatabase = parsed
+            .map(user => JSON.parse(JSON.stringify(user)))
+            .map(user => {
+                const migrated = migrateUserObject(user);
+                if (migrated.needsSave) needsSave = true;
+                return migrated.user;
+            });
+
+        if (ensureAdminUserExists()) {
+            needsSave = true;
+        }
+
+        if (needsSave) {
+            localStorage.setItem(USER_DB_KEY, JSON.stringify(userDatabase));
+        }
+    } catch (error) {
+        console.error("Failed to parse user database. Rebuilding default users.", error);
+        bootstrapDefaultUsers();
     }
 }
 
@@ -205,7 +394,13 @@ export function getUserSettings() {
 
 export function getCurrentUserProfile() {
     if (userDatabase.length === 0) loadUserDatabase();
-    return userDatabase.find(u => u.userId === activeUserId) || null;
+    let profile = userDatabase.find(u => u.userId === activeUserId) || null;
+    if (!profile && userDatabase.length > 0) {
+        activeUserId = userDatabase[0].userId;
+        localStorage.setItem('promptPrimActiveUserId', activeUserId);
+        profile = userDatabase[0];
+    }
+    return profile;
 }
 
 export async function initUserSettings() {
@@ -217,8 +412,17 @@ export async function initUserSettings() {
     
     if (lastUserId && userDatabase.some(u => u.userId === lastUserId)) {
         activeUserId = lastUserId;
-    } else if (!activeUserId && userDatabase.length > 0) {
+    } else if (!activeUserId || !userDatabase.some(u => u.userId === activeUserId)) {
+        if (userDatabase.length > 0) {
+            activeUserId = userDatabase[0].userId;
+        }
+    }
+
+    if (activeUserId) {
+        localStorage.setItem('promptPrimActiveUserId', activeUserId);
+    } else if (userDatabase.length > 0) {
         activeUserId = userDatabase[0].userId;
+        localStorage.setItem('promptPrimActiveUserId', activeUserId);
     }
     
     const currentUser = getCurrentUserProfile();
@@ -326,59 +530,138 @@ function checkGracePeriod(user) {
 
 // --- [FIX] Re-add getSystemApiSettings and ensure it's exported ---
 export function getSystemApiSettings() {
-    // [FIX] Find the admin by their constant ID.
     const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
-    return adminUser?.apiSettings || { openrouterKey: '', ollamaBaseUrl: '', kieAiApiKey: '' };
+    return getNormalizedApiSettings(adminUser);
+}
+
+function resolveProviderEnabledForCurrentUser(provider) {
+    const profile = getCurrentUserProfile();
+    const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
+    const profileSettings = getNormalizedApiSettings(profile);
+    const adminSettings = getNormalizedApiSettings(adminUser);
+
+    if (isMasterProfile(profile)) {
+        return profileSettings.providerEnabled[provider];
+    }
+    return adminSettings.providerEnabled[provider];
+}
+
+export function isApiProviderEnabled(provider, options = {}) {
+    const normalizedProvider = String(provider || '').toLowerCase();
+    const useSystemSettings = options?.useSystemSettings === true;
+    if (!['openrouter', 'ollama', 'kieai'].includes(normalizedProvider)) return false;
+
+    if (useSystemSettings) {
+        return getSystemApiSettings().providerEnabled[normalizedProvider] !== false;
+    }
+
+    return resolveProviderEnabledForCurrentUser(normalizedProvider) !== false;
 }
 
 // --- Specific Getters and Setters ---
 // [✅ NEW: Getter สำหรับ Kie.ai Key]
 export function getKieAiApiKey() {
-    const profile = getCurrentUserProfile();
-    const adminUser = userDatabase.find(u => u.userId === 'user_master');
-
-    if (profile?.plan === 'master') {
-        return profile.apiSettings?.kieAiApiKey || '';
+    if (!isApiProviderEnabled('kieai')) {
+        return '';
     }
-    // ใช้ Key ของ Admin เป็น Fallback สำหรับ Free/Pro users
-    return adminUser?.apiSettings?.kieAiApiKey || '';
+    const profile = getCurrentUserProfile();
+    const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
+    const profileSettings = getNormalizedApiSettings(profile);
+    const adminSettings = getNormalizedApiSettings(adminUser);
+
+    if (isMasterProfile(profile)) {
+        return profileSettings.kieAiApiKey;
+    }
+    // Fallback to own profile key if admin key is not configured.
+    return adminSettings.kieAiApiKey || profileSettings.kieAiApiKey || '';
 }
 
 export function getApiKey() {
-    const profile = getCurrentUserProfile(); // Gets the currently logged-in user
-    const adminUser = userDatabase.find(u => u.userId === 'user_master'); // Gets the system's admin profile
+    if (!isApiProviderEnabled('openrouter')) {
+        return '';
+    }
+    const profile = getCurrentUserProfile();
+    const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
+    const profileSettings = getNormalizedApiSettings(profile);
+    const adminSettings = getNormalizedApiSettings(adminUser);
 
-    // FIRST, it checks if the current user is on the Master Plan
-    if (profile.plan === 'master') {
-        // If they are, it returns THEIR OWN key and the function stops here.
-        return profile.apiSettings?.openrouterKey || '';
+    if (isMasterProfile(profile)) {
+        return profileSettings.openrouterKey;
     }
 
-    // ONLY if the user is NOT Master (i.e., they are Free or Pro),
-    // does it proceed to return the system-wide Admin key.
-    return adminUser?.apiSettings?.openrouterKey || '';
+    return adminSettings.openrouterKey || profileSettings.openrouterKey || '';
 }
 
 export function getOllamaUrl() {
-    const profile = getCurrentUserProfile();
-    // [FIX] Find the admin by their constant ID.
-    const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
-
-    if (profile.plan === 'master') {
-        return profile.apiSettings?.ollamaBaseUrl || '';
+    if (!isApiProviderEnabled('ollama')) {
+        return '';
     }
-    return adminUser?.apiSettings?.ollamaBaseUrl || '';
+    const profile = getCurrentUserProfile();
+    const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
+    const profileSettings = getNormalizedApiSettings(profile);
+    const adminSettings = getNormalizedApiSettings(adminUser);
+
+    if (isMasterProfile(profile)) {
+        return profileSettings.ollamaBaseUrl;
+    }
+    return adminSettings.ollamaBaseUrl || profileSettings.ollamaBaseUrl || '';
 }
 
 
-export function saveSystemApiSettings({ openrouter, ollamaBaseUrl }) {
-    // [FIX] Find the admin by their constant ID to ensure we save to the correct profile.
+export function saveSystemApiSettings({ openrouter, ollamaBaseUrl, kieAiApiKey, providerEnabled } = {}) {
     const adminUser = userDatabase.find(u => u.userId === ADMIN_USER_ID);
     if (adminUser) {
-        adminUser.apiSettings.openrouterKey = openrouter;
-        adminUser.apiSettings.ollamaBaseUrl = ollamaBaseUrl;
+        if (!adminUser.apiSettings || typeof adminUser.apiSettings !== 'object') {
+            adminUser.apiSettings = {};
+        }
+        if (openrouter !== undefined) {
+            adminUser.apiSettings.openrouterKey = normalizeApiKey(openrouter);
+        }
+        if (ollamaBaseUrl !== undefined) {
+            adminUser.apiSettings.ollamaBaseUrl = normalizeOllamaBaseUrl(ollamaBaseUrl);
+        }
+        if (kieAiApiKey !== undefined) {
+            adminUser.apiSettings.kieAiApiKey = normalizeApiKey(kieAiApiKey);
+        }
+        if (providerEnabled !== undefined) {
+            const mergedEnabled = normalizeProviderEnabled({
+                ...normalizeProviderEnabled(adminUser.apiSettings.providerEnabled),
+                ...(typeof providerEnabled === 'object' ? providerEnabled : {})
+            });
+            adminUser.apiSettings.providerEnabled = mergedEnabled;
+        }
+        ensureUserApiSettingsShape(adminUser);
         saveUserDatabase();
     }
+}
+
+export function updateApiSettings({ openrouterKey, ollamaBaseUrl, kieAiApiKey, providerEnabled } = {}) {
+    const profile = getCurrentUserProfile();
+    if (!profile) return;
+
+    if (!profile.apiSettings || typeof profile.apiSettings !== 'object') {
+        profile.apiSettings = {};
+    }
+
+    if (openrouterKey !== undefined) {
+        profile.apiSettings.openrouterKey = normalizeApiKey(openrouterKey);
+    }
+    if (ollamaBaseUrl !== undefined) {
+        profile.apiSettings.ollamaBaseUrl = normalizeOllamaBaseUrl(ollamaBaseUrl);
+    }
+    if (kieAiApiKey !== undefined) {
+        profile.apiSettings.kieAiApiKey = normalizeApiKey(kieAiApiKey);
+    }
+    if (providerEnabled !== undefined) {
+        const mergedEnabled = normalizeProviderEnabled({
+            ...normalizeProviderEnabled(profile.apiSettings.providerEnabled),
+            ...(typeof providerEnabled === 'object' ? providerEnabled : {})
+        });
+        profile.apiSettings.providerEnabled = mergedEnabled;
+    }
+
+    ensureUserApiSettingsShape(profile);
+    saveFullUserProfile(profile);
 }
 
 export function getMasterModelPresets() {
@@ -601,6 +884,10 @@ export function addNewUser(userName, email) {
 export function changeUserPlan(userId, newPlan) {
     const user = getUserById(userId);
     if (!user) return;
+    if (user.userId === ADMIN_USER_ID && newPlan !== 'master') {
+        console.warn('Blocked plan change for master profile.');
+        return;
+    }
 
     const oldPlan = user.plan;
     if (oldPlan === newPlan) return; // No change needed

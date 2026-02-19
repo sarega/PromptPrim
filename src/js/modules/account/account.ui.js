@@ -27,19 +27,18 @@ export function renderAccountModal() {
         return;
     }
 
+    const isMaster = UserService.isMasterProfile(user);
+
     // --- [FIX] Added logic for the 'master' plan ---
     let planButtonsHTML = '';
-    if (user.plan === 'free') {
+    if (isMaster) {
+        planButtonsHTML = '<p>Master profile is fixed for API management.</p>';
+    } else if (user.plan === 'free') {
         planButtonsHTML = '<button class="btn" data-action="switch-plan" data-plan="pro">Upgrade to Pro</button>';
     } else if (user.plan === 'pro') {
         planButtonsHTML = `
             <button class="btn btn-secondary" data-action="switch-plan" data-plan="free">Downgrade to Free</button>
             <button class="btn" data-action="switch-plan" data-plan="master">Upgrade to Master</button>
-        `;
-    } else if (user.plan === 'master') {
-        // This is the missing part
-        planButtonsHTML = `
-            <button class="btn btn-secondary" data-action="switch-plan" data-plan="pro">Downgrade to Pro</button>
         `;
     }
 
@@ -59,9 +58,9 @@ export function renderAccountModal() {
                     <label>Username</label>
                     <input type="text" value="${user.userName}" readonly>
                 </div>
-                 <div class="form-group">
+                <div class="form-group">
                     <label>Current Plan</label>
-                    <input type="text" value="${user.plan.charAt(0).toUpperCase() + user.plan.slice(1)}" readonly>
+                    <input type="text" value="${isMaster ? 'Master' : user.plan.charAt(0).toUpperCase() + user.plan.slice(1)}" readonly>
                 </div>
                 <div class="form-group">
                     <label>Credits</label>
@@ -79,7 +78,7 @@ export function renderAccountModal() {
                 </div>
                 <div class="form-group">
                     <label>Refill Credits (USD)</label>
-                    <div class="refill-presets">${user.plan === 'master' ? '<p>Not applicable.</p>' : refillButtonsHTML}</div>
+                    <div class="refill-presets">${isMaster ? '<p>Not applicable.</p>' : refillButtonsHTML}</div>
                 </div>
             </div>
         </div>

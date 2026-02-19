@@ -337,26 +337,464 @@ export function showContextMenu(options, event) {
     }, 0);
 }
 
+function normalizeModelSearchText(value = '') {
+    return String(value || '').trim().toLowerCase();
+}
+
+function foldModelSearchText(value = '') {
+    return normalizeModelSearchText(value).replace(/[^a-z0-9]+/g, '');
+}
+
+function isSubsequence(needle, haystack) {
+    if (!needle) return true;
+    let i = 0;
+    let j = 0;
+    while (i < needle.length && j < haystack.length) {
+        if (needle[i] === haystack[j]) i += 1;
+        j += 1;
+    }
+    return i === needle.length;
+}
+
+function levenshteinDistance(a = '', b = '', maxDistance = Infinity) {
+    const left = String(a);
+    const right = String(b);
+
+    if (left === right) return 0;
+    if (!left.length) return right.length;
+    if (!right.length) return left.length;
+    if (Math.abs(left.length - right.length) > maxDistance) return maxDistance + 1;
+
+    let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+    for (let i = 1; i <= left.length; i += 1) {
+        const current = [i];
+        let rowMin = current[0];
+
+        for (let j = 1; j <= right.length; j += 1) {
+            const substitutionCost = left[i - 1] === right[j - 1] ? 0 : 1;
+            const value = Math.min(
+                previous[j] + 1,
+                current[j - 1] + 1,
+                previous[j - 1] + substitutionCost
+            );
+            current[j] = value;
+            if (value < rowMin) rowMin = value;
+        }
+
+        if (rowMin > maxDistance) return maxDistance + 1;
+        previous = current;
+    }
+
+    return previous[right.length];
+}
+
+function buildModelSearchIndex(models = []) {
+    const seenIds = new Set();
+    const uniqueModels = [];
+
+    (Array.isArray(models) ? models : []).forEach((model) => {
+        const normalizedId = normalizeModelSearchText(model?.id);
+        if (!normalizedId || seenIds.has(normalizedId)) return;
+        seenIds.add(normalizedId);
+
+        const canonicalId = String(model.id).trim();
+        const displayName = String(model.name || canonicalId).trim();
+        const providerName = String(model.provider || '').trim();
+
+        uniqueModels.push({
+            ...model,
+            id: canonicalId,
+            name: displayName,
+            provider: providerName
+        });
+    });
+
+    uniqueModels.sort((a, b) => {
+        const byName = a.name.localeCompare(b.name);
+        if (byName !== 0) return byName;
+        return a.id.localeCompare(b.id);
+    });
+
+    return uniqueModels.map((model, order) => {
+        const idLower = normalizeModelSearchText(model.id);
+        const nameLower = normalizeModelSearchText(model.name);
+        const providerLower = normalizeModelSearchText(model.provider);
+        const idTailLower = idLower.includes('/') ? idLower.split('/').slice(1).join('/') : idLower;
+
+        return {
+            model,
+            order,
+            idLower,
+            nameLower,
+            providerLower,
+            idTailLower,
+            idFolded: foldModelSearchText(idLower),
+            nameFolded: foldModelSearchText(nameLower),
+            idTailFolded: foldModelSearchText(idTailLower)
+        };
+    });
+}
+
+function rankModelMatches(indexedModels, rawQuery) {
+    const query = normalizeModelSearchText(rawQuery);
+    const queryFolded = foldModelSearchText(rawQuery);
+
+    if (!query && !queryFolded) {
+        return indexedModels.map((entry) => ({ entry, tier: 99, detail: entry.order }));
+    }
+
+    const ranked = [];
+
+    indexedModels.forEach((entry) => {
+        let tier = Number.POSITIVE_INFINITY;
+        let detail = Number.POSITIVE_INFINITY;
+
+        const exactMatch = (
+            entry.idLower === query ||
+            entry.idTailLower === query ||
+            entry.nameLower === query
+        );
+
+        const foldedExactMatch = Boolean(queryFolded) && (
+            entry.idFolded === queryFolded ||
+            entry.idTailFolded === queryFolded ||
+            entry.nameFolded === queryFolded
+        );
+
+        if (exactMatch) {
+            tier = 0;
+            detail = 0;
+        } else if (foldedExactMatch) {
+            tier = 1;
+            detail = 0;
+        } else {
+            const prefixMatch = query && (
+                entry.idLower.startsWith(query) ||
+                entry.idTailLower.startsWith(query) ||
+                entry.nameLower.startsWith(query) ||
+                entry.providerLower.startsWith(query)
+            );
+            const foldedPrefixMatch = Boolean(queryFolded) && (
+                entry.idFolded.startsWith(queryFolded) ||
+                entry.idTailFolded.startsWith(queryFolded) ||
+                entry.nameFolded.startsWith(queryFolded)
+            );
+
+            if (prefixMatch || foldedPrefixMatch) {
+                tier = 2;
+                const positions = [
+                    entry.idLower.indexOf(query),
+                    entry.idTailLower.indexOf(query),
+                    entry.nameLower.indexOf(query),
+                    entry.providerLower.indexOf(query)
+                ].filter((index) => index >= 0);
+                detail = positions.length ? Math.min(...positions) : 0;
+            } else {
+                const substringMatch = query && (
+                    entry.idLower.includes(query) ||
+                    entry.idTailLower.includes(query) ||
+                    entry.nameLower.includes(query) ||
+                    entry.providerLower.includes(query)
+                );
+                const foldedSubstringMatch = Boolean(queryFolded) && (
+                    entry.idFolded.includes(queryFolded) ||
+                    entry.idTailFolded.includes(queryFolded) ||
+                    entry.nameFolded.includes(queryFolded)
+                );
+
+                if (substringMatch || foldedSubstringMatch) {
+                    tier = 3;
+                    detail = Math.min(
+                        ...[
+                            entry.nameLower.indexOf(query),
+                            entry.idLower.indexOf(query),
+                            entry.idTailLower.indexOf(query)
+                        ].filter((index) => index >= 0)
+                    );
+                } else if (queryFolded.length >= 2) {
+                    const fuzzyLimit = Math.max(1, Math.floor(queryFolded.length * 0.4));
+                    const candidates = [entry.idTailFolded, entry.nameFolded, entry.idFolded];
+                    let fuzzyScore = Number.POSITIVE_INFINITY;
+
+                    candidates.forEach((candidate) => {
+                        if (!candidate) return;
+
+                        if (isSubsequence(queryFolded, candidate)) {
+                            fuzzyScore = Math.min(
+                                fuzzyScore,
+                                Math.max(1, candidate.length - queryFolded.length)
+                            );
+                        }
+
+                        const comparisonTarget = candidate.slice(0, Math.max(queryFolded.length + 2, 8));
+                        const distance = levenshteinDistance(queryFolded, comparisonTarget, fuzzyLimit);
+                        if (distance <= fuzzyLimit) {
+                            fuzzyScore = Math.min(fuzzyScore, distance);
+                        }
+                    });
+
+                    if (Number.isFinite(fuzzyScore)) {
+                        tier = 4;
+                        detail = fuzzyScore;
+                    }
+                }
+            }
+        }
+
+        if (Number.isFinite(tier)) {
+            ranked.push({ entry, tier, detail });
+        }
+    });
+
+    ranked.sort((a, b) => {
+        if (a.tier !== b.tier) return a.tier - b.tier;
+        if (a.detail !== b.detail) return a.detail - b.detail;
+        const byName = a.entry.model.name.localeCompare(b.entry.model.name);
+        if (byName !== 0) return byName;
+        return a.entry.model.id.localeCompare(b.entry.model.id);
+    });
+
+    return ranked;
+}
+
+function getClosestModelSuggestions(indexedModels, rawQuery, limit = 3) {
+    const query = normalizeModelSearchText(rawQuery);
+    const queryFolded = foldModelSearchText(rawQuery);
+    if (!query && !queryFolded) return [];
+
+    const scored = indexedModels.map((entry) => {
+        const candidates = [entry.idTailFolded, entry.nameFolded, entry.idFolded].filter(Boolean);
+        if (!candidates.length) return { entry, score: Number.POSITIVE_INFINITY };
+
+        let score = Number.POSITIVE_INFINITY;
+        if (query && (entry.idLower.includes(query) || entry.idTailLower.includes(query) || entry.nameLower.includes(query))) {
+            score = 0;
+        }
+
+        if (queryFolded) {
+            const maxDistance = Math.max(2, Math.ceil(queryFolded.length * 0.7));
+            candidates.forEach((candidate) => {
+                const comparison = candidate.slice(0, Math.max(queryFolded.length + 3, 10));
+                const distance = levenshteinDistance(queryFolded, comparison, maxDistance);
+                score = Math.min(score, distance);
+            });
+        }
+
+        return { entry, score };
+    });
+
+    const threshold = Math.max(2, Math.ceil((queryFolded || query).length * 0.7));
+    return scored
+        .filter((item) => Number.isFinite(item.score) && item.score <= threshold)
+        .sort((a, b) => {
+            if (a.score !== b.score) return a.score - b.score;
+            const byName = a.entry.model.name.localeCompare(b.entry.model.name);
+            if (byName !== 0) return byName;
+            return a.entry.model.id.localeCompare(b.entry.model.id);
+        })
+        .slice(0, limit)
+        .map((item) => item.entry);
+}
+
+const MODEL_PICKER_PREFERENCES_KEY = 'promptPrimModelPickerPrefs_v1';
+const MAX_RECENT_MODELS = 8;
+const MAX_PINNED_MODELS = 24;
+
+function readModelPickerPreferenceStore() {
+    try {
+        const raw = localStorage.getItem(MODEL_PICKER_PREFERENCES_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        console.warn('Failed to read model picker preferences:', error);
+        return {};
+    }
+}
+
+function writeModelPickerPreferenceStore(store) {
+    try {
+        localStorage.setItem(MODEL_PICKER_PREFERENCES_KEY, JSON.stringify(store));
+    } catch (error) {
+        console.warn('Failed to write model picker preferences:', error);
+    }
+}
+
+function areStringArraysEqual(left = [], right = []) {
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+        if (left[index] !== right[index]) return false;
+    }
+    return true;
+}
+
+function normalizeModelIdPreferences(rawList, indexedById, maxSize = Infinity) {
+    const normalized = [];
+    const seen = new Set();
+    if (!Array.isArray(rawList)) return normalized;
+
+    rawList.forEach((value) => {
+        const key = normalizeModelSearchText(value);
+        if (!key) return;
+        const entry = indexedById.get(key);
+        if (!entry) return;
+
+        const canonicalId = entry.model.id;
+        if (seen.has(canonicalId)) return;
+        seen.add(canonicalId);
+        normalized.push(canonicalId);
+    });
+
+    return normalized.slice(0, maxSize);
+}
+
+function normalizeModelPickerPreferences(rawPreferences, indexedById) {
+    return {
+        pinnedModelIds: normalizeModelIdPreferences(
+            rawPreferences?.pinnedModelIds,
+            indexedById,
+            MAX_PINNED_MODELS
+        ),
+        recentModelIds: normalizeModelIdPreferences(
+            rawPreferences?.recentModelIds,
+            indexedById,
+            MAX_RECENT_MODELS
+        )
+    };
+}
+
+function createModelOptionItem(entry, { onSelect, onTogglePin, isPinned = false } = {}) {
+    const item = document.createElement('div');
+    item.className = 'searchable-option-item searchable-option-row';
+    item.dataset.value = entry.model.id;
+    item.dataset.selectable = 'true';
+
+    const content = document.createElement('div');
+    content.className = 'searchable-option-main';
+
+    const title = document.createElement('span');
+    title.className = 'searchable-option-title';
+    title.textContent = entry.model.name;
+
+    const meta = document.createElement('small');
+    meta.textContent = entry.model.provider
+        ? `${entry.model.id} • ${entry.model.provider}`
+        : entry.model.id;
+
+    content.append(title, meta);
+    item.append(content);
+
+    if (typeof onTogglePin === 'function') {
+        const pinButton = document.createElement('button');
+        pinButton.type = 'button';
+        pinButton.className = `searchable-option-pin${isPinned ? ' is-pinned' : ''}`;
+        pinButton.textContent = isPinned ? 'Pinned' : 'Pin';
+        pinButton.title = isPinned ? 'Unpin model' : 'Pin model';
+        pinButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onTogglePin(entry);
+        });
+        item.append(pinButton);
+    }
+
+    item.addEventListener('click', () => {
+        if (typeof onSelect === 'function') {
+            onSelect(entry);
+        }
+    });
+    return item;
+}
+
 /**
- * [NEW & REUSABLE] Creates a searchable model selector component.
- * @param {string} wrapperId - The ID of the main container div for the selector.
- * @param {string} initialModelId - The ID of the model that should be selected initially.
- * @param {function(string):void} onSelect - The callback function to run when a model is selected. It receives the model ID.
+ * Creates a searchable model selector component.
+ * @param {string} wrapperId - The ID of the wrapper element that contains text input + hidden input.
+ * @param {string} initialModelId - The model ID to initialize in the selector.
+ * @param {Array<object>} modelsToShow - Optional model list to render instead of the global list.
  */
 export function createSearchableModelSelector(wrapperId, initialModelId, modelsToShow) {
     const wrapper = document.getElementById(wrapperId);
     if (!wrapper) return;
 
-    const allModels = modelsToShow !== undefined ? modelsToShow : (stateManager.getState().allProviderModels || []);
+    if (typeof wrapper.__searchableModelSelectorCleanup === 'function') {
+        wrapper.__searchableModelSelectorCleanup();
+    }
+
+    const allModels = modelsToShow !== undefined
+        ? modelsToShow
+        : (stateManager.getState().allProviderModels || []);
+    const indexedModels = buildModelSearchIndex(allModels);
+    const indexedById = new Map();
+    indexedModels.forEach((entry) => {
+        indexedById.set(entry.idLower, entry);
+    });
+
     const searchInput = wrapper.querySelector('input[type="text"]');
     const valueInput = wrapper.querySelector('input[type="hidden"]');
     const optionsContainer = wrapper.querySelector('.searchable-select-options');
     if (!searchInput || !valueInput || !optionsContainer) return;
 
     let activeIndex = -1;
+    let selectedEntry = null;
+    const cleanupFns = [];
+    const userScopeKey = `user:${UserService.getCurrentUserProfile()?.userId || 'anonymous'}`;
+    let preferenceStore = readModelPickerPreferenceStore();
+    let pickerPreferences = normalizeModelPickerPreferences(preferenceStore[userScopeKey], indexedById);
+
+    const savePreferences = (nextPreferences) => {
+        const normalized = normalizeModelPickerPreferences(nextPreferences, indexedById);
+        if (
+            areStringArraysEqual(normalized.pinnedModelIds, pickerPreferences.pinnedModelIds) &&
+            areStringArraysEqual(normalized.recentModelIds, pickerPreferences.recentModelIds)
+        ) {
+            return;
+        }
+        pickerPreferences = normalized;
+        preferenceStore[userScopeKey] = normalized;
+        writeModelPickerPreferenceStore(preferenceStore);
+    };
+
+    const isPinned = (modelId) => pickerPreferences.pinnedModelIds.includes(modelId);
+
+    const getEntriesForModelIds = (modelIds = []) => modelIds
+        .map((modelId) => indexedById.get(normalizeModelSearchText(modelId)))
+        .filter(Boolean);
+
+    const markAsRecent = (entry) => {
+        const modelId = entry?.model?.id;
+        if (!modelId) return;
+        const nextRecent = [
+            modelId,
+            ...pickerPreferences.recentModelIds.filter((id) => id !== modelId)
+        ].slice(0, MAX_RECENT_MODELS);
+        savePreferences({
+            ...pickerPreferences,
+            recentModelIds: nextRecent
+        });
+    };
+
+    const addListener = (target, eventName, handler, options) => {
+        target.addEventListener(eventName, handler, options);
+        cleanupFns.push(() => target.removeEventListener(eventName, handler, options));
+    };
+
+    const getSelectableItems = () => Array.from(
+        optionsContainer.querySelectorAll('.searchable-option-item[data-selectable="true"]')
+    );
+
+    const hideOptions = () => {
+        optionsContainer.classList.add('hidden');
+        activeIndex = -1;
+    };
+
+    const showOptions = () => {
+        optionsContainer.classList.remove('hidden');
+    };
 
     const updateActiveOption = () => {
-        optionsContainer.querySelectorAll('.searchable-option-item').forEach((item, index) => {
+        const selectableItems = getSelectableItems();
+        selectableItems.forEach((item, index) => {
             item.classList.toggle('active', index === activeIndex);
             if (index === activeIndex) {
                 item.scrollIntoView({ block: 'nearest' });
@@ -364,73 +802,254 @@ export function createSearchableModelSelector(wrapperId, initialModelId, modelsT
         });
     };
 
-    const selectOption = (index) => {
-        const items = optionsContainer.querySelectorAll('.searchable-option-item');
-        if (items[index]) {
-            items[index].click();
+    const commitSelection = (entry, { emitChange = true } = {}) => {
+        const previousValue = valueInput.value;
+        markAsRecent(entry);
+        selectedEntry = entry;
+        searchInput.value = entry.model.name;
+        valueInput.value = entry.model.id;
+        hideOptions();
+        if (emitChange && previousValue !== entry.model.id) {
+            valueInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
     };
-    
-    const renderOptions = (modelsToRender) => {
-        optionsContainer.innerHTML = '';
-        activeIndex = -1; // Reset active index
-        if (modelsToRender.length === 0) {
-            optionsContainer.innerHTML = `<div class="searchable-option-item">No models found.</div>`;
+
+    const restoreCommittedText = () => {
+        if (!selectedEntry) {
+            searchInput.value = '';
+            valueInput.value = '';
             return;
         }
-        modelsToRender.forEach(model => {
-            const item = document.createElement('div');
-            item.className = 'searchable-option-item';
-            item.dataset.value = model.id;
-            item.innerHTML = `${model.name} &nbsp;•&nbsp; <small>${model.id}</small>`;
-            item.addEventListener('click', () => {
-                searchInput.value = model.name;
-                valueInput.value = model.id;
-                optionsContainer.classList.add('hidden');
-                valueInput.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-            optionsContainer.appendChild(item);
+        searchInput.value = selectedEntry.model.name;
+        valueInput.value = selectedEntry.model.id;
+    };
+
+    const renderDidYouMean = (rawQuery) => {
+        const suggestionEntries = getClosestModelSuggestions(indexedModels, rawQuery, 3);
+        if (!suggestionEntries.length) return;
+
+        const hint = document.createElement('div');
+        hint.className = 'searchable-option-hint';
+        hint.textContent = 'Did you mean';
+        optionsContainer.appendChild(hint);
+
+        suggestionEntries.forEach((entry) => {
+            optionsContainer.appendChild(createModelOptionItem(entry, {
+                isPinned: isPinned(entry.model.id),
+                onTogglePin: (selected) => {
+                    const modelId = selected.model.id;
+                    const nextPinned = isPinned(modelId)
+                        ? pickerPreferences.pinnedModelIds.filter((id) => id !== modelId)
+                        : [modelId, ...pickerPreferences.pinnedModelIds.filter((id) => id !== modelId)].slice(0, MAX_PINNED_MODELS);
+                    savePreferences({ ...pickerPreferences, pinnedModelIds: nextPinned });
+                    renderOptionsForQuery(searchInput.value);
+                    showOptions();
+                },
+                onSelect: (selected) => {
+                    commitSelection(selected);
+                }
+            }));
         });
     };
 
-    // --- Keyboard Navigation Logic ---
-    searchInput.addEventListener('keydown', (e) => {
-        const items = optionsContainer.querySelectorAll('.searchable-option-item');
-        if (items.length === 0) return;
+    const createSectionTitle = (title) => {
+        const titleElement = document.createElement('div');
+        titleElement.className = 'searchable-option-section-title';
+        titleElement.textContent = title;
+        return titleElement;
+    };
 
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            activeIndex = (activeIndex + 1) % items.length;
-            updateActiveOption();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            activeIndex = (activeIndex - 1 + items.length) % items.length;
-            updateActiveOption();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            e.stopPropagation(); // <-- ป้องกันไม่ให้ Modal ปิด
-            if (activeIndex > -1) {
-                selectOption(activeIndex);
+    const togglePinnedModel = (entry) => {
+        const modelId = entry.model.id;
+        const nextPinned = isPinned(modelId)
+            ? pickerPreferences.pinnedModelIds.filter((id) => id !== modelId)
+            : [modelId, ...pickerPreferences.pinnedModelIds.filter((id) => id !== modelId)].slice(0, MAX_PINNED_MODELS);
+
+        savePreferences({ ...pickerPreferences, pinnedModelIds: nextPinned });
+        renderOptionsForQuery(searchInput.value);
+        showOptions();
+    };
+
+    const appendModelEntries = (entries) => {
+        entries.forEach((entry) => {
+            optionsContainer.appendChild(createModelOptionItem(entry, {
+                isPinned: isPinned(entry.model.id),
+                onTogglePin: togglePinnedModel,
+                onSelect: (selected) => {
+                    commitSelection(selected);
+                }
+            }));
+        });
+    };
+
+    const renderOptionsForQuery = (rawQuery = '') => {
+        optionsContainer.innerHTML = '';
+        activeIndex = -1;
+
+        const hasQuery = Boolean(
+            normalizeModelSearchText(rawQuery) || foldModelSearchText(rawQuery)
+        );
+        const ranked = rankModelMatches(indexedModels, rawQuery);
+        if (ranked.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'searchable-option-item searchable-option-empty';
+            emptyState.dataset.selectable = 'false';
+            emptyState.textContent = 'No models found.';
+            optionsContainer.appendChild(emptyState);
+            renderDidYouMean(rawQuery);
+            return;
+        }
+
+        if (hasQuery) {
+            appendModelEntries(ranked.map((item) => item.entry));
+            return;
+        }
+
+        const pinnedEntries = getEntriesForModelIds(pickerPreferences.pinnedModelIds);
+        const pinnedIdSet = new Set(pinnedEntries.map((entry) => entry.model.id));
+
+        const recentEntries = getEntriesForModelIds(pickerPreferences.recentModelIds)
+            .filter((entry) => !pinnedIdSet.has(entry.model.id));
+        const recentIdSet = new Set(recentEntries.map((entry) => entry.model.id));
+
+        const allEntries = ranked
+            .map((item) => item.entry)
+            .filter((entry) => !pinnedIdSet.has(entry.model.id) && !recentIdSet.has(entry.model.id));
+
+        if (pinnedEntries.length > 0) {
+            optionsContainer.appendChild(createSectionTitle('Pinned'));
+            appendModelEntries(pinnedEntries);
+        }
+
+        if (recentEntries.length > 0) {
+            optionsContainer.appendChild(createSectionTitle('Recent'));
+            appendModelEntries(recentEntries);
+        }
+
+        if (allEntries.length > 0) {
+            if (pinnedEntries.length > 0 || recentEntries.length > 0) {
+                optionsContainer.appendChild(createSectionTitle('All Models'));
             }
-        } else if (e.key === 'Escape') {
-            optionsContainer.classList.add('hidden');
+            appendModelEntries(allEntries);
+        }
+    };
+
+    const tryCommitTypedValue = () => {
+        const query = normalizeModelSearchText(searchInput.value);
+        const queryFolded = foldModelSearchText(searchInput.value);
+
+        if (!query && !queryFolded) {
+            restoreCommittedText();
+            return;
+        }
+
+        const exactEntry = indexedModels.find((entry) =>
+            entry.idLower === query ||
+            entry.idTailLower === query ||
+            entry.nameLower === query ||
+            (queryFolded && (
+                entry.idFolded === queryFolded ||
+                entry.idTailFolded === queryFolded ||
+                entry.nameFolded === queryFolded
+            ))
+        );
+
+        if (exactEntry) {
+            commitSelection(exactEntry);
+            return;
+        }
+
+        restoreCommittedText();
+    };
+
+    addListener(searchInput, 'keydown', (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (optionsContainer.classList.contains('hidden')) {
+                renderOptionsForQuery(searchInput.value);
+                showOptions();
+            }
+            const selectableItems = getSelectableItems();
+            if (!selectableItems.length) return;
+
+            if (event.key === 'ArrowDown') {
+                activeIndex = (activeIndex + 1) % selectableItems.length;
+            } else {
+                activeIndex = (activeIndex - 1 + selectableItems.length) % selectableItems.length;
+            }
+            updateActiveOption();
+            return;
+        }
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (optionsContainer.classList.contains('hidden')) {
+                renderOptionsForQuery(searchInput.value);
+                showOptions();
+            }
+
+            const selectableItems = getSelectableItems();
+            if (!selectableItems.length) {
+                tryCommitTypedValue();
+                hideOptions();
+                return;
+            }
+
+            const indexToSelect = activeIndex >= 0 ? activeIndex : 0;
+            selectableItems[indexToSelect].click();
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            restoreCommittedText();
+            hideOptions();
         }
     });
-    
-    // --- Event Listeners for Mouse ---
-    searchInput.addEventListener('input', () => renderOptions(allModels.filter(m => m.name.toLowerCase().includes(searchInput.value.toLowerCase()))));
-    searchInput.addEventListener('focus', () => {
-        renderOptions(allModels);
-        optionsContainer.classList.remove('hidden');
+
+    addListener(searchInput, 'input', () => {
+        renderOptionsForQuery(searchInput.value);
+        showOptions();
     });
 
-    // --- Initial Setup ---
-    const currentModel = allModels.find(m => m.id === initialModelId);
-    if (currentModel) {
-        searchInput.value = currentModel.name;
-        valueInput.value = currentModel.id;
+    addListener(searchInput, 'focus', () => {
+        renderOptionsForQuery(searchInput.value);
+        showOptions();
+    });
+
+    addListener(searchInput, 'click', () => {
+        renderOptionsForQuery(searchInput.value);
+        showOptions();
+    });
+
+    addListener(searchInput, 'blur', () => {
+        window.setTimeout(() => {
+            if (wrapper.contains(document.activeElement)) return;
+            tryCommitTypedValue();
+            hideOptions();
+        }, 100);
+    });
+
+    const initialEntry = indexedModels.find(
+        (entry) => entry.idLower === normalizeModelSearchText(initialModelId)
+    );
+
+    if (initialEntry) {
+        selectedEntry = initialEntry;
+        searchInput.value = initialEntry.model.name;
+        valueInput.value = initialEntry.model.id;
+        hideOptions();
     } else {
+        selectedEntry = null;
         searchInput.value = '';
         valueInput.value = '';
+        hideOptions();
     }
+
+    wrapper.__searchableModelSelectorCleanup = () => {
+        cleanupFns.forEach((cleanup) => cleanup());
+        delete wrapper.__searchableModelSelectorCleanup;
+    };
 }

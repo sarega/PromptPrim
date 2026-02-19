@@ -19,6 +19,11 @@ import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
 import { scrollToLinkedEntity } from './project.ui.js';
 import { createNewChatSession, loadChatSession, saveAllSessions, saveActiveSession } from '../session/session.handlers.js';
+import {
+    ensureProjectFolders,
+    normalizeSessionRagSettings,
+    normalizeSessionContextMode
+} from '../session/session.folder-utils.js';
 import * as UserService from '../user/user.service.js'; // <-- เพิ่ม Import นี้เข้ามา
 
 
@@ -496,6 +501,7 @@ export function saveSystemUtilityAgentSettings() {
 
 export function migrateProjectData(projectData) {
     const currentUser = UserService.getCurrentUserProfile();
+    const currentUserName = currentUser?.userName || 'Unknown User';
 
     // 1. ซ่อม System Utility Agent (เหมือนเดิม)
     projectData.globalSettings.systemUtilityAgent = Object.assign(
@@ -514,7 +520,7 @@ export function migrateProjectData(projectData) {
 
             // ถ้ายังไม่มีข้อมูลผู้สร้าง ให้เติมชื่อผู้ใช้ปัจจุบันเข้าไป
             if (!migratedAgent.createdBy || migratedAgent.createdBy === 'Unknown User') {
-                migratedAgent.createdBy = currentUser.userName;
+                migratedAgent.createdBy = currentUserName;
             }
             // ถ้ายังไม่มีข้อมูลวันที่สร้าง ให้ใช้วันที่ปัจจุบัน
             if (!migratedAgent.createdAt) {
@@ -540,6 +546,141 @@ export function migrateProjectData(projectData) {
             }
         }
     }
+
+    if (Array.isArray(projectData.chatSessions)) {
+        const firstAgentName = Object.keys(projectData.agentPresets || {})[0] || null;
+        const firstGroupName = Object.keys(projectData.agentGroups || {})[0] || null;
+
+        const normalizeLinkedEntity = (entity) => {
+            if (entity?.type === 'agent' && entity?.name && projectData.agentPresets?.[entity.name]) {
+                return { type: 'agent', name: entity.name };
+            }
+            if (entity?.type === 'group' && entity?.name && projectData.agentGroups?.[entity.name]) {
+                return { type: 'group', name: entity.name };
+            }
+            if (firstAgentName) return { type: 'agent', name: firstAgentName };
+            if (firstGroupName) return { type: 'group', name: firstGroupName };
+            return null;
+        };
+
+        projectData.chatSessions = projectData.chatSessions.map(session => {
+            const rawSettings = session?.ragSettings || {};
+            const normalizedLinkedEntity = normalizeLinkedEntity(session?.linkedEntity);
+            return {
+                ...session,
+                linkedEntity: normalizedLinkedEntity,
+                folderId: typeof session?.folderId === 'string' && session.folderId.trim()
+                    ? session.folderId
+                    : null,
+                contextMode: normalizeSessionContextMode(session?.contextMode),
+                ragSettings: normalizeSessionRagSettings(rawSettings)
+            };
+        });
+
+        if (projectData.chatSessions.length > 0) {
+            const activeSession = projectData.chatSessions.find(session => session.id === projectData.activeSessionId)
+                || projectData.chatSessions[0];
+            if (activeSession?.linkedEntity) {
+                projectData.activeEntity = { ...activeSession.linkedEntity };
+            }
+        }
+    }
+
+    ensureProjectFolders(projectData);
+
+    if (!Array.isArray(projectData.knowledgeFiles)) {
+        projectData.knowledgeFiles = [];
+    } else {
+        projectData.knowledgeFiles = projectData.knowledgeFiles.map(file => ({
+            id: file.id || `kf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+            name: file.name || 'Untitled',
+            type: file.type || 'application/octet-stream',
+            size: Number.isFinite(file.size) ? file.size : 0,
+            uploadedAt: file.uploadedAt || Date.now(),
+            source: file.source || 'upload',
+            status: file.status || 'uploaded',
+            textContent: typeof file.textContent === 'string' ? file.textContent : '',
+            excerpt: typeof file.excerpt === 'string' ? file.excerpt : '',
+            note: typeof file.note === 'string' ? file.note : '',
+            lastModified: Number.isFinite(file.lastModified) ? file.lastModified : 0,
+            chunkCount: Number.isFinite(file.chunkCount) ? file.chunkCount : 0,
+            indexedAt: Number.isFinite(file.indexedAt) ? file.indexedAt : null,
+            embeddingModel: typeof file.embeddingModel === 'string' ? file.embeddingModel : ''
+        }));
+    }
+
+    const knowledgeFileIdSet = new Set(projectData.knowledgeFiles.map(file => file.id));
+    if (Array.isArray(projectData.chatSessions)) {
+        projectData.chatSessions = projectData.chatSessions.map(session => ({
+            ...session,
+            ragSettings: {
+                ...session.ragSettings,
+                selectedFileIds: (session.ragSettings?.selectedFileIds || []).filter(id => knowledgeFileIdSet.has(id))
+            }
+        }));
+    }
+    if (Array.isArray(projectData.chatFolders)) {
+        projectData.chatFolders = projectData.chatFolders.map(folder => ({
+            ...folder,
+            ragSettings: {
+                ...folder.ragSettings,
+                selectedFileIds: (folder.ragSettings?.selectedFileIds || []).filter(id => knowledgeFileIdSet.has(id))
+            }
+        }));
+    }
+
+    const defaultKnowledgeIndex = {
+        version: 1,
+        embeddingModel: 'local-hash-v1',
+        dimensions: 128,
+        updatedAt: Date.now(),
+        chunks: []
+    };
+
+    if (!projectData.knowledgeIndex || typeof projectData.knowledgeIndex !== 'object') {
+        projectData.knowledgeIndex = { ...defaultKnowledgeIndex };
+    } else {
+        const source = projectData.knowledgeIndex;
+        projectData.knowledgeIndex = {
+            version: Number.isFinite(source.version) ? source.version : defaultKnowledgeIndex.version,
+            embeddingModel: source.embeddingModel || defaultKnowledgeIndex.embeddingModel,
+            dimensions: Number.isFinite(source.dimensions) ? source.dimensions : defaultKnowledgeIndex.dimensions,
+            updatedAt: Number.isFinite(source.updatedAt) ? source.updatedAt : defaultKnowledgeIndex.updatedAt,
+            chunks: Array.isArray(source.chunks)
+                ? source.chunks.map((chunk, index) => ({
+                    id: chunk.id || `kc_${Date.now()}_${index}`,
+                    fileId: chunk.fileId || '',
+                    fileName: chunk.fileName || 'Unknown',
+                    chunkIndex: Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex : index,
+                    text: typeof chunk.text === 'string' ? chunk.text : '',
+                    charCount: Number.isFinite(chunk.charCount) ? chunk.charCount : 0,
+                    tokenEstimate: Number.isFinite(chunk.tokenEstimate) ? chunk.tokenEstimate : 0,
+                    vector: Array.isArray(chunk.vector) ? chunk.vector : [],
+                    embeddingModel: chunk.embeddingModel || source.embeddingModel || defaultKnowledgeIndex.embeddingModel,
+                    createdAt: Number.isFinite(chunk.createdAt) ? chunk.createdAt : Date.now()
+                }))
+                : []
+        };
+    }
+
+    const chunkCountByFileId = new Map();
+    for (const chunk of projectData.knowledgeIndex.chunks) {
+        if (!chunk.fileId) continue;
+        chunkCountByFileId.set(chunk.fileId, (chunkCountByFileId.get(chunk.fileId) || 0) + 1);
+    }
+
+    projectData.knowledgeFiles = projectData.knowledgeFiles.map(file => {
+        const indexedChunkCount = chunkCountByFileId.get(file.id) || 0;
+        const normalizedStatus = file.status || 'uploaded';
+        const status = normalizedStatus === 'ready'
+            ? 'indexed'
+            : (normalizedStatus === 'error' ? 'failed' : normalizedStatus);
+        return {
+            ...file,
+            chunkCount: Number.isFinite(file.chunkCount) && file.chunkCount > 0 ? file.chunkCount : indexedChunkCount,
+            status: indexedChunkCount > 0 && !['failed', 'binary'].includes(status) ? 'indexed' : status
+        };
+    });
     
     // [FIX END]
     return projectData;
@@ -562,10 +703,18 @@ export async function selectEntity(type, name) {
         name.includes('Seedance')
     );
 
+    const entityExists = (
+        (type === 'agent' && Boolean(project.agentPresets?.[name])) ||
+        (type === 'group' && Boolean(project.agentGroups?.[name]))
+    );
+
     project.activeEntity = { type, name };
     const activeSession = project.chatSessions.find(s => s.id === project.activeSessionId);
 
-    if (activeSession) {
+    // Only persist as session linked entity when this is a real chat entity.
+    // Special workspace-only entities (e.g. Visual Studio) should not overwrite
+    // the session's chat routing target.
+    if (activeSession && entityExists) {
         if (activeSession.groupChatState) activeSession.groupChatState.isRunning = false;
         activeSession.linkedEntity = { ...project.activeEntity };
         activeSession.updatedAt = Date.now();

@@ -19,6 +19,7 @@ export default defineConfig({
     },
   },
   build: {
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       input: {
         // หน้าหลัก (/) จะเป็น Landing Page
@@ -28,6 +29,15 @@ export default defineConfig({
         // หน้าแอดมินยังคงเหมือนเดิม
         admin: resolve(__dirname, 'admin.html'),
       },
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('@tiptap')) return 'vendor-tiptap';
+          if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react';
+          if (id.includes('sortablejs')) return 'vendor-sortable';
+          return 'vendor';
+        }
+      }
     },
   },
   base: '/PromptPrim/',

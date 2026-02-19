@@ -1,0 +1,7 @@
+/* Landing page stylesheet placeholder.
+   Keeps Vite build clean for index.html stylesheet reference. */
+
+body {
+    margin: 0;
+    font-family: 'Sarabun', sans-serif;
+}

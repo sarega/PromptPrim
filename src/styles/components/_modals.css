@@ -161,3 +161,37 @@ body.dark-mode .modal-loading-overlay .spinner {
     padding-bottom: 10px;
 }
 
+.session-action-modal-box {
+    max-width: 520px;
+}
+
+.session-move-create-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.folder-settings-file-list {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+    display: grid;
+    gap: 6px;
+}
+
+.folder-settings-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #334155;
+}
+
+.folder-settings-file-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}

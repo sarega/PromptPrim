@@ -16,7 +16,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&family=IBM+Plex+Sans+Thai:wght@400;700&family=Mitr:wght@400;700&family=Noto+Sans+Thai:wght@400;700&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
     <!-- <link rel="stylesheet" href="/src/styles/tw-runtime.css" /> -->
-    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <meta name="apple-mobile-web-app-capable" content="yes">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -88,9 +87,15 @@
                     <div class="section-box">
                         <div class="section-header">
                             <h3><span class="material-symbols-outlined">folder</span> Chat Sessions</h3>
-                            <button id="new-chat-btn" class="btn-icon" title="New Chat">
-                                <span class="material-symbols-outlined">add</span>
-                            </button>
+                            <div id="new-session-menu" class="dropdown align-right">
+                                <button id="new-chat-btn" class="btn-icon" data-action="toggle-menu" title="Create">
+                                    <span class="material-symbols-outlined">add</span>
+                                </button>
+                                <div class="dropdown-content">
+                                    <a href="#" data-action="new-chat">New Chat</a>
+                                    <a href="#" data-action="new-folder">New Folder</a>
+                                </div>
+                            </div>
                         </div>
                         <div id="pinnedSessionList" class="item-list"></div>
                         <div id="sessionListContainer" class="item-list"></div>
@@ -186,7 +191,7 @@
             </div>
 
             <!-- [NEW] CONTAINER สำหรับคอลัมน์กลางและขวา -->
-            <div class="content-columns-wrapper">
+            <div id="content-columns-wrapper" class="content-columns-wrapper">
                 
                 <!-- MAIN CHAT AREA (คอลัมน์กลาง) -->
                 <div id="main-chat-panel" class="main-chat-area">
@@ -271,6 +276,56 @@
                 </div>
             </div>
 
+            <div id="context-debugger-page" class="context-debugger-page hidden">
+                <div class="context-debugger-page-header">
+                    <div class="context-debugger-page-title">
+                        <button id="context-debugger-back-btn" class="btn-icon" title="Back to Chat">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <h3>Context Debugger</h3>
+                    </div>
+                    <div class="context-debugger-header-actions">
+                        <button id="context-debugger-refresh-btn" class="btn btn-secondary">Refresh</button>
+                    </div>
+                </div>
+                <div class="context-debugger-body">
+                    <div class="context-debugger-summary-grid">
+                        <div class="context-debugger-card">
+                            <div class="label">Session</div>
+                            <div id="context-debugger-session-name" class="value">-</div>
+                        </div>
+                        <div class="context-debugger-card">
+                            <div class="label">Folder Mode</div>
+                            <div id="context-debugger-folder-mode" class="value">-</div>
+                        </div>
+                        <div class="context-debugger-card">
+                            <div class="label">Folder Context</div>
+                            <div id="context-debugger-folder-budget" class="value">-</div>
+                        </div>
+                        <div class="context-debugger-card">
+                            <div class="label">RAG</div>
+                            <div id="context-debugger-rag-budget" class="value">-</div>
+                        </div>
+                        <div class="context-debugger-card">
+                            <div class="label">Payload</div>
+                            <div id="context-debugger-payload-meta" class="value">-</div>
+                        </div>
+                    </div>
+                    <div class="context-debugger-panels">
+                        <div class="context-debugger-turns-panel">
+                            <h4>Turns</h4>
+                            <div id="context-debugger-turn-list" class="item-list"></div>
+                        </div>
+                        <div class="context-debugger-detail-panel">
+                            <h4>Turn Detail</h4>
+                            <div id="context-debugger-turn-detail" class="context-debugger-turn-detail"></div>
+                            <h4>Current Assembly</h4>
+                            <pre id="context-debugger-assembly"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- [ย้ายมานี่] STATUS BAR -->
             <div id="status-panel">
                 <div class="status-left">
@@ -282,7 +337,7 @@
                     <span id="active-agent-status"></span> &nbsp;
                     <span id="token-count-status"></span>
                 </div>
-                <button id="context-inspector-trigger-btn" title="Inspect Context">&#8505;</button>
+                <button id="context-inspector-trigger-btn" title="Open Context Debugger">&#8505;</button>
             </div>
 
         </div>
@@ -332,6 +387,39 @@
                 <div class="tab-content active" data-tab-content="services">
                     <div class="section-box">
                         <h3>API Settings</h3>
+
+                        <div id="api-provider-switches" class="api-provider-switches">
+                            <div class="api-provider-switch-row">
+                                <div class="api-provider-switch-meta">
+                                    <span class="api-provider-switch-title">OpenRouter</span>
+                                    <span class="api-provider-switch-desc">Cloud LLM provider</span>
+                                </div>
+                                <label class="api-toggle" for="openrouter-enabled-toggle">
+                                    <input type="checkbox" id="openrouter-enabled-toggle" checked>
+                                    <span class="api-toggle-track"></span>
+                                </label>
+                            </div>
+                            <div class="api-provider-switch-row">
+                                <div class="api-provider-switch-meta">
+                                    <span class="api-provider-switch-title">Ollama</span>
+                                    <span class="api-provider-switch-desc">Local runtime endpoint</span>
+                                </div>
+                                <label class="api-toggle" for="ollama-enabled-toggle">
+                                    <input type="checkbox" id="ollama-enabled-toggle" checked>
+                                    <span class="api-toggle-track"></span>
+                                </label>
+                            </div>
+                            <div class="api-provider-switch-row">
+                                <div class="api-provider-switch-meta">
+                                    <span class="api-provider-switch-title">Kie.ai</span>
+                                    <span class="api-provider-switch-desc">Image and video generation</span>
+                                </div>
+                                <label class="api-toggle" for="kieai-enabled-toggle">
+                                    <input type="checkbox" id="kieai-enabled-toggle" checked>
+                                    <span class="api-toggle-track"></span>
+                                </label>
+                            </div>
+                        </div>
                         
                         <div class="form-group" id="api-key-group">
                             <label for="apiKey">OpenRouter API Key</label>
@@ -360,7 +448,7 @@
                         <div class="form-group">
                             <label for="system-model-search-input">System Utility Model</label>
                                 <div class="searchable-select-wrapper" id="settings-system-model-wrapper">      
-                                <input type="text" id="system-model-search-input" placeholder="Search models..." autocomplete="off" spellcheck="false">
+                                <input type="text" id="system-model-search-input" placeholder="Type to search, then select a model..." autocomplete="off" spellcheck="false">
                                 <input type="hidden" id="system-utility-model-select">
                                 <div id="system-model-options-container" class="searchable-select-options hidden"></div>
                             </div>
@@ -633,7 +721,7 @@
                                     <label>Agent Icon</label>
                                     <div class="emoji-picker-wrapper">
                                         <button type="button" id="agent-icon-button" class="emoji-picker-button">🌐</button>
-                                        <emoji-picker id="agent-emoji-picker" class="light hidden"></emoji-picker>
+                                        <div id="agent-emoji-picker-host"></div>
                                     </div>
                                 </div>
 
@@ -671,7 +759,7 @@
 
                             <div class="searchable-select-wrapper" id="agent-model-search-wrapper">
                                 <label>Model</label>
-                                <input type="text" id="agent-model-search-input" placeholder="Search models..." autocomplete="off" spellcheck="false">
+                                <input type="text" id="agent-model-search-input" placeholder="Type to search, then select a model..." autocomplete="off" spellcheck="false">
                                 <input type="hidden" id="agent-model-select">
                                 <div id="agent-model-options-container" class="searchable-select-options hidden"></div>
                             </div>
@@ -784,11 +872,161 @@
             <div class="modal-actions"><button class="btn btn-secondary">Close</button></div>
         </div>
     </div>
+    <div id="folder-settings-modal" class="modal-overlay">
+        <div class="modal-box folder-settings-modal-box">
+            <div class="modal-header">
+                <h3>Folder Settings</h3>
+                <button type="button" class="modal-close-btn" title="Close Folder Settings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="folder-settings-id">
+                <div class="form-group">
+                    <label for="folder-settings-name">Folder Name</label>
+                    <input type="text" id="folder-settings-name" placeholder="Folder name">
+                </div>
+                <h4>Shared Context Policy</h4>
+                <div class="folder-settings-toggle-row">
+                    <div class="folder-settings-toggle-meta">
+                        <span class="folder-settings-toggle-title">Auto Shared Context</span>
+                        <span class="folder-settings-toggle-desc">Automatically retrieve sibling session snippets in this folder.</span>
+                    </div>
+                    <label class="api-toggle" for="folder-settings-auto-shared-context">
+                        <input type="checkbox" id="folder-settings-auto-shared-context" checked>
+                        <span class="api-toggle-track"></span>
+                    </label>
+                </div>
+                <div class="folder-settings-grid">
+                    <div class="form-group">
+                        <label for="folder-settings-shared-budget">Shared Budget Tokens</label>
+                        <input type="number" id="folder-settings-shared-budget" min="200" max="6000" step="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="folder-settings-max-sessions">Max Related Sessions</label>
+                        <input type="number" id="folder-settings-max-sessions" min="1" max="12" step="1">
+                    </div>
+                </div>
+                <h4>Folder Memory Snippets</h4>
+                <p class="modal-warning">Coming next: curate reusable memory snippets per folder (pin, priority, include/exclude).</p>
+                <h4>Folder RAG Defaults</h4>
+                <div class="folder-settings-toggle-row">
+                    <div class="folder-settings-toggle-meta">
+                        <span class="folder-settings-toggle-title">Auto Folder RAG</span>
+                        <span class="folder-settings-toggle-desc">Automatically retrieve context from files selected for this folder.</span>
+                    </div>
+                    <label class="api-toggle" for="folder-settings-auto-rag">
+                        <input type="checkbox" id="folder-settings-auto-rag" checked>
+                        <span class="api-toggle-track"></span>
+                    </label>
+                </div>
+                <div class="folder-settings-grid">
+                    <div class="form-group">
+                        <label for="folder-settings-rag-scope">Scope</label>
+                        <select id="folder-settings-rag-scope">
+                            <option value="all">All files</option>
+                            <option value="selected">Selected files only</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="folder-settings-rag-topk">Top-K</label>
+                        <input type="number" id="folder-settings-rag-topk" min="1" max="12" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="folder-settings-rag-budget">RAG Token Budget</label>
+                        <input type="number" id="folder-settings-rag-budget" min="200" max="10000" step="100">
+                    </div>
+                </div>
+                <h4>Folder RAG Files</h4>
+                <div class="form-group">
+                    <label>Selected files (used when Scope = Selected)</label>
+                    <div id="folder-settings-file-list" class="folder-settings-file-list"></div>
+                </div>
+                <p class="modal-warning">These file selections are used when sessions in this folder choose Folder RAG + Selected scope.</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-close-btn">Cancel</button>
+                <button id="folder-settings-save-btn" class="btn">Save Folder Settings</button>
+            </div>
+        </div>
+    </div>
+    <div id="folder-name-modal" class="modal-overlay">
+        <div class="modal-box session-action-modal-box">
+            <div class="modal-header">
+                <h3 id="folder-name-modal-title">Create Folder</h3>
+                <button type="button" class="modal-close-btn" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="folder-name-mode" value="create">
+                <input type="hidden" id="folder-name-folder-id" value="">
+                <div class="form-group">
+                    <label for="folder-name-input">Folder Name</label>
+                    <input id="folder-name-input" type="text" placeholder="Folder name">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-close-btn">Cancel</button>
+                <button id="folder-name-save-btn" class="btn">Save</button>
+            </div>
+        </div>
+    </div>
+    <div id="session-move-modal" class="modal-overlay">
+        <div class="modal-box session-action-modal-box">
+            <div class="modal-header">
+                <h3 id="session-move-modal-title">Move Session</h3>
+                <button type="button" class="modal-close-btn" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="session-move-session-id" value="">
+                <div class="form-group">
+                    <label for="session-move-folder-select">Destination</label>
+                    <select id="session-move-folder-select"></select>
+                </div>
+                <div class="session-move-create-row">
+                    <input type="text" id="session-move-new-folder-name" placeholder="New folder name">
+                    <button id="session-move-create-folder-btn" class="btn btn-secondary" type="button">Create Folder</button>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-close-btn">Cancel</button>
+                <button id="session-move-save-btn" class="btn">Move</button>
+            </div>
+        </div>
+    </div>
+    <div id="session-context-mode-modal" class="modal-overlay">
+        <div class="modal-box session-action-modal-box">
+            <div class="modal-header">
+                <h3 id="session-context-mode-title">Context Mode</h3>
+                <button type="button" class="modal-close-btn" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="session-context-mode-session-id" value="">
+                <div class="form-group">
+                    <label for="session-context-mode-select">Mode</label>
+                    <select id="session-context-mode-select">
+                        <option value="folder_aware">Folder aware</option>
+                        <option value="session_only">Session only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary modal-close-btn">Cancel</button>
+                <button id="session-context-mode-save-btn" class="btn">Save</button>
+            </div>
+        </div>
+    </div>
     <div id="view-summary-modal" class="modal-overlay">
         <div class="modal-box">
             <h3 id="view-summary-title"></h3>
             <div class="modal-body"><pre id="view-summary-content"></pre></div>
             <div class="modal-actions"><button class="btn btn-secondary">Close</button></div>
+        </div>
+    </div>
+    <div id="session-info-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>Session Info</h3>
+            <div class="modal-body">
+                <div id="session-info-content" class="session-info-content"></div>
+            </div>
+            <div class="modal-actions"><button class="btn btn-secondary modal-close-btn">Close</button></div>
         </div>
     </div>
     <div id="right-sidebar-overlay"></div>
@@ -826,6 +1064,7 @@
     <input type="file" id="import-agents-input" class="hidden" accept=".json,.prim">
     <input type="file" id="load-memory-package-input" class="hidden" accept=".json">
     <input type="file" id="file-input" class="hidden" multiple>
+    <input type="file" id="knowledge-file-input" class="hidden" multiple accept=".txt,.md,.markdown,.csv,.json,.log,.xml,.yaml,.yml,.pdf,.doc,.docx">
     <input type="file" id="import-settings-input" class="hidden" accept=".json">
     
     <script type="module" src="/src/app.js"></script>

@@ -8,6 +8,7 @@ import { toggleDropdown } from '../../core/core.ui.js';
 import { renderAgentPresets } from '../agent/agent.ui.js';
 import { renderAgentGroups } from '../group/group.ui.js';
 import { loadAndRenderMemories } from '../memory/memory.ui.js';
+import { loadAndRenderKnowledgeFiles } from '../knowledge/knowledge.ui.js';
 import * as StudioHandlers from './studio.handlers.js'; // <-- Import handler ใหม่
 
 function renderStudioContent() {
@@ -20,6 +21,7 @@ function renderStudioContent() {
     renderAgentPresets(assetsContainer, filteredAgents);
     renderAgentGroups(assetsContainer);
     loadAndRenderMemories(assetsContainer);
+    loadAndRenderKnowledgeFiles(assetsContainer);
 }
 
 export function initStudioUI() {

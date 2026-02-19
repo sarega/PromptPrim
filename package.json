@@ -4,8 +4,8 @@
   "version": "0.0.1alpha",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "BROWSERSLIST_IGNORE_OLD_DATA=1 vite",
+    "build": "BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
     "preview": "vite preview",
     "tw:version": "node -p \"require('tailwindcss/package.json').version\"",
     "tw:build": "tailwindcss -i src/styles/main.css -o public/assets/tw.css",

@@ -7,6 +7,101 @@ import { stateManager } from '../../core/core.state.js';
 // [HELPER] สร้างฟังก์ชันกลางเพื่อดึง Element ที่ถูกต้อง ป้องกันความผิดพลาด
 const getEditableArea = () => document.querySelector('#composer-editor .composer-content-area');
 
+const DEFAULT_BLACK_COLORS = new Set([
+    'black',
+    '#000',
+    '#000000',
+    'rgb(0,0,0)',
+    'rgba(0,0,0,1)',
+    'hsl(0,0%,0%)'
+]);
+
+const TRANSPARENT_BG_VALUES = new Set([
+    'transparent',
+    'rgba(0,0,0,0)',
+    'initial',
+    'inherit',
+    'unset',
+    'none'
+]);
+
+function normalizeCssColorValue(value = '') {
+    return String(value).trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function sanitizeInlineStylesForComposer(rawHtml = '', { forExport = false } = {}) {
+    if (!rawHtml || typeof rawHtml !== 'string') return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = rawHtml;
+
+    tempDiv.querySelectorAll('*').forEach((el) => {
+        const style = el.getAttribute('style');
+        if (style) {
+            const kept = [];
+            style.split(';').forEach((part) => {
+                const [rawKey, ...rawValParts] = part.split(':');
+                const rawVal = rawValParts.join(':');
+                if (!rawKey || !rawVal) return;
+                const key = rawKey.trim().toLowerCase();
+                const val = rawVal.trim();
+                const normalizedVal = normalizeCssColorValue(val);
+
+                if (forExport && (key === 'color' || key === 'background-color')) {
+                    return;
+                }
+
+                if (!forExport && key === 'color' && DEFAULT_BLACK_COLORS.has(normalizedVal)) {
+                    return;
+                }
+
+                if (!forExport && key === 'background-color' && TRANSPARENT_BG_VALUES.has(normalizedVal)) {
+                    return;
+                }
+
+                kept.push(`${key}: ${val}`);
+            });
+
+            if (kept.length) {
+                el.setAttribute('style', kept.join('; '));
+            } else {
+                el.removeAttribute('style');
+            }
+        }
+
+        if (forExport) {
+            el.removeAttribute('color');
+            el.removeAttribute('bgcolor');
+        }
+    });
+
+    return tempDiv.innerHTML;
+}
+
+export function normalizeComposerHtmlForStorage(rawHtml = '') {
+    return sanitizeInlineStylesForComposer(rawHtml, { forExport: false });
+}
+
+function hasMeaningfulComposerContent(html = '', text = '') {
+    const normalizedText = String(text || '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim();
+    if (normalizedText) return true;
+
+    if (!html || typeof html !== 'string') return false;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+
+    const domText = String(tempDiv.textContent || '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim();
+    if (domText) return true;
+
+    return Boolean(
+        tempDiv.querySelector('img,video,audio,iframe,canvas,svg,math,hr,table,pre,code,blockquote,ul,ol,li')
+    );
+}
+
 /**
  * Updates the composer content in the currently active session's state.
  * @param {string} content - The HTML content from the composer editor.
@@ -14,9 +109,10 @@ const getEditableArea = () => document.querySelector('#composer-editor .composer
 export function updateComposerContent(newContent) {
     const project = stateManager.getProject();
     const session = project?.chatSessions.find(s => s.id === project.activeSessionId);
+    const normalizedContent = normalizeComposerHtmlForStorage(newContent);
 
-    if (session && session.composerContent !== newContent) {
-        session.composerContent = newContent;
+    if (session && session.composerContent !== normalizedContent) {
+        session.composerContent = normalizedContent;
         stateManager.updateAndPersistState();
     }
 }
@@ -32,7 +128,7 @@ export function loadComposerContent() {
     }
 
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
-    contentArea.innerHTML = session?.composerContent || '';
+    contentArea.innerHTML = normalizeComposerHtmlForStorage(session?.composerContent || '');
 }
 
 /**
@@ -66,15 +162,13 @@ export function appendToComposer({ content }) {
 
 // [REVISED] ฟังก์ชันทำความสะอาด HTML ที่จะเก็บคลาสของ highlight.js ไว้
 function sanitizeHtmlForExport(rawHtml) {
-  const tempDiv = document.createElement('div')
-  tempDiv.innerHTML = rawHtml || ''
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = sanitizeInlineStylesForComposer(rawHtml || '', { forExport: true });
 
   const ALLOWED_STYLE_PROPS = new Set([
     'font-size',
-    'color',
     'text-align',
-    'background-color',
-  ])
+  ]);
 
   tempDiv.querySelectorAll('*').forEach((el) => {
     // --- Keep only allowed inline styles ---
@@ -82,16 +176,16 @@ function sanitizeHtmlForExport(rawHtml) {
     if (style) {
       const kept = []
       style.split(';').forEach((part) => {
-        const [rawKey, rawVal] = part.split(':')
-        if (!rawKey || !rawVal) return
-        const key = rawKey.trim().toLowerCase()
-        const val = rawVal.trim()
+        const [rawKey, rawVal] = part.split(':');
+        if (!rawKey || !rawVal) return;
+        const key = rawKey.trim().toLowerCase();
+        const val = rawVal.trim();
         if (ALLOWED_STYLE_PROPS.has(key) && val) {
-          kept.push(`${key}: ${val}`)
+          kept.push(`${key}: ${val}`);
         }
-      })
-      if (kept.length) el.setAttribute('style', kept.join('; '))
-      else el.removeAttribute('style')
+      });
+      if (kept.length) el.setAttribute('style', kept.join('; '));
+      else el.removeAttribute('style');
     }
 
     // --- Keep only highlight-related classes (optional hardening) ---
@@ -116,16 +210,24 @@ function sanitizeHtmlForExport(rawHtml) {
  */
 export function exportComposerContent({ html = '', text = '' } = {}) {
   try {
-    const rawHtmlContent = (html || '').trim()
-    if (!rawHtmlContent) {
-      window.alert('Composer is empty. Nothing to export.')
-      return
-    }
-    // --- [✅ ส่วนที่แก้ไข] ---
+    const providedHtml = typeof html === 'string' ? html : '';
+    const providedText = typeof text === 'string' ? text : '';
+
     // 1. ดึงข้อมูล Session ปัจจุบันจาก stateManager
     const project = stateManager.getProject();
     const session = project?.chatSessions.find(s => s.id === project.activeSessionId);
     const sessionName = session?.name || 'Untitled Composer';
+    const sessionHtml = typeof session?.composerContent === 'string' ? session.composerContent : '';
+
+    // Guard: บางครั้ง onExport ถูกเรียกซ้ำด้วย payload ว่าง
+    if (!hasMeaningfulComposerContent(providedHtml, providedText)) {
+      if (!hasMeaningfulComposerContent(sessionHtml, '')) {
+        showCustomAlert('Composer is empty. Nothing to export.', 'Export Composer');
+      }
+      return;
+    }
+
+    const rawHtmlContent = providedHtml.trim();
 
     // 2. สร้าง Timestamp ที่อ่านง่าย
     const now = new Date();
@@ -151,6 +253,12 @@ export function exportComposerContent({ html = '', text = '' } = {}) {
             padding: 24px;
             max-width: 860px;
             margin: auto;
+            background: #ffffff;
+            color: #111827;
+        }
+            .composer-export-content {
+                background: #ffffff;
+                color: #111827;
             }
             h1,h2,h3 { line-height: 1.25; margin: 1.2em 0 0.6em; }
             p { margin: 0.6em 0; }
@@ -167,7 +275,7 @@ export function exportComposerContent({ html = '', text = '' } = {}) {
     </style>
         </head>
         <body>
-        ${cleanHtmlContent}
+        <article class="composer-export-content">${cleanHtmlContent}</article>
 
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
             <script>

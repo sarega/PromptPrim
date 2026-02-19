@@ -38,6 +38,7 @@ import * as GroupUI from './js/modules/group/group.ui.js';
 import * as GroupHandlers from './js/modules/group/group.handlers.js';
 import * as MemoryUI from './js/modules/memory/memory.ui.js';
 import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
+import * as KnowledgeHandlers from './js/modules/knowledge/knowledge.handlers.js';
 import * as ComposerUI from './js/modules/composer/composer.ui.js';
 import * as ComposerHandlers from './js/modules/composer/composer.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
@@ -186,13 +187,16 @@ function setupEventSubscriptions() {
         // [FIX] Only publish entity:selected if we're not preventing auto-mount
         // This prevents the photo studio from re-mounting when user clicks "Back to Chat"
         const preventAutoMount = stateManager.getState().preventPhotoStudioAutoMount;
+        const entityForSession = session.linkedEntity || stateManager.getProject()?.activeEntity || null;
         if (!preventAutoMount) {
-            stateManager.bus.publish('entity:selected', session.linkedEntity);
+            if (entityForSession) {
+                stateManager.bus.publish('entity:selected', entityForSession);
+            }
         } else {
             // Still update the activeEntity in state, just don't trigger workspace switch
             const project = stateManager.getProject();
-            if (session.linkedEntity) {
-                project.activeEntity = { ...session.linkedEntity };
+            if (entityForSession) {
+                project.activeEntity = { ...entityForSession };
                 stateManager.setProject(project);
             }
         }
@@ -251,12 +255,24 @@ function setupEventSubscriptions() {
         SessionUI.renderSessionList();
     });
     bus.subscribe('session:autoRename', SessionHandlers.handleAutoRename);
+    bus.subscribe('session:info', (payload) => SessionUI.openSessionInfoModal(payload));
     bus.subscribe('session:rename', (payload) => SessionHandlers.renameChatSession(payload));
+    bus.subscribe('session:move', (payload) => SessionHandlers.moveSessionToFolder(payload));
+    bus.subscribe('session:movePrompt', (payload) => SessionHandlers.moveSessionToFolderPrompt(payload));
+    bus.subscribe('session:contextMode', (payload) => SessionHandlers.setSessionContextMode(payload));
+    bus.subscribe('session:contextModePrompt', (payload) => SessionHandlers.setSessionContextModePrompt(payload));
     bus.subscribe('session:clone', ({ sessionId, event }) => SessionHandlers.cloneSession(sessionId, event));
     bus.subscribe('session:archive', ({ sessionId, event }) => SessionHandlers.archiveSession(sessionId, event));
     bus.subscribe('session:pin', ({ sessionId, event }) => SessionHandlers.togglePinSession(sessionId, event));
     bus.subscribe('session:delete', (payload) => SessionHandlers.deleteChatSession(payload));
     bus.subscribe('session:download', ({ sessionId }) => SessionHandlers.downloadChatSession({ sessionId }));
+    bus.subscribe('folder:new', (payload) => SessionHandlers.createSessionFolder(payload));
+    bus.subscribe('folder:rename', (payload) => SessionHandlers.renameSessionFolder(payload));
+    bus.subscribe('folder:delete', (payload) => SessionHandlers.deleteSessionFolder(payload));
+    bus.subscribe('folder:updateSettings', (payload) => SessionHandlers.updateSessionFolderSettings(payload));
+    bus.subscribe('folder:newChat', (payload) => SessionHandlers.createChatInFolder(payload));
+    bus.subscribe('folder:activate', (payload) => SessionHandlers.activateSessionFolder(payload));
+    bus.subscribe('folder:collapse', (payload) => SessionHandlers.setFolderCollapsedState(payload));
 
 
     // Agent & Studio Actions
@@ -319,6 +335,17 @@ function setupEventSubscriptions() {
     bus.subscribe('chat:fileUpload', (event) => ChatHandlers.handleFileUpload(event));
     bus.subscribe('chat:filesSelected', (files) => ChatHandlers.handleFileUpload(files));
     bus.subscribe('chat:removeFile', ({ index }) => ChatHandlers.removeAttachedFile({ index }));
+    bus.subscribe('knowledge:upload', KnowledgeHandlers.openKnowledgeFilePicker);
+    bus.subscribe('knowledge:filesSelected', (files) => KnowledgeHandlers.handleKnowledgeFilesSelected(files));
+    bus.subscribe('knowledge:delete', ({ fileId }) => KnowledgeHandlers.deleteKnowledgeFile({ fileId }));
+    bus.subscribe('knowledge:reindex', ({ fileId }) => KnowledgeHandlers.reindexKnowledgeFile({ fileId }));
+    bus.subscribe('knowledge:reindexAll', KnowledgeHandlers.reindexAllKnowledgeFiles);
+    bus.subscribe('knowledge:clearAll', KnowledgeHandlers.clearKnowledgeFiles);
+    bus.subscribe('knowledge:updateSessionRagSettings', (payload) => KnowledgeHandlers.updateActiveSessionRagSettings(payload));
+    bus.subscribe('knowledge:toggleSelection', ({ fileId }) => KnowledgeHandlers.toggleFileInActiveSessionScope({ fileId }));
+    bus.subscribe('knowledge:setScopeSource', (payload) => KnowledgeHandlers.setActiveSessionRagScopeSource(payload));
+    bus.subscribe('knowledge:focusChunk', (payload) => KnowledgeHandlers.focusKnowledgeChunk(payload));
+    bus.subscribe('knowledge:clearFocus', KnowledgeHandlers.clearKnowledgeFocus);
 
     bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
@@ -514,19 +541,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- [CRITICAL FIX] ---
         const currentUser = UserService.getCurrentUserProfile();
         const systemSettings = UserService.getSystemApiSettings();
+        const systemProviderEnabled = systemSettings.providerEnabled || {};
 
         // 1. โหลดโมเดลของระบบ (สำหรับ Free/Pro tiers)
         await loadAllProviderModels({ 
-            apiKey: systemSettings.openrouterKey, 
-            ollamaBaseUrl: systemSettings.ollamaBaseUrl,
+            apiKey: systemProviderEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
+            ollamaBaseUrl: systemProviderEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
             isUserKey: false 
         });
 
         // 2. [FIX] โหลดโมเดลของผู้ใช้ (ถ้าเป็น Master Plan) จากทุกแหล่ง
         if (currentUser && currentUser.plan === 'master') {
+            const userProviderEnabled = currentUser.apiSettings?.providerEnabled || {};
             await loadAllProviderModels({ 
-                apiKey: currentUser.apiSettings?.openrouterKey,
-                ollamaBaseUrl: currentUser.apiSettings?.ollamaBaseUrl,
+                apiKey: userProviderEnabled.openrouter !== false ? currentUser.apiSettings?.openrouterKey : '',
+                ollamaBaseUrl: userProviderEnabled.ollama !== false ? currentUser.apiSettings?.ollamaBaseUrl : '',
                 isUserKey: true 
             });
         }
@@ -538,6 +567,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupEventSubscriptions();
         ProjectHandlers.setupAutoSaveChanges();
         document.getElementById('load-memory-package-input').addEventListener('change', MemoryHandlers.loadMemoryPackage);
+        document.getElementById('knowledge-file-input')?.addEventListener('change', (event) => {
+            stateManager.bus.publish('knowledge:filesSelected', event.target.files);
+            event.target.value = '';
+        });
 
         // --- [DEFINITIVE FIX] เพิ่ม try...catch เพื่อจัดการ Error ตอนโหลดโปรเจกต์ ---
         const lastProjectId = localStorage.getItem('lastActiveProjectId');

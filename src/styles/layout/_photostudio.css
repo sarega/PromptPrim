@@ -1,0 +1,14 @@
+/* ===============================================
+   FILE: src/styles/layout/_photostudio.css
+   DESCRIPTION: Base layout hooks for the Photo Studio workspace.
+   =============================================== */
+
+#kieai-studio-workspace {
+    width: 100%;
+    height: 100%;
+}
+
+#photo-studio-root {
+    width: 100%;
+    height: 100%;
+}

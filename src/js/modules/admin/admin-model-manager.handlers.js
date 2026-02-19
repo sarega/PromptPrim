@@ -84,3 +84,24 @@ export function importMasterPresets(event) {
     reader.readAsText(file);
     event.target.value = ''; // Clear the input
 }
+
+export function deleteMasterPreset() {
+    const presetSelector = document.getElementById('admin-preset-selector');
+    if (!presetSelector) return;
+
+    const selectedKey = presetSelector.value;
+    if (!selectedKey || selectedKey === '--new--') {
+        showCustomAlert('Please select a preset to delete.', 'Info');
+        return;
+    }
+
+    const allMasterPresets = UserService.getMasterModelPresets();
+    const presetName = allMasterPresets[selectedKey]?.name || selectedKey;
+
+    if (!confirm(`Delete master preset "${presetName}"?`)) return;
+
+    delete allMasterPresets[selectedKey];
+    UserService.saveMasterModelPresets(allMasterPresets);
+    showCustomAlert(`Deleted preset "${presetName}".`, 'Success');
+    stateManager.bus.publish('admin:presetsChanged');
+}

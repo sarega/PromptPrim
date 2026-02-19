@@ -806,3 +806,111 @@ body.dark-mode .agent-selector-bar {
     color: white;
     border-color: var(--accent-color);
 }
+
+/* --- RAG Source / Debug UI --- */
+.rag-source-strip {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.rag-source-title {
+    font-size: 0.72rem;
+    color: #486581;
+}
+
+.rag-source-chip {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    border: 1px solid #bfdff5;
+    color: #1d4e89;
+    background: #eef7ff;
+    border-radius: 999px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.rag-source-chip:hover {
+    background: #dff0ff;
+    border-color: #8bc5ec;
+}
+
+.rag-source-chip:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 1px;
+}
+
+.rag-debug-panel {
+    margin-top: 8px;
+    border: 1px solid #d7e3f0;
+    background: #f8fbff;
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 0.74rem;
+}
+
+.rag-debug-panel.hidden {
+    display: none;
+}
+
+.rag-debug-summary {
+    color: #102a43;
+}
+
+.rag-debug-reason {
+    margin-top: 4px;
+    color: #486581;
+}
+
+.rag-debug-list {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rag-debug-item {
+    border: 1px solid #e1ecf7;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 6px;
+}
+
+.rag-debug-item-title {
+    color: #1f3c5b;
+    font-weight: 600;
+}
+
+.rag-debug-item-excerpt {
+    margin-top: 3px;
+    color: #334e68;
+    white-space: pre-wrap;
+}
+
+.message-actions button.active {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.session-info-content h4 {
+    margin: 10px 0 6px;
+    font-size: 0.9rem;
+}
+
+.session-info-content pre {
+    margin: 0;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: #f8fbff;
+    white-space: pre-wrap;
+    font-size: 0.78rem;
+    line-height: 1.45;
+}

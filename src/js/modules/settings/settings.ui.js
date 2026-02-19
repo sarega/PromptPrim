@@ -11,6 +11,46 @@ import { getFilteredModelsForDisplay } from '../models/model-manager.ui.js';
 import { renderModelManager } from '../models/model-manager.ui.js';
 import { createParameterEditor } from '../../components/parameter-editor.js';
 
+function getProviderEnabledMap(user) {
+    const raw = user?.apiSettings?.providerEnabled || {};
+    return {
+        openrouter: raw.openrouter !== false,
+        ollama: raw.ollama !== false,
+        kieai: raw.kieai !== false
+    };
+}
+
+function applyApiProviderVisibility({ isMaster, providerEnabled }) {
+    const switchesWrapper = document.getElementById('api-provider-switches');
+    const apiKeyGroup = document.getElementById('api-key-group');
+    const ollamaGroup = document.getElementById('ollama-url-group');
+    const kieAiGroup = document.getElementById('kieai-key-group');
+    const loadModelsBtn = document.getElementById('load-models-btn');
+
+    if (switchesWrapper) switchesWrapper.style.display = isMaster ? 'block' : 'none';
+    if (apiKeyGroup) apiKeyGroup.style.display = (isMaster && providerEnabled.openrouter) ? 'block' : 'none';
+    if (ollamaGroup) ollamaGroup.style.display = (isMaster && providerEnabled.ollama) ? 'block' : 'none';
+    if (kieAiGroup) kieAiGroup.style.display = (isMaster && providerEnabled.kieai) ? 'block' : 'none';
+
+    if (loadModelsBtn) {
+        const canLoad = isMaster && (providerEnabled.openrouter || providerEnabled.ollama);
+        loadModelsBtn.style.display = canLoad ? 'inline-block' : 'none';
+        loadModelsBtn.disabled = !canLoad;
+    }
+}
+
+function pruneDisabledUserModels(providerEnabled) {
+    const userModels = stateManager.getState().userProviderModels || [];
+    const filteredModels = userModels.filter((model) => {
+        if (model.provider === 'openrouter') return providerEnabled.openrouter;
+        if (model.provider === 'ollama') return providerEnabled.ollama;
+        return true;
+    });
+    if (filteredModels.length !== userModels.length) {
+        stateManager.setUserModels(filteredModels);
+    }
+}
+
 // function initTabs() {
 //     const settingsModal = document.getElementById('settings-modal'); 
 //     if (!settingsModal) return;
@@ -161,28 +201,46 @@ function renderSettingsPanel() {
     const user = UserService.getCurrentUserProfile(); 
     const project = stateManager.getProject();
     if (!project || !project.globalSettings) return;
+    if (!user) {
+        applyApiProviderVisibility({
+            isMaster: false,
+            providerEnabled: { openrouter: false, ollama: false, kieai: false }
+        });
+        return;
+    }
 
-    // ... (Logic for API keys and System Agents is correct)
-    const apiKeyGroup = document.getElementById('api-key-group');
-    const ollamaGroup = document.getElementById('ollama-url-group');
-    const loadModelsBtn = document.getElementById('load-models-btn');
+    const isMaster = UserService.isMasterProfile(user);
+    const providerEnabled = getProviderEnabledMap(user);
+    const kieAiInput = document.getElementById('kieAiApiKey');
+    const openrouterToggle = document.getElementById('openrouter-enabled-toggle');
+    const ollamaToggle = document.getElementById('ollama-enabled-toggle');
+    const kieAiToggle = document.getElementById('kieai-enabled-toggle');
 
-    if (user.plan === 'master') {
-        apiKeyGroup.style.display = 'block';
-        ollamaGroup.style.display = 'block';
-        if (loadModelsBtn) loadModelsBtn.style.display = 'inline-block';
+    if (kieAiInput) {
+        kieAiInput.value = user.apiSettings?.kieAiApiKey || '';
+    }
+    if (openrouterToggle) {
+        openrouterToggle.checked = providerEnabled.openrouter;
+        openrouterToggle.disabled = !isMaster;
+    }
+    if (ollamaToggle) {
+        ollamaToggle.checked = providerEnabled.ollama;
+        ollamaToggle.disabled = !isMaster;
+    }
+    if (kieAiToggle) {
+        kieAiToggle.checked = providerEnabled.kieai;
+        kieAiToggle.disabled = !isMaster;
+    }
+
+    if (isMaster) {
         document.getElementById('apiKey').value = user.apiSettings?.openrouterKey || '';
         document.getElementById('ollamaBaseUrl').value = user.apiSettings?.ollamaBaseUrl || '';
-    } else {
-        apiKeyGroup.style.display = 'none';
-        ollamaGroup.style.display = 'none';
-        if (loadModelsBtn) loadModelsBtn.style.display = 'none';
     }
+    applyApiProviderVisibility({ isMaster, providerEnabled });
 
     const sysAgent = project.globalSettings.systemUtilityAgent || {};
     document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
     
-    const modelsToShow = UserService.getAllowedModelsForCurrentUser();
     createSearchableModelSelector('settings-system-model-wrapper', sysAgent.model, UserService.getAllowedModelsForCurrentUser());
     
     // [THIS IS THE KEY CHANGE]
@@ -209,25 +267,47 @@ export function initSettingsUI() {
     const bus = stateManager.bus;
     document.getElementById('load-models-btn')?.addEventListener('click', () => {
         const user = UserService.getCurrentUserProfile();
-        if (user.plan === 'master') {
-            // [FIX] ดึงทั้ง API Key และ Ollama URL จากฟอร์ม
-            const userApiKey = document.getElementById('apiKey').value;
-            const userOllamaUrl = document.getElementById('ollamaBaseUrl').value;
-
-            // ส่งข้อมูลทั้งสองอย่างไปพร้อมกัน
-            bus.publish('api:loadUserModels', { 
-                apiKey: userApiKey, 
-                ollamaBaseUrl: userOllamaUrl, 
-                isUserKey: true 
-            });
+        if (!user) {
+            showCustomAlert('User profile is not ready yet. Please reload the app and try again.', 'Settings');
+            return;
         }
+        if (!UserService.isMasterProfile(user)) {
+            return;
+        }
+
+        const providerEnabled = getProviderEnabledMap(user);
+        const userApiKey = providerEnabled.openrouter ? document.getElementById('apiKey').value : '';
+        const userOllamaUrl = providerEnabled.ollama ? document.getElementById('ollamaBaseUrl').value : '';
+
+        bus.publish('api:loadUserModels', { 
+            apiKey: userApiKey, 
+            ollamaBaseUrl: userOllamaUrl, 
+            isUserKey: true 
+        });
+    });
+
+    const providerToggleConfig = [
+        { inputId: 'openrouter-enabled-toggle', key: 'openrouter' },
+        { inputId: 'ollama-enabled-toggle', key: 'ollama' },
+        { inputId: 'kieai-enabled-toggle', key: 'kieai' }
+    ];
+    providerToggleConfig.forEach(({ inputId, key }) => {
+        document.getElementById(inputId)?.addEventListener('change', (event) => {
+            const user = UserService.getCurrentUserProfile();
+            if (!user || !UserService.isMasterProfile(user)) return;
+
+            UserService.updateApiSettings({ providerEnabled: { [key]: event.target.checked } });
+            const updatedUser = UserService.getCurrentUserProfile();
+            const updatedProviderEnabled = getProviderEnabledMap(updatedUser);
+            pruneDisabledUserModels(updatedProviderEnabled);
+            applyApiProviderVisibility({ isMaster: true, providerEnabled: updatedProviderEnabled });
+        });
     });
     
     document.getElementById('apiKey')?.addEventListener('input', debounce((e) => {
         const user = UserService.getCurrentUserProfile();
-        if (user && user.plan === 'master') {
-            user.apiSettings.openrouterKey = e.target.value;
-            UserService.saveFullUserProfile(user);
+        if (user && UserService.isMasterProfile(user)) {
+            UserService.updateApiSettings({ openrouterKey: e.target.value });
         }
     }, 500));
     
