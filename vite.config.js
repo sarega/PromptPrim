@@ -28,15 +28,6 @@ export default defineConfig({
         app: resolve(__dirname, 'app.html'), 
         // หน้าแอดมินยังคงเหมือนเดิม
         admin: resolve(__dirname, 'admin.html'),
-      },
-      output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return;
-          if (id.includes('@tiptap')) return 'vendor-tiptap';
-          if (id.includes('react-dom') || id.includes('/react/')) return 'vendor-react';
-          if (id.includes('sortablejs')) return 'vendor-sortable';
-          return 'vendor';
-        }
       }
     },
   },
