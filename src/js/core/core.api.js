@@ -28,7 +28,7 @@ const modelCapabilities = {
 
 const MODEL_ALERT_DEDUPE_MS = 7000;
 const MODEL_LOAD_RETRY_COUNT = 2;
-const OPENROUTER_MODELS_TIMEOUT_MS = 25000;
+const OPENROUTER_MODELS_TIMEOUT_MS = 90000;
 const OLLAMA_MODELS_TIMEOUT_MS = 8000;
 
 let lastModelAlertKey = '';
@@ -583,11 +583,7 @@ async function fetchOpenRouterModels(apiKey) {
 
     const headers = {
         'Authorization': `Bearer ${normalizedApiKey}`,
-        'Accept': 'application/json',
-        'X-Title': 'PromptPrim'
-    };
-    if (typeof window !== 'undefined' && window.location?.origin) {
-        headers['HTTP-Referer'] = window.location.origin;
+        'Accept': 'application/json'
     }
 
     let lastError = null;
@@ -636,7 +632,8 @@ async function fetchOpenRouterModels(apiKey) {
     }
 
     if (lastError && isNetworkLikeError(lastError)) {
-        throw new Error('Could not fetch models from OpenRouter (network timeout/CORS). Please retry, then check network/firewall or try a different connection.');
+        const suffix = lastError.message ? ` Details: ${String(lastError.message).slice(0, 240)}` : '';
+        throw new Error(`Could not fetch models from OpenRouter.${suffix}`);
     }
     throw lastError || new Error('Could not fetch models from OpenRouter.');
 }
@@ -676,7 +673,20 @@ async function fetchOllamaModels(baseUrl) {
 async function fetchWithTimeout(resource, options = {}, timeout = 120000) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
-    const signal = AbortSignal.any([options.signal, controller.signal].filter(Boolean));
+
+    const externalSignal = options.signal;
+    let signal = controller.signal;
+
+    if (externalSignal) {
+        if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+            signal = AbortSignal.any([externalSignal, controller.signal]);
+        } else if (externalSignal.aborted) {
+            controller.abort(externalSignal.reason);
+        } else if (typeof externalSignal.addEventListener === 'function') {
+            externalSignal.addEventListener('abort', () => controller.abort(externalSignal.reason), { once: true });
+        }
+    }
+
     try {
         return await fetch(resource, { ...options, signal });
     } finally {
