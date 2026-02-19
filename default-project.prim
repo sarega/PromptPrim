@@ -34,6 +34,17 @@
       "content": "You are a creative writing assistant."
     }
   ],
+  "knowledgeFiles": [],
+  "knowledgeIndex": {
+    "version": 1,
+    "embeddingModel": "local-hash-v1",
+    "dimensions": 128,
+    "updatedAt": 0,
+    "chunks": []
+  },
+  "chatFolders": [],
+  "folderMemoryCards": [],
+  "activeFolderId": null,
   "chatSessions": [],
   "activeSessionId": null,
   "summaryLogs": [],
