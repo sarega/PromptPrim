@@ -26,6 +26,65 @@ const modelCapabilities = {
     'xai/grok-1.5': { penalties: false, seed: false },
 };
 
+const MODEL_ALERT_DEDUPE_MS = 7000;
+const MODEL_LOAD_RETRY_COUNT = 2;
+const OPENROUTER_MODELS_TIMEOUT_MS = 25000;
+const OLLAMA_MODELS_TIMEOUT_MS = 8000;
+
+let lastModelAlertKey = '';
+let lastModelAlertAt = 0;
+let userModelLoadInFlight = null;
+let systemModelLoadInFlight = null;
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function showModelWarningOnce(message, title = 'Warning') {
+    const text = String(message || '').trim();
+    if (!text) return;
+    const now = Date.now();
+    const key = `${title}:${text}`;
+    if (key === lastModelAlertKey && (now - lastModelAlertAt) < MODEL_ALERT_DEDUPE_MS) {
+        return;
+    }
+    lastModelAlertKey = key;
+    lastModelAlertAt = now;
+    showCustomAlert(text, title);
+}
+
+function isRetriableHttpStatus(status) {
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
+function isNetworkLikeError(error) {
+    if (!error) return false;
+    if (error.name === 'AbortError') return true;
+    const message = String(error.message || '');
+    return (
+        /timed?\s*out/i.test(message) ||
+        /network/i.test(message) ||
+        /failed to fetch/i.test(message) ||
+        /load failed/i.test(message) ||
+        /not allowed to request resource/i.test(message) ||
+        /fetch api cannot load/i.test(message)
+    );
+}
+
+function isLocalhostUrl(baseUrl = '') {
+    try {
+        const parsed = new URL(baseUrl);
+        return ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+    } catch (_) {
+        return false;
+    }
+}
+
+function isAppRunningLocally() {
+    if (typeof window === 'undefined' || !window.location) return false;
+    return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+}
+
 function fnv1a32(input) {
     let hash = 0x811c9dc5;
     for (let i = 0; i < input.length; i += 1) {
@@ -522,35 +581,64 @@ async function fetchOpenRouterModels(apiKey) {
     const normalizedApiKey = typeof apiKey === 'string' ? apiKey.trim().replace(/^Bearer\s+/i, '').trim() : '';
     if (!normalizedApiKey) return [];
 
-    const response = await fetch('https://openrouter.ai/api/v1/models', { 
-        headers: { 'Authorization': `Bearer ${normalizedApiKey}` } 
-    });
-    if (!response.ok) {
-        let errorText = '';
-        try {
-            errorText = (await response.text()).trim();
-        } catch (_) {
-            errorText = '';
-        }
-        const details = errorText ? ` Details: ${errorText.slice(0, 240)}` : '';
-        if (response.status === 401) {
-            throw new Error(`OpenRouter returned 401 Unauthorized. Check API key format in Settings.${details}`);
-        }
-        throw new Error(`Could not fetch models from OpenRouter (HTTP ${response.status}).${details}`);
+    const headers = {
+        'Authorization': `Bearer ${normalizedApiKey}`,
+        'Accept': 'application/json',
+        'X-Title': 'PromptPrim'
+    };
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        headers['HTTP-Referer'] = window.location.origin;
     }
-    const data = await response.json();
-    return data.data.map(m => ({ 
-        id: m.id, 
-        name: m.name || m.id, 
-        provider: 'openrouter',
-        description: m.description,
-        context_length: m.context_length,
-        pricing: {
-            prompt: m.pricing?.prompt || '0',
-            completion: m.pricing?.completion || '0'
-        },
-        supports_tools: m.architecture?.tool_use === true 
-    }));
+
+    let lastError = null;
+    for (let attempt = 0; attempt <= MODEL_LOAD_RETRY_COUNT; attempt += 1) {
+        try {
+            const response = await fetchWithTimeout(
+                'https://openrouter.ai/api/v1/models',
+                { headers },
+                OPENROUTER_MODELS_TIMEOUT_MS
+            );
+            if (!response.ok) {
+                const errorText = await safeReadErrorText(response);
+                const details = errorText ? ` Details: ${errorText.slice(0, 240)}` : '';
+                if (isRetriableHttpStatus(response.status) && attempt < MODEL_LOAD_RETRY_COUNT) {
+                    await sleep(450 * (attempt + 1));
+                    continue;
+                }
+                if (response.status === 401) {
+                    throw new Error(`OpenRouter returned 401 Unauthorized. Check API key format in Settings.${details}`);
+                }
+                throw new Error(`Could not fetch models from OpenRouter (HTTP ${response.status}).${details}`);
+            }
+
+            const data = await response.json();
+            const rows = Array.isArray(data?.data) ? data.data : [];
+            return rows.map(m => ({
+                id: m.id,
+                name: m.name || m.id,
+                provider: 'openrouter',
+                description: m.description,
+                context_length: m.context_length,
+                pricing: {
+                    prompt: m.pricing?.prompt || '0',
+                    completion: m.pricing?.completion || '0'
+                },
+                supports_tools: m.architecture?.tool_use === true
+            }));
+        } catch (error) {
+            lastError = error;
+            if (attempt < MODEL_LOAD_RETRY_COUNT && isNetworkLikeError(error)) {
+                await sleep(450 * (attempt + 1));
+                continue;
+            }
+            break;
+        }
+    }
+
+    if (lastError && isNetworkLikeError(lastError)) {
+        throw new Error('Could not fetch models from OpenRouter (network timeout/CORS). Please retry, then check network/firewall or try a different connection.');
+    }
+    throw lastError || new Error('Could not fetch models from OpenRouter.');
 }
 
 async function fetchOllamaModels(baseUrl) {
@@ -559,13 +647,29 @@ async function fetchOllamaModels(baseUrl) {
     if (!trimmed) return [];
     const normalizedBaseUrl = (/^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`).replace(/\/+$/, '');
 
+    if (!isAppRunningLocally() && isLocalhostUrl(normalizedBaseUrl)) {
+        throw new Error(
+            'Skipped Ollama model fetch for localhost while app is hosted remotely. Run PromptPrim on localhost, or expose Ollama via HTTPS reverse proxy with CORS.'
+        );
+    }
+
     try {
-        const response = await fetch(`${normalizedBaseUrl}/api/tags`);
-        if (!response.ok) throw new Error(`Ollama connection failed (HTTP ${response.status})`);
+        const response = await fetchWithTimeout(`${normalizedBaseUrl}/api/tags`, {}, OLLAMA_MODELS_TIMEOUT_MS);
+        if (!response.ok) {
+            const details = await safeReadErrorText(response);
+            const suffix = details ? ` Details: ${details.slice(0, 240)}` : '';
+            throw new Error(`Ollama connection failed (HTTP ${response.status}).${suffix}`);
+        }
         const data = await response.json();
-        return data.models.map(m => ({ id: m.name, name: m.name, provider: 'ollama', supports_tools: false }));
+        const rows = Array.isArray(data?.models) ? data.models : [];
+        return rows.map(m => ({ id: m.name, name: m.name, provider: 'ollama', supports_tools: false }));
     } catch (error) {
-        throw new Error('Could not connect to Ollama. Check URL and CORS settings.');
+        if (isNetworkLikeError(error)) {
+            throw new Error(
+                `Could not connect to Ollama at ${normalizedBaseUrl}/api/tags. Check that Ollama is running and OLLAMA_ORIGINS allows this app origin.`
+            );
+        }
+        throw error;
     }
 }
 
@@ -664,46 +768,91 @@ function resolveModelLoadSettings({ apiKey, ollamaBaseUrl, isUserKey = false } =
 }
 
 export async function loadAllProviderModels({ apiKey, ollamaBaseUrl, isUserKey = false } = {}) {
-    stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
-    const resolved = resolveModelLoadSettings({ apiKey, ollamaBaseUrl, isUserKey });
-    let allModels = [];
-    let attemptedProviders = 0;
+    const activeLoad = isUserKey ? userModelLoadInFlight : systemModelLoadInFlight;
+    if (activeLoad) return activeLoad;
 
-    // 1. Fetch from OpenRouter if enabled and apiKey is provided
-    if (resolved.providerEnabled.openrouter && resolved.apiKey) {
-        attemptedProviders += 1;
-        try {
-            const openRouterModels = await fetchOpenRouterModels(resolved.apiKey);
-            allModels.push(...openRouterModels);
-        } catch (error) {
-            console.error("Failed to fetch OpenRouter models:", error);
-            showCustomAlert(error.message || "Could not fetch models from OpenRouter.", "Warning");
-        }
-    }
+    const loadPromise = (async () => {
+        stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
+        const resolved = resolveModelLoadSettings({ apiKey, ollamaBaseUrl, isUserKey });
+        let allModels = [];
+        let attemptedProviders = 0;
+        let successfulProviders = 0;
+        const providerErrors = [];
 
-    // 2. Fetch from Ollama if enabled and url is provided
-    if (resolved.providerEnabled.ollama && resolved.ollamaBaseUrl) {
-        attemptedProviders += 1;
-        try {
-            const ollamaModels = await fetchOllamaModels(resolved.ollamaBaseUrl);
-            allModels.push(...ollamaModels);
-        } catch (error) {
-            console.error("Failed to fetch Ollama models:", error);
-            showCustomAlert(error.message, "Warning");
+        if (resolved.providerEnabled.openrouter && resolved.apiKey) {
+            attemptedProviders += 1;
+            try {
+                const openRouterModels = await fetchOpenRouterModels(resolved.apiKey);
+                allModels.push(...openRouterModels);
+                successfulProviders += 1;
+            } catch (error) {
+                console.error("Failed to fetch OpenRouter models:", error);
+                providerErrors.push(`OpenRouter: ${error.message || 'Unknown error'}`);
+            }
         }
-    }
-    
-    // 3. Save to the correct state (user or system)
+
+        if (resolved.providerEnabled.ollama && resolved.ollamaBaseUrl) {
+            attemptedProviders += 1;
+            try {
+                const ollamaModels = await fetchOllamaModels(resolved.ollamaBaseUrl);
+                allModels.push(...ollamaModels);
+                successfulProviders += 1;
+            } catch (error) {
+                console.error("Failed to fetch Ollama models:", error);
+                providerErrors.push(`Ollama: ${error.message || 'Unknown error'}`);
+            }
+        }
+
+        if (providerErrors.length > 0) {
+            showModelWarningOnce(providerErrors.join('\n\n'), 'Warning');
+        }
+
+        const currentList = isUserKey
+            ? (stateManager.getState().userProviderModels || [])
+            : (stateManager.getState().systemProviderModels || []);
+        const shouldPersistNewList = successfulProviders > 0 || attemptedProviders === 0;
+
+        if (shouldPersistNewList) {
+            if (isUserKey) {
+                stateManager.setUserModels(allModels);
+            } else {
+                stateManager.setSystemModels(allModels);
+            }
+        } else if (!Array.isArray(currentList)) {
+            if (isUserKey) {
+                stateManager.setUserModels([]);
+            } else {
+                stateManager.setSystemModels([]);
+            }
+        }
+
+        if (attemptedProviders === 0) {
+            stateManager.bus.publish('status:update', { message: 'No enabled model providers configured', state: 'connected' });
+            return;
+        }
+
+        if (successfulProviders === 0) {
+            stateManager.bus.publish('status:update', {
+                message: `Model load failed for ${attemptedProviders} provider(s). Keeping previous model list.`,
+                state: 'error'
+            });
+            return;
+        }
+
+        stateManager.bus.publish('status:update', { message: `Models loaded (${allModels.length})`, state: 'connected' });
+    })();
+
     if (isUserKey) {
-        stateManager.setUserModels(allModels);
-    } else {
-        stateManager.setSystemModels(allModels);
+        userModelLoadInFlight = loadPromise.finally(() => {
+            userModelLoadInFlight = null;
+        });
+        return userModelLoadInFlight;
     }
-    
-    const statusMessage = attemptedProviders > 0
-        ? `Models loaded (${allModels.length})`
-        : 'No enabled model providers configured';
-    stateManager.bus.publish('status:update', { message: statusMessage, state: 'connected' });
+
+    systemModelLoadInFlight = loadPromise.finally(() => {
+        systemModelLoadInFlight = null;
+    });
+    return systemModelLoadInFlight;
 }
 
 // --- Main Exported Functions ---
@@ -713,34 +862,51 @@ export async function loadAllSystemModels() {
     const settings = UserService.getSystemApiSettings();
     const providerEnabled = settings.providerEnabled || {};
     let allModels = [];
+    let attemptedProviders = 0;
+    let successfulProviders = 0;
+    const providerErrors = [];
 
     // 1. พยายามดึงโมเดลจาก OpenRouter (ถ้ามี Key)
     if (providerEnabled.openrouter !== false && settings.openrouterKey) {
+        attemptedProviders += 1;
         try {
             const openRouterModels = await fetchOpenRouterModels(settings.openrouterKey);
             allModels.push(...openRouterModels);
+            successfulProviders += 1;
         } catch (error) {
             console.error("Failed to fetch OpenRouter models:", error);
-            showCustomAlert(error.message || "Could not fetch models from OpenRouter. Check key and connection.", "Warning");
+            providerErrors.push(`OpenRouter: ${error.message || 'Could not fetch models from OpenRouter. Check key and connection.'}`);
         }
     }
 
     // 2. พยายามดึงโมเดลจาก Ollama (ถ้ามี URL)
     if (providerEnabled.ollama !== false && settings.ollamaBaseUrl) {
+        attemptedProviders += 1;
         try {
             const ollamaModels = await fetchOllamaModels(settings.ollamaBaseUrl);
             allModels.push(...ollamaModels);
+            successfulProviders += 1;
         } catch (error) {
             console.error("Failed to fetch Ollama models:", error);
-            showCustomAlert(error.message, "Warning");
+            providerErrors.push(`Ollama: ${error.message || 'Could not fetch models from Ollama.'}`);
         }
+    }
+
+    if (providerErrors.length > 0) {
+        showModelWarningOnce(providerErrors.join('\n\n'), 'Warning');
     }
     
     // 3. บันทึกโมเดลทั้งหมดที่หาเจอเข้าสู่ State
-    stateManager.setSystemModels(allModels);
+    if (successfulProviders > 0 || attemptedProviders === 0) {
+        stateManager.setSystemModels(allModels);
+    }
     
     console.log(`Loaded a total of ${allModels.length} system models.`);
-    stateManager.bus.publish('status:update', { message: 'Models loaded', state: 'connected' });
+    if (attemptedProviders > 0 && successfulProviders === 0) {
+        stateManager.bus.publish('status:update', { message: 'Failed to load system models. Keeping previous list.', state: 'error' });
+    } else {
+        stateManager.bus.publish('status:update', { message: 'Models loaded', state: 'connected' });
+    }
 }
 
 

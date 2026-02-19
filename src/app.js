@@ -540,23 +540,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         await UserService.initUserSettings();
         // --- [CRITICAL FIX] ---
         const currentUser = UserService.getCurrentUserProfile();
+        const isMasterUser = UserService.isMasterProfile(currentUser);
         const systemSettings = UserService.getSystemApiSettings();
         const systemProviderEnabled = systemSettings.providerEnabled || {};
 
-        // 1. โหลดโมเดลของระบบ (สำหรับ Free/Pro tiers)
-        await loadAllProviderModels({ 
-            apiKey: systemProviderEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
-            ollamaBaseUrl: systemProviderEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
-            isUserKey: false 
-        });
+        // 1. โหลดโมเดลของระบบเฉพาะผู้ใช้ Free/Pro
+        if (!isMasterUser) {
+            await loadAllProviderModels({
+                apiKey: systemProviderEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
+                ollamaBaseUrl: systemProviderEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
+                isUserKey: false
+            });
+        }
 
-        // 2. [FIX] โหลดโมเดลของผู้ใช้ (ถ้าเป็น Master Plan) จากทุกแหล่ง
-        if (currentUser && currentUser.plan === 'master') {
+        // 2. โหลดโมเดลของผู้ใช้เองสำหรับ Master Plan
+        if (isMasterUser && currentUser) {
             const userProviderEnabled = currentUser.apiSettings?.providerEnabled || {};
-            await loadAllProviderModels({ 
+            await loadAllProviderModels({
                 apiKey: userProviderEnabled.openrouter !== false ? currentUser.apiSettings?.openrouterKey : '',
                 ollamaBaseUrl: userProviderEnabled.ollama !== false ? currentUser.apiSettings?.ollamaBaseUrl : '',
-                isUserKey: true 
+                isUserKey: true
             });
         }
         console.log("🚀 Application starting...");
