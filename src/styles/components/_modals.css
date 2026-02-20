@@ -82,14 +82,22 @@
 }
 
 .modal-close-btn {
+    cursor: pointer;
+}
+
+/*
+ * Only the icon-style close button (X) should use the large font size.
+ * Footer action buttons reuse .modal-close-btn as a close trigger and must
+ * keep normal .btn typography.
+ */
+.modal-close-btn:not(.btn) {
     background: none;
     border: none;
     font-size: 28px;
     line-height: 1;
-    cursor: pointer;
     color: #888;
 }
-body.dark-mode .modal-close-btn {
+body.dark-mode .modal-close-btn:not(.btn) {
     color: var(--text-dark);
 }
 

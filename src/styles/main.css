@@ -151,16 +151,15 @@
 
 /* Dropzone Overlay Styles */
 .dropzone-overlay {
-    position: fixed;
-    inset: 0; /* top, right, bottom, left = 0 */
-    background-color: rgba(188, 213, 255, 0.85);
-    border: 3px dashed var(--accent-color);
-    z-index: 9998;
+    position: absolute;
+    inset: 0;
+    background-color: rgba(188, 213, 255, 0.22);
+    border: 2px dashed var(--accent-color);
+    border-radius: 20px;
+    z-index: 6;
     display: flex;
     align-items: center;
     justify-content: center;
-    
-    /* Hidden by default */
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -173,18 +172,31 @@
 }
 
 .dropzone-message {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
     color: var(--text-dark);
     font-weight: 600;
+    font-size: 0.82rem;
+    background: var(--white-alpha-95);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 5px 10px;
 }
 
 .dropzone-message .material-symbols-outlined {
-    font-size: 64px;
-    margin-bottom: 1rem;
+    font-size: 18px;
+    margin-bottom: 0;
+}
+
+.dropzone-message h2 {
+    margin: 0;
+    font-size: inherit;
 }
 
 body.dark-mode .dropzone-overlay {
-    background-color: rgba(45, 55, 72, 0.85);
+    background-color: rgba(45, 55, 72, 0.28);
     border-color: var(--primary-color);
 }
 

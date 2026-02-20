@@ -5,16 +5,28 @@ import { stateManager } from '../../core/core.state.js';
 import { ReactBridge } from '../../react-entry.jsx'; 
 import Composer from '../../react-components/Composer.jsx';
 import * as ComposerHandlers from './composer.handlers.js';
-import { initHorizontalResizer } from '../../core/core.layout.js';
 
 // --- Element ที่จำเป็น ---
 const composerPanelContainer = document.getElementById('composer-panel');
-const resizerRow = document.getElementById('resizer-row');
 const mainContentWrapper = document.querySelector('.main-content-wrapper');
 const mainChatArea = document.querySelector('.main-chat-area');
 
 // --- ตัวแปรสำหรับเก็บ instance ของ React Component ---
 let activeComposerInstance = null;
+
+function isPeekChatActive() {
+    return Boolean(mainContentWrapper?.classList.contains('composer-peek-chat'));
+}
+
+function setPeekChatActive(enabled) {
+    if (!mainContentWrapper) return false;
+    if (!mainContentWrapper.classList.contains('composer-maximized')) {
+        mainContentWrapper.classList.remove('composer-peek-chat');
+        return false;
+    }
+    mainContentWrapper.classList.toggle('composer-peek-chat', Boolean(enabled));
+    return isPeekChatActive();
+}
 
 function mountOrUpdateComposer(content, isMaximized) {
     if (!composerPanelContainer) return;
@@ -28,6 +40,8 @@ function mountOrUpdateComposer(content, isMaximized) {
             const currentIsMaximized = mainContentWrapper.classList.contains('composer-maximized');
             setComposerState(currentIsMaximized ? 'normal' : 'maximized');
         },
+        onTogglePeekChat: () => setPeekChatActive(!isPeekChatActive()),
+        isPeekChat: isPeekChatActive(),
         onExport: (payload) => {
             const html = typeof payload?.html === 'string' ? payload.html : '';
             const text = typeof payload?.text === 'string' ? payload.text : '';
@@ -40,7 +54,6 @@ function mountOrUpdateComposer(content, isMaximized) {
     };
 
     ReactBridge.mount(Composer, props, composerPanelContainer);
-    initHorizontalResizer(resizerRow, composerPanelContainer);
 }
 
 function unmountComposer() {
@@ -53,7 +66,8 @@ export function setComposerState(newState) {
     if (!composerPanelContainer || !mainContentWrapper || !mainChatArea) return;
 
     // --- Reset Class ทั้งหมดก่อน ---
-   mainContentWrapper.classList.remove('composer-maximized');
+    mainContentWrapper.classList.remove('composer-maximized');
+    mainContentWrapper.classList.remove('composer-peek-chat');
     mainChatArea.classList.remove('composer-is-active');
     composerPanelContainer.classList.remove('collapsed');
 

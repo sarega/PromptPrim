@@ -34,7 +34,8 @@
     align-items: center;
     gap: 1rem;
     flex-shrink: 0;
-    z-index: 40; 
+    position: relative;
+    z-index: 200;
 }
 
 /* [NEW] สร้าง Container สำหรับแต่ละส่วนใน Header */

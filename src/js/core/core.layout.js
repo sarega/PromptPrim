@@ -69,71 +69,115 @@ function cacheDOMElements() {
 
 export function initHorizontalResizer(resizer, panelToResize) {
     if (!resizer || !panelToResize) return;
-    
-    let initialMouseY = 0, initialPanelHeight = 0;
-    let lastMouseY = 0; // << เพิ่มตัวแปรเก็บตำแหน่งล่าสุด
-    let ticking = false; // << เพิ่ม "ธง" เพื่อเช็คสถานะ
 
-    const onMouseDown = (e) => {
+    // Guard against duplicate bindings from repeated init paths.
+    if (resizer.dataset.horizontalResizerBound === 'true') return;
+    resizer.dataset.horizontalResizerBound = 'true';
+
+    const MIN_PANEL_HEIGHT = 140;
+    const RESERVED_CHAT_HEIGHT = 140;
+    const SNAP_RATIOS = [0.38, 0.55, 0.72];
+
+    let dragPointerId = null;
+    let initialPointerY = 0;
+    let initialPanelHeight = 0;
+    let lastPointerY = 0;
+    let rafId = null;
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    const getHeightBounds = () => {
+        const container = panelToResize.parentElement;
+        const containerHeight = container?.getBoundingClientRect().height || window.innerHeight;
+        const maxHeight = Math.max(MIN_PANEL_HEIGHT, containerHeight - RESERVED_CHAT_HEIGHT);
+        return { containerHeight, maxHeight };
+    };
+
+    const applyPanelHeight = (height) => {
+        panelToResize.style.flexBasis = `${Math.round(height)}px`;
+    };
+
+    const stopDragging = () => {
+        if (dragPointerId === null) return;
+
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
+
+        const currentHeight = panelToResize.getBoundingClientRect().height;
+        const { containerHeight, maxHeight } = getHeightBounds();
+        const snapPoints = SNAP_RATIOS
+            .map((ratio) => clamp(containerHeight * ratio, MIN_PANEL_HEIGHT, maxHeight));
+
+        const snappedHeight = snapPoints.reduce((nearest, point) => (
+            Math.abs(point - currentHeight) < Math.abs(nearest - currentHeight) ? point : nearest
+        ), snapPoints[0] || currentHeight);
+
+        applyPanelHeight(snappedHeight);
+        localStorage.setItem('promptPrimComposerHeight', String(Math.round(snappedHeight)));
+        stateManager.bus.publish('composer:heightChanged', { height: Math.round(snappedHeight) });
+
+        try {
+            resizer.releasePointerCapture(dragPointerId);
+        } catch (_) {
+            // ignore capture release errors
+        }
+
+        resizer.classList.remove('active');
+        panelToResize.classList.remove('is-resizing');
+        document.body.style.cursor = '';
+        dragPointerId = null;
+    };
+
+    const onPointerMove = (e) => {
+        if (dragPointerId === null || e.pointerId !== dragPointerId) return;
+        lastPointerY = e.clientY;
+
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+            const deltaY = lastPointerY - initialPointerY;
+            const { maxHeight } = getHeightBounds();
+            const nextHeight = clamp(initialPanelHeight - deltaY, MIN_PANEL_HEIGHT, maxHeight);
+            applyPanelHeight(nextHeight);
+            rafId = null;
+        });
+    };
+
+    const onPointerUp = (e) => {
+        if (dragPointerId === null || e.pointerId !== dragPointerId) return;
+        stopDragging();
+    };
+
+    const onPointerCancel = (e) => {
+        if (dragPointerId === null || e.pointerId !== dragPointerId) return;
+        stopDragging();
+    };
+
+    const onPointerDown = (e) => {
+        if (window.innerWidth <= 768) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
         e.preventDefault();
-        resizer.classList.add('active');
-        document.body.style.cursor = 'row-resize';
-
-        panelToResize.classList.add('is-resizing'); 
-
         if (panelToResize.classList.contains('collapsed')) {
-            // panelToResize.classList.remove('collapsed');
-            // resizer.classList.remove('collapsed');
             stateManager.bus.publish('ui:requestComposerOpen');
         }
 
-        initialMouseY = e.clientY;
+        dragPointerId = e.pointerId;
+        initialPointerY = e.clientY;
         initialPanelHeight = panelToResize.getBoundingClientRect().height;
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        lastPointerY = e.clientY;
+
+        resizer.classList.add('active');
+        panelToResize.classList.add('is-resizing');
+        document.body.style.cursor = 'row-resize';
+        resizer.setPointerCapture(e.pointerId);
     };
 
-    // แก้ไขฟังก์ชัน onMouseMove ใหม่
-    const onMouseMove = (e) => {
-        lastMouseY = e.clientY;
-        
-        if (!ticking) {
-            window.requestAnimationFrame(() => {
-                const deltaY = lastMouseY - initialMouseY;
-                let newHeight = initialPanelHeight - deltaY;
-                const minHeight = 100; // ความสูงน้อยสุดที่ยอมรับได้
-                if (newHeight < minHeight) newHeight = minHeight;
-                
-                // 1. สั่งปรับขนาด Panel หลัก (เหมือนเดิม)
-                panelToResize.style.flexBasis = `${newHeight}px`;
-
-                // 2. [คำสั่งใหม่] หา .composer-editor ที่อยู่ข้างในแล้วสั่งปรับความสูงด้วย!
-                const editorDiv = panelToResize.querySelector('.composer-editor');
-                if (editorDiv) {
-                    // เราอาจจะต้องเผื่อความสูงของ Header ของ Composer ไว้ด้วย
-                    const headerHeight = 50; // ประมาณความสูงของ Toolbar
-                    editorDiv.style.height = `${newHeight - headerHeight}px`;
-                }
-
-                ticking = false;
-            });
-            ticking = true;
-        }
-    };
-
-    const onMouseUp = () => {
-        resizer.classList.remove('active');
-        document.body.style.cursor = '';
-        panelToResize.classList.remove('is-resizing');
-
-        const currentHeight = panelToResize.getBoundingClientRect().height;
-        localStorage.setItem('promptPrimComposerHeight', currentHeight);
-
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-    };
-    
-    resizer.addEventListener('mousedown', onMouseDown);
+    resizer.addEventListener('pointerdown', onPointerDown);
+    resizer.addEventListener('pointermove', onPointerMove);
+    resizer.addEventListener('pointerup', onPointerUp);
+    resizer.addEventListener('pointercancel', onPointerCancel);
 }
 
 function initializePanelControls() {

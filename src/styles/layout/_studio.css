@@ -269,3 +269,51 @@
     padding: 0 8px;
     font-size: 0.7rem;
 }
+
+/* Prevent accidental text selection/highlight in interactive labels/buttons. */
+#studio-panel .section-header,
+#studio-panel .section-header *,
+#studio-panel .item-header,
+#studio-panel .item-header *,
+#studio-panel .selected-entity-section,
+#studio-panel .selected-entity-section *,
+#studio-panel .btn,
+#studio-panel .btn-icon,
+#studio-panel .dropdown-content a {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Keep text fields selectable/editable. */
+#studio-panel input,
+#studio-panel textarea,
+#studio-panel select {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.selected-entity-name-btn {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.selected-entity-name-btn:hover {
+    text-decoration: underline;
+}
+
+.item-list > .item.selected-entity-jump-highlight {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+    animation: studioEntityJumpHighlight 1.1s ease;
+}
+
+@keyframes studioEntityJumpHighlight {
+    0% { transform: translateY(0); }
+    20% { transform: translateY(-2px); }
+    100% { transform: translateY(0); }
+}

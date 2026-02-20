@@ -130,6 +130,170 @@ function initMobileGestures() {
         }
     });
 }
+
+function setWorkspaceToggleActive(workspace = 'chat') {
+    document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+
+    if (workspace === 'photo') {
+        document.getElementById('switch-to-photo-btn')?.classList.add('active');
+        return;
+    }
+
+    if (workspace === 'composer') {
+        document.getElementById('switch-to-composer-btn')?.classList.add('active');
+        return;
+    }
+
+    document.getElementById('switch-to-chat-btn')?.classList.add('active');
+}
+
+const SESSION_WORKSPACE_CHAT = 'chat';
+const SESSION_WORKSPACE_COMPOSER = 'composer';
+const SESSION_COMPOSER_MODE_NORMAL = 'normal';
+const SESSION_COMPOSER_MODE_MAXIMIZED = 'maximized';
+let suppressWorkspacePreferenceSync = false;
+
+function normalizeSessionWorkspacePreference(workspace) {
+    return workspace === SESSION_WORKSPACE_COMPOSER
+        ? SESSION_WORKSPACE_COMPOSER
+        : SESSION_WORKSPACE_CHAT;
+}
+
+function getSessionWorkspacePreference(session) {
+    return normalizeSessionWorkspacePreference(session?.workspaceView);
+}
+
+function normalizeSessionComposerMode(mode) {
+    return mode === SESSION_COMPOSER_MODE_NORMAL
+        ? SESSION_COMPOSER_MODE_NORMAL
+        : SESSION_COMPOSER_MODE_MAXIMIZED;
+}
+
+function getSessionComposerMode(session) {
+    return normalizeSessionComposerMode(session?.composerViewMode);
+}
+
+function getSessionComposerHeight(session) {
+    const sessionHeight = Number(session?.composerHeight);
+    if (Number.isFinite(sessionHeight) && sessionHeight > 0) {
+        return sessionHeight;
+    }
+
+    const savedHeight = Number(localStorage.getItem('promptPrimComposerHeight'));
+    if (Number.isFinite(savedHeight) && savedHeight > 0) {
+        return savedHeight;
+    }
+
+    return null;
+}
+
+function getCurrentComposerMode() {
+    if (!isComposerWorkspaceActive()) return null;
+    const mainContentWrapper = document.querySelector('.main-content-wrapper');
+    return mainContentWrapper?.classList.contains('composer-maximized')
+        ? SESSION_COMPOSER_MODE_MAXIMIZED
+        : SESSION_COMPOSER_MODE_NORMAL;
+}
+
+function hasComposerTextContent(rawHtml = '') {
+    if (!rawHtml || typeof rawHtml !== 'string') return false;
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = rawHtml;
+
+    const normalizedText = String(tempDiv.textContent || '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .trim();
+
+    return normalizedText.length > 0;
+}
+
+function appendComposerContentToActiveSession(rawContent) {
+    const nextChunk = typeof rawContent === 'string' ? rawContent : '';
+    if (!nextChunk.trim()) return false;
+
+    const project = stateManager.getProject();
+    if (!project?.activeSessionId || !Array.isArray(project.chatSessions)) return false;
+
+    const activeSession = project.chatSessions.find(item => item.id === project.activeSessionId);
+    if (!activeSession) return false;
+
+    const currentRaw = typeof activeSession.composerContent === 'string' ? activeSession.composerContent : '';
+    const currentNormalized = ComposerHandlers.normalizeComposerHtmlForStorage(currentRaw);
+
+    let mergedContent = currentNormalized;
+    if (hasComposerTextContent(currentNormalized)) {
+        mergedContent += '<hr>';
+    }
+    mergedContent += nextChunk;
+
+    const nextNormalized = ComposerHandlers.normalizeComposerHtmlForStorage(mergedContent);
+    if (nextNormalized === currentRaw) return true;
+
+    activeSession.composerContent = nextNormalized;
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    return true;
+}
+
+function persistActiveSessionWorkspacePreference(workspace, composerMode = null) {
+    const normalizedWorkspace = normalizeSessionWorkspacePreference(workspace);
+    const project = stateManager.getProject();
+    if (!project?.activeSessionId || !Array.isArray(project.chatSessions)) return;
+
+    const activeSession = project.chatSessions.find(item => item.id === project.activeSessionId);
+    if (!activeSession) return;
+
+    const resolvedComposerMode = composerMode
+        || getCurrentComposerMode()
+        || activeSession.composerViewMode
+        || SESSION_COMPOSER_MODE_MAXIMIZED;
+    const normalizedComposerMode = normalizeSessionComposerMode(resolvedComposerMode);
+
+    const currentWorkspace = normalizeSessionWorkspacePreference(activeSession.workspaceView);
+    const currentComposerMode = normalizeSessionComposerMode(activeSession.composerViewMode);
+    if (
+        currentWorkspace === normalizedWorkspace &&
+        currentComposerMode === normalizedComposerMode
+    ) {
+        return;
+    }
+
+    activeSession.workspaceView = normalizedWorkspace;
+    activeSession.composerViewMode = normalizedComposerMode;
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+}
+
+function withWorkspacePreferenceSyncSuspended(callback) {
+    suppressWorkspacePreferenceSync = true;
+    try {
+        callback();
+    } finally {
+        suppressWorkspacePreferenceSync = false;
+    }
+}
+
+function isComposerWorkspaceActive() {
+    const composerPanel = document.getElementById('composer-panel');
+    return Boolean(composerPanel && !composerPanel.classList.contains('collapsed'));
+}
+
+function isPhotoWorkspaceActive() {
+    const photoWorkspace = document.getElementById('kieai-studio-workspace');
+    return Boolean(photoWorkspace && !photoWorkspace.classList.contains('hidden'));
+}
+
+function syncWorkspaceToggleActive() {
+    if (isPhotoWorkspaceActive()) {
+        setWorkspaceToggleActive('photo');
+        return;
+    }
+
+    setWorkspaceToggleActive(isComposerWorkspaceActive() ? 'composer' : 'chat');
+}
+
 // --- Event Bus Setup ---
 function setupEventSubscriptions() {
     const bus = stateManager.bus;
@@ -145,31 +309,7 @@ function setupEventSubscriptions() {
     bus.subscribe('project:loaded', (eventData) => {
         // โค้ดเดิมที่อัปเดต UI ยังอยู่เหมือนเดิม
         ProjectUI.updateProjectTitle(eventData.projectData.name);
-        // เมื่อโปรเจกต์โหลดเสร็จแล้ว ค่อยเรียกคืนสถานะ Composer
-        try {
-            const savedComposerState = localStorage.getItem('promptPrimComposerState');
-            if (savedComposerState === 'normal' || savedComposerState === 'maximized') {
-                
-                // 1. สั่งให้เปิด Composer ก่อน (ซึ่งจะใช้ค่า default จาก CSS)
-                setComposerState(savedComposerState);
-
-                // --- [✅ ส่วนที่แก้ไข] ---
-                // 2. "เขียนทับ" ความสูงด้วยค่าที่บันทึกไว้จาก localStorage ทีหลัง
-                const savedHeight = localStorage.getItem('promptPrimComposerHeight');
-                const composerPanel = document.getElementById('composer-panel');
-                
-                // ตรวจสอบให้แน่ใจว่าเราอยู่ในโหมด normal เท่านั้นถึงจะปรับความสูง
-                if (savedHeight && composerPanel && savedComposerState === 'normal') {
-                    // ใช้ requestAnimationFrame เพื่อให้แน่ใจว่า Browser วาด UI เสร็จก่อน
-                    requestAnimationFrame(() => {
-                        composerPanel.style.flexBasis = `${savedHeight}px`;
-                    });
-                }
-            }
-        } catch (error) {
-            console.error("Could not restore composer state:", error);
-        }
-        // ------------------------------------
+        syncWorkspaceToggleActive();
     });
 
     // Session Management
@@ -200,38 +340,38 @@ function setupEventSubscriptions() {
             }
         }
 
-        // --- ส่วนที่ 2: จัดการสถานะ Composer (ส่วนที่เพิ่มเข้ามา) ---
+        // --- ส่วนที่ 2: จัดการสถานะ Composer ต่อ session ---
+        const workspacePreference = getSessionWorkspacePreference(session);
+        const composerModePreference = getSessionComposerMode(session);
         try {
-            const savedComposerState = localStorage.getItem('promptPrimComposerState');
-            if (savedComposerState === 'normal' || savedComposerState === 'maximized') {
-                // เรียก setComposerState ซึ่งจะไปดึง content ของ session ใหม่มาเอง
-                setComposerState(savedComposerState);
-                const savedHeight = localStorage.getItem('promptPrimComposerHeight');
+            if (workspacePreference === SESSION_WORKSPACE_COMPOSER) {
+                setComposerState(composerModePreference);
+                const preferredHeight = getSessionComposerHeight(session);
                 const composerPanel = document.getElementById('composer-panel');
-                if (savedHeight && composerPanel && savedComposerState === 'normal') {
-                    composerPanel.style.flexBasis = `${savedHeight}px`;
+                if (preferredHeight && composerPanel && composerModePreference === SESSION_COMPOSER_MODE_NORMAL) {
+                    composerPanel.style.flexBasis = `${Math.round(preferredHeight)}px`;
                 }
             } else {
-                // ถ้าสถานะเดิมคือ 'collapsed' ให้แน่ใจว่ามันปิดอยู่
                 setComposerState('collapsed');
             }
         } catch (error) {
             console.error("Could not set composer state on session load:", error);
         }
+        persistActiveSessionWorkspacePreference(
+            isComposerWorkspaceActive() ? SESSION_WORKSPACE_COMPOSER : SESSION_WORKSPACE_CHAT,
+            getCurrentComposerMode()
+        );
 
-        // Always switch to chat view after loading a session.  Without this
-        // override the linked entity (e.g. a KieAI agent) would re‑mount the
-        // photo studio immediately, causing the application to start on the
-        // visual studio unintentionally.  Hiding the photo studio here
-        // guarantees the chat workspace is the default visible page on session load.
+        // Always leave the photo workspace after loading a session.  The
+        // linked entity can still be preserved, but the visible workspace
+        // should be the standard chat/composer area and header toggle must
+        // reflect whichever one is actually open.
         try {
             KieAI_UI.unmountPhotoStudio();
         } catch (_) {
             // ignore if unavailable
         }
-        // Reset header active classes to ensure chat is highlighted
-        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('switch-to-chat-btn')?.classList.add('active');
+        syncWorkspaceToggleActive();
     });
 
     
@@ -241,9 +381,11 @@ function setupEventSubscriptions() {
         if (composerApi && composerApi.appendContent) {
             // แล้วเรียกใช้ฟังก์ชัน appendContent ที่อยู่ใน React Component
             composerApi.appendContent(content);
-        } else {
-            // (Optional) อาจจะเปิด Composer ขึ้นมาก่อนถ้ามันปิดอยู่
-            console.warn("Composer is not ready to append content.");
+            return;
+        }
+
+        if (!appendComposerContentToActiveSession(content)) {
+            console.warn("Composer is not ready and no active session to store appended content.");
         }
     });
 
@@ -323,8 +465,27 @@ function setupEventSubscriptions() {
     // Chat Actions
     bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
     bus.subscribe('composer:heightChanged', SessionHandlers.saveComposerHeight);
-    bus.subscribe('ui:requestComposerOpen', () => { setComposerState('normal');});
-    bus.subscribe('ui:toggleComposer', () => { setComposerState('normal');});
+    bus.subscribe('ui:requestComposerOpen', () => {
+        KieAI_UI.unmountPhotoStudio();
+        setComposerState(SESSION_COMPOSER_MODE_NORMAL);
+        persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_COMPOSER, SESSION_COMPOSER_MODE_NORMAL);
+        syncWorkspaceToggleActive();
+    });
+    bus.subscribe('ui:toggleComposer', () => {
+        KieAI_UI.unmountPhotoStudio();
+        setComposerState(SESSION_COMPOSER_MODE_NORMAL);
+        persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_COMPOSER, SESSION_COMPOSER_MODE_NORMAL);
+        syncWorkspaceToggleActive();
+    });
+    bus.subscribe('composer:visibilityChanged', () => {
+        if (!suppressWorkspacePreferenceSync && !isPhotoWorkspaceActive()) {
+            persistActiveSessionWorkspacePreference(
+                isComposerWorkspaceActive() ? SESSION_WORKSPACE_COMPOSER : SESSION_WORKSPACE_CHAT,
+                getCurrentComposerMode()
+            );
+        }
+        syncWorkspaceToggleActive();
+    });
     bus.subscribe('composer:export', ComposerHandlers.exportComposerContent);
     
     bus.subscribe('chat:deleteMessage', (payload) => ChatHandlers.deleteMessage(payload));
@@ -394,18 +555,18 @@ function setupEventSubscriptions() {
     
     document.getElementById('switch-to-photo-btn')?.addEventListener('click', () => {
         // Collapse the composer completely when entering the photo studio.
-        try {
-            setComposerState('collapsed');
-        } catch (_) {
-            // ignore if unavailable
-        }
+        withWorkspacePreferenceSyncSuspended(() => {
+            try {
+                setComposerState('collapsed');
+            } catch (_) {
+                // ignore if unavailable
+            }
+        });
         // Let the application know we selected the visual studio agent.  Use the new
         // agent name "Visual Studio" so that the photo studio logic
         // recognizes it correctly and displays the correct heading.
         stateManager.bus.publish('entity:select', { type: 'agent', name: 'Visual Studio' });
-        // Highlight the photo button and remove highlights from the others.
-        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('switch-to-photo-btn')?.classList.add('active');
+        setWorkspaceToggleActive('photo');
     });
 
     document.getElementById('switch-to-chat-btn')?.addEventListener('click', () => {
@@ -415,6 +576,7 @@ function setupEventSubscriptions() {
         } catch (_) {
             // ignore if unavailable
         }
+        persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_CHAT);
         // Ensure any photo studio view is closed
         KieAI_UI.unmountPhotoStudio();
         
@@ -430,28 +592,34 @@ function setupEventSubscriptions() {
             stateManager.setState('preventPhotoStudioAutoMount', false);
         }, 100);
         
-        // Highlight the chat button and remove highlights from the others.
-        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('switch-to-chat-btn')?.classList.add('active');
+        setWorkspaceToggleActive('chat');
     });
 
     document.getElementById('switch-to-composer-btn')?.addEventListener('click', () => {
-        // When opening the composer we want a clean slate: hide the photo
-        // studio and maximize the composer panel.
+        // Restore the preferred composer mode for the active session.
         KieAI_UI.unmountPhotoStudio();
+        const project = stateManager.getProject();
+        const activeSession = project?.chatSessions?.find((item) => item.id === project.activeSessionId);
+        const preferredMode = getSessionComposerMode(activeSession);
         try {
-            ComposerUI.setComposerState('maximized');
+            ComposerUI.setComposerState(preferredMode);
         } catch (_) {
             // fallback to the named import if namespace call fails
             try {
-                setComposerState('maximized');
+                setComposerState(preferredMode);
             } catch (_) {
                 // ignore
             }
         }
-        // Highlight the composer button and remove highlights from the others.
-        document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById('switch-to-composer-btn')?.classList.add('active');
+        if (preferredMode === SESSION_COMPOSER_MODE_NORMAL) {
+            const preferredHeight = getSessionComposerHeight(activeSession);
+            const composerPanel = document.getElementById('composer-panel');
+            if (preferredHeight && composerPanel) {
+                composerPanel.style.flexBasis = `${Math.round(preferredHeight)}px`;
+            }
+        }
+        persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_COMPOSER, preferredMode);
+        setWorkspaceToggleActive('composer');
     });
     
     // [✅ CRITICAL FIX: แก้ไข logic สลับหน้าใน entity:selected]
@@ -475,15 +643,11 @@ function setupEventSubscriptions() {
         // 1. จัดการ Workspace
         if (isKieAIAgent && !preventAutoMount) {
             KieAI_UI.mountPhotoStudio(name);
-            // Highlight the photo button when mounting
-            document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('switch-to-photo-btn')?.classList.add('active');
+            setWorkspaceToggleActive('photo');
         } else if (!preventAutoMount) {
             // [✅ FIX: ใช้ KieAI_UI.unmountPhotoStudio() แทน StudioUI]
             KieAI_UI.unmountPhotoStudio();
-            // Highlight chat button when unmounting
-            document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('switch-to-chat-btn')?.classList.add('active');
+            syncWorkspaceToggleActive();
         }
     });
     

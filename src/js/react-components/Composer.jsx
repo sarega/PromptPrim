@@ -28,7 +28,16 @@ import { SuggestionNode } from '../tiptap-extensions/SuggestionNode.js';
 // ---------------------------------------------------------
 
 // --- Toolbar Component (ฉบับสมบูรณ์) ---
-const ComposerToolbar = ({ editor, onCollapse, onToggleMaximize, isMaximized, onExport, onToggleInspector }) => {
+const ComposerToolbar = ({
+  editor,
+  onCollapse,
+  onToggleMaximize,
+  isMaximized,
+  onExport,
+  onToggleInspector,
+  onTogglePeekChat,
+  isPeekChat
+}) => {
   
   if (!editor) return null;
 
@@ -125,6 +134,16 @@ const ComposerToolbar = ({ editor, onCollapse, onToggleMaximize, isMaximized, on
               <span className="material-symbols-outlined">bug_report</span>
           </button>
 
+          {isMaximized && (
+            <button
+              className={isPeekChat ? 'btn-icon is-active' : 'btn-icon'}
+              onClick={onTogglePeekChat}
+              title={isPeekChat ? 'Hide Chat Peek' : 'Peek Chat'}
+            >
+              <span className="material-symbols-outlined">splitscreen</span>
+            </button>
+          )}
+
           <button className="btn-icon" onClick={onCollapse} title="Collapse">
               <span className="material-symbols-outlined">keyboard_arrow_down</span>
           </button>
@@ -181,12 +200,23 @@ const ComposerToolbar = ({ editor, onCollapse, onToggleMaximize, isMaximized, on
 };
 
 // --- Component หลัก ---
-export default function Composer({ initialContent, onContentChange, onCollapse, onToggleMaximize, isMaximized, onExport, onReady }) {
+export default function Composer({
+  initialContent,
+  onContentChange,
+  onCollapse,
+  onToggleMaximize,
+  isMaximized,
+  onExport,
+  onReady,
+  onTogglePeekChat,
+  isPeekChat = false
+}) {
     const [menuState, setMenuState] = useState({ visible: false, x: 0, y: 0 });
     const [loadingState, setLoadingState] = useState({ isLoading: false });
     const [hasPending, setHasPending] = useState(false);
     const [inspectorState, setInspectorState] = useState({ isVisible: false, systemPrompt: '', actionPrompt: '', userText: '' });
     const [isConfigOpen, setIsConfigOpen] = useState(false);
+    const [peekChatActive, setPeekChatActive] = useState(Boolean(isPeekChat));
 
     // --- Functions สำหรับจัดการ Decisions ---
     const handleAcceptSuggestion = (editorInstance) => {
@@ -273,6 +303,20 @@ export default function Composer({ initialContent, onContentChange, onCollapse, 
     }, [initialContent, editor]);
 
     useEffect(() => {
+        setPeekChatActive(Boolean(isPeekChat));
+    }, [isPeekChat, isMaximized]);
+
+    const handleTogglePeekChat = () => {
+        if (typeof onTogglePeekChat !== 'function') return;
+        const nextState = onTogglePeekChat();
+        if (typeof nextState === 'boolean') {
+            setPeekChatActive(nextState);
+        } else {
+            setPeekChatActive((prev) => !prev);
+        }
+    };
+
+    useEffect(() => {
         if (editor && onReady) {
             const api = {
                 appendContent: (htmlContent) => {
@@ -294,6 +338,8 @@ export default function Composer({ initialContent, onContentChange, onCollapse, 
                 isMaximized={isMaximized}
                 onExport={onExport}
                 onToggleInspector={() => setInspectorState(prev => ({ ...prev, isVisible: !prev.isVisible }))}
+                onTogglePeekChat={handleTogglePeekChat}
+                isPeekChat={peekChatActive}
             />
             <EditorContent editor={editor} className="composer-editor" />
 

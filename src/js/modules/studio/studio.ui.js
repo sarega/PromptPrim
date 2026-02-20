@@ -14,6 +14,66 @@ import * as StudioHandlers from './studio.handlers.js'; // <-- Import handler �
 
 let stagedCountdownIntervalId = null;
 
+function escapeSelectorValue(rawValue = '') {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+        return CSS.escape(rawValue);
+    }
+    return String(rawValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function findStudioEntityListItem(entity) {
+    if (!entity?.type || !entity?.name) return null;
+    const escapedName = escapeSelectorValue(entity.name);
+    const selector = entity.type === 'group'
+        ? `#studio-panel #agentGroupList .item[data-group-name="${escapedName}"]`
+        : `#studio-panel #agentPresetList .item[data-agent-name="${escapedName}"]`;
+    return document.querySelector(selector);
+}
+
+function focusSelectedEntityInList(payload = {}) {
+    const entity = {
+        type: payload.entityType || payload.type || '',
+        name: payload.entityName || payload.name || ''
+    };
+    if (!entity.type || !entity.name) return;
+
+    const searchInput = document.getElementById('asset-search-input');
+    let targetItem = findStudioEntityListItem(entity);
+
+    // If the active agent is hidden by current search, narrow the search to that name.
+    if (!targetItem && entity.type === 'agent' && searchInput) {
+        const desiredQuery = entity.name;
+        if ((searchInput.value || '').trim() !== desiredQuery) {
+            searchInput.value = desiredQuery;
+            renderStudioContent();
+            targetItem = findStudioEntityListItem(entity);
+        }
+    }
+
+    // Fallback: clear search and render full list.
+    if (!targetItem && entity.type === 'agent' && searchInput) {
+        if ((searchInput.value || '').trim() !== '') {
+            searchInput.value = '';
+            renderStudioContent();
+            targetItem = findStudioEntityListItem(entity);
+        }
+    }
+
+    if (!targetItem) return;
+
+    const parentSection = targetItem.closest('details.collapsible-section');
+    if (parentSection) parentSection.open = true;
+
+    targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetItem.classList.remove('selected-entity-jump-highlight');
+    // Force reflow so highlight animation restarts on repeated clicks.
+    void targetItem.offsetWidth;
+    targetItem.classList.add('selected-entity-jump-highlight');
+    setTimeout(() => {
+        targetItem.classList.remove('selected-entity-jump-highlight');
+    }, 1200);
+}
+
 function getPendingSwitchText(stagedSnapshot) {
     const remainingSeconds = getStagedEntityRemainingSeconds();
     return `Switch to ${stagedSnapshot.icon} ${stagedSnapshot.name} in ${remainingSeconds}s`;
@@ -146,9 +206,14 @@ function buildSelectedEntitySection(project) {
         const info = document.createElement('div');
         info.className = 'selected-entity-info';
 
-        const name = document.createElement('div');
-        name.className = 'selected-entity-name';
+        const name = document.createElement('button');
+        name.type = 'button';
+        name.className = 'selected-entity-name selected-entity-name-btn';
+        name.dataset.action = 'studio:focusSelectedEntity';
+        name.dataset.entityType = activeSnapshot.type;
+        name.dataset.entityName = activeSnapshot.name;
         name.textContent = activeSnapshot.name;
+        name.title = 'Show in list';
 
         const meta = document.createElement('div');
         meta.className = 'selected-entity-meta';
@@ -260,6 +325,10 @@ export function initStudioUI() {
             
             // สร้าง Payload เริ่มต้นจาก item หลัก (ถ้ามี)
             let eventPayload = { ...itemContext?.dataset };
+            Object.entries(actionTarget.dataset || {}).forEach(([key, value]) => {
+                if (key === 'action' || key === 'data') return;
+                eventPayload[key] = value;
+            });
 
             // [KEY FIX] นำข้อมูล index จาก data-data ของปุ่มมาใส่ใน Payload
             if (actionTarget.dataset.data) {
@@ -308,6 +377,7 @@ export function initStudioUI() {
     stateManager.bus.subscribe('session:loaded', renderStudioContent);
     stateManager.bus.subscribe('entity:selected', renderStudioContent);
     stateManager.bus.subscribe('entity:staged', renderStudioContent);
+    stateManager.bus.subscribe('studio:focusSelectedEntity', focusSelectedEntityInList);
     
     console.log("✅ Studio UI Initialized with definitive, robust event listeners.");
 }

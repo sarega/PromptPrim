@@ -598,12 +598,25 @@ export function migrateProjectData(projectData) {
             if (firstGroupName) return { type: 'group', name: firstGroupName };
             return null;
         };
+        const normalizeWorkspaceView = (workspaceView) => (
+            workspaceView === 'composer' ? 'composer' : 'chat'
+        );
+        const normalizeComposerViewMode = (composerViewMode) => (
+            composerViewMode === 'normal' ? 'normal' : 'maximized'
+        );
+        const normalizeComposerHeight = (composerHeight) => {
+            const parsed = Number(composerHeight);
+            return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+        };
 
         projectData.chatSessions = projectData.chatSessions.map(session => {
             const rawSettings = session?.ragSettings || {};
             const normalizedLinkedEntity = normalizeLinkedEntity(session?.linkedEntity);
             return {
                 ...session,
+                workspaceView: normalizeWorkspaceView(session?.workspaceView),
+                composerViewMode: normalizeComposerViewMode(session?.composerViewMode),
+                composerHeight: normalizeComposerHeight(session?.composerHeight),
                 linkedEntity: normalizedLinkedEntity,
                 folderId: typeof session?.folderId === 'string' && session.folderId.trim()
                     ? session.folderId

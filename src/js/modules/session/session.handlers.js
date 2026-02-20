@@ -190,6 +190,9 @@ export function createNewChatSession(payload = {}) {
         name: 'New Chat',
         history: [], // Explicit initialization
         composerContent: "",
+        workspaceView: 'chat',
+        composerViewMode: 'maximized',
+        composerHeight: null,
         createdAt: Date.now(),
         updatedAt: Date.now(),
         pinned: false,
@@ -876,10 +879,12 @@ export function downloadChatSession(payload) {
 export function saveComposerHeight({ height }) {
     const project = stateManager.getProject();
     const session = project?.chatSessions.find(s => s.id === project.activeSessionId);
+    const normalizedHeight = Number(height);
 
-    if (session && height) {
-        session.composerHeight = height;
-      
+    if (session && Number.isFinite(normalizedHeight) && normalizedHeight > 0) {
+        session.composerHeight = Math.round(normalizedHeight);
+        stateManager.setProject(project);
+        stateManager.updateAndPersistState();
     }
 }
 

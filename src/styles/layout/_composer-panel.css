@@ -100,6 +100,11 @@
     justify-content: flex-end; /* จัดปุ่มชิดขวา */
 }
 
+.composer-actions .btn-icon.is-active {
+    background: var(--workspace-switcher-active-bg);
+    color: var(--workspace-switcher-active-color);
+}
+
 /* [NEW] ลดขนาดปุ่มใน Tools และไอคอน */
 .composer-tools-area .btn-icon.small {
     width: 28px;
@@ -220,6 +225,22 @@ body.dark-mode .composer-toolbar .btn-icon.is-active {
     flex-grow: 1;       /* ให้มันขยายเต็มที่ */
     flex-basis: auto;   /* ไม่ต้องกำหนดความสูงตายตัว */
     height: 100%;       /* สูง 100% ของ parent (.main-content-wrapper) */
+}
+
+/* Focus mode helper: temporarily reveal chat while composer stays primary. */
+.main-content-wrapper.composer-maximized.composer-peek-chat .chat-messages {
+    display: flex;
+    flex: 0 1 42%;
+    min-height: 180px;
+}
+
+.main-content-wrapper.composer-maximized.composer-peek-chat #resizer-row {
+    display: block;
+}
+
+.main-content-wrapper.composer-maximized.composer-peek-chat .composer-panel {
+    height: auto;
+    flex: 1 1 auto;
 }
 
 /* เพิ่ม CSS นี้เข้าไป */

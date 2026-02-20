@@ -237,6 +237,11 @@
 
 /* ทำให้ปุ่มแสดงผลเฉพาะบนมือถือ */
 @media (max-width: 768px) {
+  .main-content-wrapper.composer-maximized.composer-peek-chat .chat-messages {
+    flex-basis: 48%;
+    min-height: 140px;
+  }
+
   #mobile-composer-toggle {
     display: flex;
     align-items: center;

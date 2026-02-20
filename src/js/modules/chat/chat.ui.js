@@ -1171,14 +1171,24 @@ function updateStatusMetrics() {
     refreshMobileStatusMarquee();
 }
 
+function isFileDragEvent(event) {
+    const dataTransfer = event?.dataTransfer;
+    if (!dataTransfer) return false;
+    const types = Array.from(dataTransfer.types || []);
+    return types.includes('Files') || types.includes('application/x-moz-file');
+}
+
 function initDragAndDrop() {
     const dropzoneOverlay = document.getElementById('dropzone-overlay');
-    if (!dropzoneOverlay) return;
+    const inputDropTarget = document.querySelector('.chat-input-wrapper .input-container-seamless');
+    if (!dropzoneOverlay || !inputDropTarget) return;
 
-    let dragCounter = 0; // ใช้นับเพื่อจัดการ dragleave ที่ซับซ้อน
+    // Keep the dropzone constrained to the chat input area only.
+    if (dropzoneOverlay.parentElement !== inputDropTarget) {
+        inputDropTarget.appendChild(dropzoneOverlay);
+    }
 
-    // ทำให้หน้าต่างโปรแกรมทั้งหมดเป็นพื้นที่รับไฟล์
-    const dropTarget = window; 
+    let dragCounter = 0;
 
     const showDropzone = () => {
         dropzoneOverlay.classList.add('active');
@@ -1186,44 +1196,66 @@ function initDragAndDrop() {
     const hideDropzone = () => {
         dropzoneOverlay.classList.remove('active');
     };
+    const resetDropzone = () => {
+        dragCounter = 0;
+        hideDropzone();
+    };
 
-    dropTarget.addEventListener('dragenter', (e) => {
+    inputDropTarget.addEventListener('dragenter', (e) => {
+        if (!isFileDragEvent(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        // แสดง Overlay เมื่อลากไฟล์เข้ามาในหน้าต่างครั้งแรก
-        if (dragCounter === 0) {
+        dragCounter++;
+        if (dragCounter === 1) {
             showDropzone();
         }
-        dragCounter++;
     });
 
-    dropTarget.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation(); // สำคัญมาก: ป้องกันไม่ให้เบราว์เซอร์เปิดไฟล์เอง
-    });
-
-    dropTarget.addEventListener('dragleave', (e) => {
+    inputDropTarget.addEventListener('dragover', (e) => {
+        if (!isFileDragEvent(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        dragCounter--;
-        // ซ่อน Overlay เมื่อลากไฟล์ออกจากหน้าต่างโปรแกรม
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = 'copy';
+        }
+        if (!dropzoneOverlay.classList.contains('active')) {
+            showDropzone();
+        }
+    });
+
+    inputDropTarget.addEventListener('dragleave', (e) => {
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter = Math.max(0, dragCounter - 1);
         if (dragCounter === 0) {
             hideDropzone();
         }
     });
 
-    dropTarget.addEventListener('drop', (e) => {
+    inputDropTarget.addEventListener('drop', (e) => {
+        if (!isFileDragEvent(e)) return;
         e.preventDefault();
         e.stopPropagation();
-        
-        // รีเซ็ตและซ่อน Overlay ทันที
-        dragCounter = 0;
-        hideDropzone();
+        resetDropzone();
 
-        const files = e.dataTransfer.files;
+        const files = e.dataTransfer?.files;
         if (files && files.length > 0) {
-            // ส่ง event พร้อมกับ FileList ไปให้ handler จัดการ
             stateManager.bus.publish('chat:filesSelected', files);
+        }
+    });
+
+    // Prevent browser navigation for file drops outside the input area.
+    window.addEventListener('dragover', (e) => {
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+    });
+
+    window.addEventListener('drop', (e) => {
+        if (!isFileDragEvent(e)) return;
+        e.preventDefault();
+        if (!inputDropTarget.contains(e.target)) {
+            resetDropzone();
         }
     });
 }
@@ -1249,16 +1281,15 @@ export function initChatUI() {
             updateAppStatus(); 
         }, 500);
         chatInput.addEventListener('input', debouncedUpdate);
-    }
-            // หน้าที่ของมันคือการ "ยกเลิก" พฤติกรรมพื้นฐานของเบราว์เซอร์เท่านั้น
         chatInput.addEventListener('dragover', (e) => {
+            if (!isFileDragEvent(e)) return;
             e.preventDefault();
         });
         chatInput.addEventListener('drop', (e) => {
+            if (!isFileDragEvent(e)) return;
             e.preventDefault(); 
-            // เราไม่ต้องเขียน Logic รับไฟล์ที่นี่ เพราะ Listener หลักที่ window จะจัดการต่อเอง
         });
-
+    }
 
     document.getElementById('sendBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:sendMessage'));
     document.getElementById('stopBtn')?.addEventListener('click', () => stateManager.bus.publish('chat:stopGeneration'));
