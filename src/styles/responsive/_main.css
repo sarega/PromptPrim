@@ -190,6 +190,21 @@
         text-overflow: ellipsis;
     }
 
+    .chat-header .app-main-title.project-menu-mobile-trigger {
+        cursor: pointer;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .chat-header .app-main-title.project-menu-mobile-trigger::after {
+        content: "▾";
+        font-size: 0.62rem;
+        opacity: 0.7;
+        transform: translateY(1px);
+    }
+
     .chat-header #hamburger-btn,
     .chat-header .header-center .menu-toggle-btn {
         font-size: 1.4rem;

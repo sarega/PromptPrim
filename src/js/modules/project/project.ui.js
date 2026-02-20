@@ -4,7 +4,61 @@
 // ===============================================
 
 import { stateManager } from '../../core/core.state.js';
-import { toggleDropdown, showCustomAlert } from '../../core/core.ui.js';
+import { toggleDropdown, showContextMenu, showCustomAlert } from '../../core/core.ui.js';
+
+const MOBILE_HEADER_BREAKPOINT = 768;
+
+function isMobileViewport() {
+    return window.matchMedia(`(max-width: ${MOBILE_HEADER_BREAKPOINT}px)`).matches;
+}
+
+function triggerProjectAction(action) {
+    const eventMap = {
+        'newProject': { name: 'project:new' },
+        'openProject': { name: 'project:open' },
+        'saveProject': { name: 'project:save', data: false },
+        'saveProjectAs': { name: 'project:save', data: true },
+        'exportChat': { name: 'project:exportChat' }
+    };
+
+    const mappedEvent = eventMap[action];
+    if (!mappedEvent) return false;
+
+    stateManager.bus.publish(mappedEvent.name, mappedEvent.data);
+    return true;
+}
+
+function buildProjectMenuOptions() {
+    return [
+        { label: 'New...', action: () => triggerProjectAction('newProject') },
+        { label: 'Open...', action: () => triggerProjectAction('openProject') },
+        { label: 'Save', action: () => triggerProjectAction('saveProject') },
+        { label: 'Save As...', action: () => triggerProjectAction('saveProjectAs') }
+    ];
+}
+
+function createAnchorEvent(anchorElement) {
+    const rect = anchorElement?.getBoundingClientRect();
+    const fallbackX = rect ? Math.round(rect.left + Math.min(rect.width, 56)) : Math.round(window.innerWidth / 2);
+    const fallbackY = rect ? Math.round(rect.bottom + 8) : 56;
+
+    return {
+        clientX: fallbackX,
+        clientY: fallbackY,
+        preventDefault() {},
+        stopPropagation() {}
+    };
+}
+
+function openMobileProjectMenu(event, anchorElement) {
+    if (!isMobileViewport()) return false;
+    const triggerEvent = (
+        event && typeof event.clientX === 'number' && typeof event.clientY === 'number'
+    ) ? event : createAnchorEvent(anchorElement);
+
+    showContextMenu(buildProjectMenuOptions(), triggerEvent);
+    return true;
+}
 
 /**
  * [MODIFIED] This function is now the single source of truth for the project title display.
@@ -78,18 +132,30 @@ export function initProjectUI() {
             const action = target.dataset.action;
             if (action) {
                 e.preventDefault();
-                const eventMap = {
-                    'newProject': { name: 'project:new' },
-                    'openProject': { name: 'project:open' },
-                    'saveProject': { name: 'project:save', data: false },
-                    'saveProjectAs': { name: 'project:save', data: true }, // This will trigger the modal via the handler
-                    'exportChat': { name: 'project:exportChat' }
-                };
-                if (eventMap[action]) {
-                    stateManager.bus.publish(eventMap[action].name, eventMap[action].data);
-                }
+                triggerProjectAction(action);
                 projectDropdownWrapper.classList.remove('open');
             }
+        });
+    }
+
+    const mobileProjectTrigger = document.querySelector('.chat-header .app-main-title');
+    if (mobileProjectTrigger) {
+        mobileProjectTrigger.classList.add('project-menu-mobile-trigger');
+        mobileProjectTrigger.setAttribute('role', 'button');
+        mobileProjectTrigger.setAttribute('tabindex', '0');
+        mobileProjectTrigger.setAttribute('aria-label', 'Open project menu');
+        mobileProjectTrigger.title = 'Project menu';
+
+        mobileProjectTrigger.addEventListener('click', (event) => {
+            openMobileProjectMenu(event, mobileProjectTrigger);
+        });
+
+        mobileProjectTrigger.addEventListener('keydown', (event) => {
+            if (!isMobileViewport()) return;
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+
+            event.preventDefault();
+            openMobileProjectMenu(null, mobileProjectTrigger);
         });
     }
 
