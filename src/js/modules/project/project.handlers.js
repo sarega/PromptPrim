@@ -17,7 +17,6 @@ import {
 import { openDb, dbRequest, clearObjectStores, deleteDb } from '../../core/core.db.js';
 import { loadAllProviderModels } from '../../core/core.api.js';
 import { showCustomAlert, showUnsavedChangesModal, hideUnsavedChangesModal } from '../../core/core.ui.js';
-import { scrollToLinkedEntity } from './project.ui.js';
 import { createNewChatSession, loadChatSession, saveAllSessions, saveActiveSession } from '../session/session.handlers.js';
 import {
     ensureProjectFolders,
@@ -25,6 +24,43 @@ import {
     normalizeSessionContextMode
 } from '../session/session.folder-utils.js';
 import * as UserService from '../user/user.service.js'; // <-- เพิ่ม Import นี้เข้ามา
+
+const STAGED_ENTITY_TIMEOUT_MS = 10000;
+let stagedEntityTimeoutHandle = null;
+let stagedEntityDeadlineAt = null;
+
+function clearStagedEntityTimeout() {
+    if (stagedEntityTimeoutHandle) {
+        clearTimeout(stagedEntityTimeoutHandle);
+        stagedEntityTimeoutHandle = null;
+    }
+    stagedEntityDeadlineAt = null;
+}
+
+function sameEntity(left, right) {
+    return Boolean(
+        left &&
+        right &&
+        left.type === right.type &&
+        left.name === right.name
+    );
+}
+
+function stageEntitySelection(entity) {
+    clearStagedEntityTimeout();
+    stagedEntityDeadlineAt = Date.now() + STAGED_ENTITY_TIMEOUT_MS;
+    stateManager.setStagedEntity(entity);
+    stagedEntityTimeoutHandle = setTimeout(() => {
+        stagedEntityTimeoutHandle = null;
+        stagedEntityDeadlineAt = null;
+        stateManager.setStagedEntity(null);
+    }, STAGED_ENTITY_TIMEOUT_MS);
+}
+
+export function getStagedEntityRemainingSeconds() {
+    if (!stagedEntityDeadlineAt) return 0;
+    return Math.max(0, Math.ceil((stagedEntityDeadlineAt - Date.now()) / 1000));
+}
 
 
 /**
@@ -688,6 +724,7 @@ export function migrateProjectData(projectData) {
 
 
 export async function selectEntity(type, name) {
+    clearStagedEntityTimeout();
     stateManager.setStagedEntity(null, false);
 
     const project = stateManager.getProject();
@@ -730,27 +767,37 @@ export async function selectEntity(type, name) {
     stateManager.bus.publish('session:listChanged');
 }
 
+export function applyStagedEntitySelection() {
+    const stagedEntity = stateManager.getStagedEntity();
+    if (!stagedEntity) return;
+
+    clearStagedEntityTimeout();
+    stateManager.setStagedEntity(null, false);
+    stateManager.bus.publish('entity:select', stagedEntity);
+}
+
+export function cancelStagedEntitySelection() {
+    clearStagedEntityTimeout();
+    stateManager.setStagedEntity(null);
+}
+
 export function handleStudioItemClick({ type, name }) {
     const clickedEntity = { type, name };
     const stagedEntity = stateManager.getStagedEntity();
     const activeEntity = stateManager.getProject().activeEntity;
 
-    // --- CASE 1: คลิกที่ Item ที่ Staged อยู่แล้ว (สีเหลือง) ---
-    // นี่คือการ "ยืนยัน" การเลือก
-    if (stagedEntity && stagedEntity.name === name && stagedEntity.type === type) {
-        // ส่ง Event ไปบอกระบบให้เลือก Entity นี้อย่างเป็นทางการ
-        stateManager.bus.publish('entity:select', clickedEntity);
-        return; // จบการทำงานทันที
+    // CASE 1: click current active = keep current active and clear pending.
+    if (sameEntity(activeEntity, clickedEntity)) {
+        cancelStagedEntitySelection();
+        return;
     }
 
-    // --- CASE 2: คลิกที่ Item ที่ Active อยู่แล้ว (สีเขียว) ---
-    // การทำแบบนี้ควรจะยกเลิกการ Staging ของ Item อื่น (ถ้ามี)
-    if (activeEntity && activeEntity.name === name && activeEntity.type === type) {
-        stateManager.setStagedEntity(null); // ล้างตัวที่ Staged (สีเหลือง) ทิ้งไป
-        return; // จบการทำงานทันที
+    // CASE 2: click the same pending entity again = confirm switch.
+    if (sameEntity(stagedEntity, clickedEntity)) {
+        applyStagedEntitySelection();
+        return;
     }
 
-    // --- CASE 3: คลิกที่ Item อื่นๆ ที่ไม่ใช่ทั้งตัวที่ Staged หรือ Active ---
-    // นี่คือการ "เริ่มต้น" Staging ใหม่
-    stateManager.setStagedEntity(clickedEntity);
+    // CASE 3: first click on a non-active entity = stage for confirmation.
+    stageEntitySelection(clickedEntity);
 }

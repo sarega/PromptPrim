@@ -4,9 +4,57 @@
 // ===============================================
 
 import { stateManager } from './core.state.js';
-import * as SettingsUI from '../modules/settings/settings.ui.js';
 import * as UserService from '../modules/user/user.service.js';
 import { getContextData } from '../modules/chat/chat.handlers.js';
+
+let mobileStatusMarqueeRaf = null;
+
+export function refreshMobileStatusMarquee() {
+    const statusPanel = document.getElementById('status-panel');
+    const statusRight = statusPanel?.querySelector('.status-right');
+    const activeAgentSpan = document.getElementById('active-agent-status');
+    if (!statusPanel || !statusRight || !activeAgentSpan) return;
+
+    if (window.innerWidth > 768) {
+        activeAgentSpan.classList.remove('is-marquee');
+        activeAgentSpan.style.removeProperty('--status-marquee-duration');
+        activeAgentSpan.style.removeProperty('--status-marquee-start');
+        activeAgentSpan.style.removeProperty('--status-marquee-end');
+        return;
+    }
+
+    if (mobileStatusMarqueeRaf) {
+        cancelAnimationFrame(mobileStatusMarqueeRaf);
+    }
+
+    mobileStatusMarqueeRaf = requestAnimationFrame(() => {
+        const centerWidth = statusRight.clientWidth;
+        const contentWidth = activeAgentSpan.scrollWidth;
+        if (centerWidth < 20 || contentWidth <= 0) {
+            activeAgentSpan.classList.remove('is-marquee');
+            mobileStatusMarqueeRaf = null;
+            return;
+        }
+        const shouldMarquee = contentWidth > centerWidth + 6;
+
+        activeAgentSpan.classList.toggle('is-marquee', shouldMarquee);
+        if (shouldMarquee) {
+            const startPx = centerWidth + 8;
+            const endPx = contentWidth + 8;
+            const travelPx = startPx + endPx;
+            const durationSeconds = Math.min(42, Math.max(12, travelPx / 28));
+            activeAgentSpan.style.setProperty('--status-marquee-start', `${startPx}px`);
+            activeAgentSpan.style.setProperty('--status-marquee-end', `${endPx}px`);
+            activeAgentSpan.style.setProperty('--status-marquee-duration', `${durationSeconds}s`);
+        } else {
+            activeAgentSpan.style.removeProperty('--status-marquee-duration');
+            activeAgentSpan.style.removeProperty('--status-marquee-start');
+            activeAgentSpan.style.removeProperty('--status-marquee-end');
+        }
+
+        mobileStatusMarqueeRaf = null;
+    });
+}
 
 export function updateAppStatus(statusUpdate = {}) {
     const { message, state } = statusUpdate;
@@ -36,12 +84,19 @@ export function updateAppStatus(statusUpdate = {}) {
     }
 
     // --- Part 2: Update Right Side (Agent, Tokens) ---
-    const { totalTokens, agent, agentNameForDisplay } = getContextData();
+    const { totalTokens, agent, agentNameForDisplay, model } = getContextData();
     const agentStatusSpan = document.getElementById('active-agent-status');
     const tokenStatusSpan = document.getElementById('token-count-status');
+    const modelName = model && model !== 'N/A' ? model : 'N/A';
 
-    if (agentStatusSpan) agentStatusSpan.textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
+    if (agentStatusSpan) {
+        const nextText = `Active: ${agent.icon || ''} ${agentNameForDisplay} • ${modelName}`;
+        if (agentStatusSpan.textContent !== nextText) {
+            agentStatusSpan.textContent = nextText;
+        }
+    }
     if (tokenStatusSpan) tokenStatusSpan.textContent = `~${totalTokens.toLocaleString()} Tokens`;
+    refreshMobileStatusMarquee();
 }
 
 export function updateStatus({ message, state }) {
@@ -61,6 +116,7 @@ export function updateStatus({ message, state }) {
             statusDotEl.classList.add('warning');
         }
     }
+    refreshMobileStatusMarquee();
 }
 
 /**
@@ -226,16 +282,10 @@ export function initCoreUI() {
     stateManager.bus.subscribe('user:modelsLoaded', () => updateAppStatus());
     stateManager.bus.subscribe('status:update', updateStatus);
     updateStatus({});
+    refreshMobileStatusMarquee();
 
-    const settingsBtn = document.querySelector('#settings-btn');
-    if (settingsBtn) {
-        // [FIX] Force a re-render every time the settings button is clicked
-        settingsBtn.addEventListener('click', () => {
-            console.log("Settings button clicked. Re-rendering panel before showing.");
-            // This ensures the settings panel always has the latest user data and model lists.
-            SettingsUI.renderAndShowSettings();
-        });
-    }
+    window.addEventListener('resize', refreshMobileStatusMarquee);
+    window.addEventListener('orientationchange', refreshMobileStatusMarquee);
 
     const mobileOverlay = document.getElementById('mobile-overlay');
     if (mobileOverlay) {

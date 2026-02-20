@@ -30,6 +30,14 @@
     --btn-primary-bg: var(--primary-color);
     --btn-primary-border: var(--primary-color-dark);
     --bg-admin-page: #f1f5f9; /* สีพื้นหลังสำหรับหน้า Admin (Light) */
+    --workspace-switcher-inactive-color: #64748b;
+    --workspace-switcher-active-color: var(--text-dark);
+    --workspace-switcher-hover-bg: rgba(148, 163, 184, 0.18);
+    --workspace-switcher-active-bg: var(--bg-color-secondary);
+    --workspace-switcher-active-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    --workspace-switcher-divider-color: var(--border-color);
+    --header-project-title-color: #4a5568;
+    --header-chat-divider-color: rgba(100, 116, 139, 0.38);
 
     /* background: #c9dbff;  */
 }

@@ -68,9 +68,17 @@
 /* 1. บังคับให้ Workspace หลักเป็น Flexbox แนวนอน */
 #chat-compose-workspace {
     display: flex !important;
-    flex-direction: row !important;
+    flex-direction: column !important;
     width: 100%;
     height: 100%;
+}
+
+#workspace-body-row {
+    display: flex;
+    flex-direction: row;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* 2. กำหนดขนาดของ Sidebar ให้คงที่ */
@@ -94,7 +102,7 @@
 /* 1. บังคับให้ Workspace หลักเป็น Flexbox แนวนอน */
 #chat-compose-workspace {
     display: flex !important;
-    flex-direction: row !important;
+    flex-direction: column !important;
 }
 
 /* 2. กำหนดขนาดและ Animation ของ Sidebar */

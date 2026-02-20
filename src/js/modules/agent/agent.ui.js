@@ -4,7 +4,7 @@
 // ===============================================
 
 import { stateManager, ALL_AGENT_SETTINGS_IDS, defaultAgentSettings } from '../../core/core.state.js';
-import { showCustomAlert, toggleDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
+import { showCustomAlert, createDropdown, createSearchableModelSelector } from '../../core/core.ui.js';
 import { populatePresetSelector, getFilteredModelsForDisplay } from '../models/model-manager.ui.js';
 import * as UserService from '../user/user.service.js';
 import { createParameterEditor } from '../../components/parameter-editor.js';
@@ -32,18 +32,28 @@ function createAgentElement(name, preset) {
         item.classList.add('staged');
     }
 
-    item.innerHTML = `
-    <div class="item-header">
-        <span class="item-name"><span class="item-icon">${preset.icon || '🤖'}</span> ${name}</span>
-        <div class="item-actions">
-            <button class="btn-icon" data-action="agent:edit" title="Edit Agent">
-                <span class="material-symbols-outlined">edit</span>
-            </button>             
-            <button class="btn-icon danger" data-action="agent:delete" title="Delete Agent">
-                <span class="material-symbols-outlined">delete</span>
-            </button>
-        </div>
-    </div>`;
+    const header = document.createElement('div');
+    header.className = 'item-header';
+
+    const itemName = document.createElement('span');
+    itemName.className = 'item-name';
+
+    const icon = document.createElement('span');
+    icon.className = 'item-icon';
+    icon.textContent = preset.icon || '🤖';
+
+    itemName.appendChild(icon);
+    itemName.appendChild(document.createTextNode(` ${name}`));
+
+    const dropdownOptions = [
+        { label: 'Edit...', action: 'agent:edit' },
+        { label: 'Delete', action: 'agent:delete', isDestructive: true },
+    ];
+    const itemDropdown = createDropdown(dropdownOptions);
+    itemDropdown.querySelector('button')?.setAttribute('title', 'Agent actions');
+
+    header.append(itemName, itemDropdown);
+    item.appendChild(header);
     
     return item;
 }

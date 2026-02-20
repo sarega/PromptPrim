@@ -5,28 +5,96 @@
 
 /* --- Mobile Specific UX --- */
 @media (max-width: 768px) {
-    .custom-select-wrapper {
-        min-width: 150px;
-    }
-    #custom-entity-selector-text {
-        white-space: nowrap;
+    #status-panel {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        padding: 6px 10px;
+        gap: 8px;
         overflow: hidden;
-        text-overflow: ellipsis;
+        transition: none;
     }
-    
+
+    #status-panel .status-left {
+        grid-column: 1;
+        flex: 0 0 auto;
+        gap: 8px;
+        font-size: 12px;
+        min-width: auto;
+        overflow: visible;
+        white-space: nowrap;
+        position: relative;
+        z-index: 2;
+        background: inherit;
+    }
+
+    #status-panel .status-right {
+        grid-column: 2;
+        max-width: none;
+        min-width: 0;
+        font-size: 11px;
+        margin-left: 0;
+        justify-content: flex-start;
+        overflow: hidden;
+        position: relative;
+        z-index: 1;
+    }
+
+    #status-panel #context-inspector-trigger-btn {
+        grid-column: 3;
+        justify-self: end;
+        position: relative;
+        z-index: 2;
+        background: inherit;
+    }
+
+    #status-panel #statusText,
+    #status-panel #token-count-status {
+        display: none;
+    }
+
+    #status-panel #active-agent-status {
+        display: inline-block;
+        white-space: nowrap;
+        max-width: none;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+    #status-panel #active-agent-status.is-marquee {
+        animation: status-agent-marquee var(--status-marquee-duration, 14s) linear infinite;
+    }
+
+    #status-panel .status-left,
+    #status-panel .status-right,
+    #status-panel #model-count-status,
+    #status-panel #statusText,
+    #status-panel #active-agent-status,
+    #status-panel #token-count-status {
+        line-height: 1.1;
+    }
+
+    #model-count-status {
+        margin-right: 0;
+    }
+
     #status-panel.is-collapsed {
-        height: 34px;
-        padding-top: 0;
-        padding-bottom: 0;
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        padding: 6px 10px;
         cursor: default;
     }
 
     #status-panel.is-collapsed .status-right {
-        display: none;
+        display: flex;
     }
 
     #status-panel.is-collapsed .status-left {
-        flex-grow: 1;
+        flex-grow: 0;
     }
 
     /* Keep Context Debugger trigger accessible even in collapsed mobile status bar */
@@ -34,6 +102,15 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+    }
+}
+
+@keyframes status-agent-marquee {
+    from {
+        transform: translateX(var(--status-marquee-start, 0px));
+    }
+    to {
+        transform: translateX(calc(-1 * var(--status-marquee-end, 100px)));
     }
 }
 
@@ -52,18 +129,77 @@
 }
 
 /* --- Mobile Specific Header Layout --- */
+@media (max-width: 1200px) {
+    .chat-header .project-title {
+        max-width: 120px;
+    }
+}
+
+@media (max-width: 980px) {
+    .chat-header .project-title {
+        display: none;
+    }
+}
+
 @media (max-width: 768px) {
-    
-    /* [FIX] ซ่อน Title ของ Chat Session */
+    .chat-header {
+        padding: 6px 10px;
+        gap: 0.45rem;
+    }
+
     .chat-header .chat-title {
         display: none;
     }
 
-    /* [FIX] ทำให้ Entity Selector ขยายเต็มพื้นที่ที่เหลือ */
-    .chat-header #custom-entity-selector-wrapper {
-        flex-grow: 1;
-        margin-left: 0; /* ลบระยะห่างซ้าย */
-        margin-right: 10px; /* เพิ่มระยะห่างขวาเล็กน้อย */
+    .chat-header #project-menu-dropdown {
+        display: none;
+    }
+
+    .chat-header .project-title {
+        display: none;
+    }
+
+    .chat-header .header-chat-divider {
+        display: none;
+    }
+
+    .chat-header .header-left {
+        flex: 0 1 auto;
+        gap: 0.4rem;
+    }
+
+    .chat-header .header-center {
+        flex: 1 1 auto;
+        gap: 0.2rem;
+        min-width: 0;
+    }
+
+    .chat-header .header-right {
+        flex: 0 0 auto;
+    }
+
+    .chat-header .header-brand-group {
+        gap: 0;
+        max-width: 96px;
+    }
+
+    .chat-header .app-main-title {
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .chat-header #hamburger-btn,
+    .chat-header .header-center .menu-toggle-btn {
+        font-size: 1.4rem;
+        padding: 2px 4px;
+    }
+
+    .chat-header .user-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
     }
 }
 

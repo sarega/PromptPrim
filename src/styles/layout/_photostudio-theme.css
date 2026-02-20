@@ -1,0 +1,105 @@
+/*
+ * Theme bridge for the React-based Visual Studio workspace.
+ * The workspace uses Tailwind utility classes with fixed dark slate colors.
+ * This file remaps those utility colors to CSS variables so the workspace
+ * follows the app theme (light/dark) via body.dark-mode.
+ */
+
+#photo-studio-root .photo-studio-workspace {
+    --ps-bg-800: #1e293b;
+    --ps-bg-700: #334155;
+    --ps-bg-600: #475569;
+    --ps-bg-500: #64748b;
+    --ps-bg-600-hover: #526178;
+    --ps-bg-500-hover: #738399;
+    --ps-border-500: #64748b;
+    --ps-text-primary: #ffffff;
+    --ps-text-200: #e5e7eb;
+    --ps-text-300: #d1d5db;
+    --ps-text-400: #9ca3af;
+    --ps-text-500: #6b7280;
+    --ps-accent-cyan: #22d3ee;
+    background-color: var(--ps-bg-800) !important;
+    color: var(--ps-text-primary) !important;
+}
+
+body:not(.dark-mode) #photo-studio-root .photo-studio-workspace {
+    --ps-bg-800: #f8fafc;
+    --ps-bg-700: #ffffff;
+    --ps-bg-600: #f1f5f9;
+    --ps-bg-500: #e2e8f0;
+    --ps-bg-600-hover: #e2e8f0;
+    --ps-bg-500-hover: #cbd5e1;
+    --ps-border-500: #cbd5e1;
+    --ps-text-primary: #0f172a;
+    --ps-text-200: #1e293b;
+    --ps-text-300: #334155;
+    --ps-text-400: #475569;
+    --ps-text-500: #64748b;
+    --ps-accent-cyan: #0e7490;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-bg-slate-800 {
+    background-color: var(--ps-bg-800) !important;
+}
+
+#photo-studio-root .photo-studio-workspace.tw-bg-slate-800 {
+    background-color: var(--ps-bg-800) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-bg-slate-700 {
+    background-color: var(--ps-bg-700) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-bg-slate-600 {
+    background-color: var(--ps-bg-600) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-bg-slate-500 {
+    background-color: var(--ps-bg-500) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-border-slate-500 {
+    border-color: var(--ps-border-500) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-text-white {
+    color: var(--ps-text-primary) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-text-gray-200 {
+    color: var(--ps-text-200) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-text-gray-300 {
+    color: var(--ps-text-300) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-text-gray-400 {
+    color: var(--ps-text-400) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-text-gray-500 {
+    color: var(--ps-text-500) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .tw-text-cyan-400 {
+    color: var(--ps-accent-cyan) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .hover\:tw-bg-slate-600:hover {
+    background-color: var(--ps-bg-600-hover) !important;
+}
+
+#photo-studio-root .photo-studio-workspace .hover\:tw-bg-slate-500:hover {
+    background-color: var(--ps-bg-500-hover) !important;
+}
+
+/*
+ * Keep white text on high-contrast accent/destructive buttons, even in light mode.
+ */
+#photo-studio-root .photo-studio-workspace .tw-bg-cyan-500.tw-text-white,
+#photo-studio-root .photo-studio-workspace .tw-bg-red-500.tw-text-white,
+#photo-studio-root .photo-studio-workspace .tw-bg-red-600.tw-text-white {
+    color: #ffffff !important;
+}

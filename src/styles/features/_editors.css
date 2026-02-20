@@ -1319,12 +1319,12 @@ body.dark-mode .param-reset-btn:hover { background: #324a74; color: #ffffff; }
 .studio-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px; /* ลด gap */
-    padding: 8px 15px; /* ลด padding บนล่าง และซ้ายขวา */
+    gap: 6px; /* ลด gap */
+    padding: 6px 10px; /* ลด padding บนล่าง และซ้ายขวา */
     border-bottom: 1px solid var(--border-color);
     background-color: var(--bg-color-secondary);
     flex-shrink: 0;
-    font-size: 0.7rem; /* ลดขนาด font */
+    font-size: 0.68rem; /* ลดขนาด font */
 }
 
 .search-wrapper {
@@ -1332,21 +1332,21 @@ body.dark-mode .param-reset-btn:hover { background: #324a74; color: #ffffff; }
     display: flex;
     align-items: center;
     background: var(--bg-color);
-    border-radius: 6px; /* ลดความมน */
-    padding: 0 6px; /* ลด padding */
+    border-radius: 5px; /* ลดความมน */
+    padding: 0 5px; /* ลด padding */
     border: 1px solid var(--border-color);
-    height: 28px; /* กำหนดความสูงให้แคบลง */
+    height: 26px; /* กำหนดความสูงให้แคบลง */
 }
 .search-wrapper .material-symbols-outlined {
     color: #94a3b8;
-    font-size: 1rem; /* ลดขนาด icon */
+    font-size: 0.95rem; /* ลดขนาด icon */
 }
 #asset-search-input {
     border: none;
     background: transparent;
-    padding: 6px; /* ลด padding */
+    padding: 4px; /* ลด padding */
     width: 100%;
-    font-size: 0.75rem; /* ลดขนาด font */
+    font-size: 0.72rem; /* ลดขนาด font */
 }
 #asset-search-input:focus {
     box-shadow: none;
@@ -1356,21 +1356,21 @@ body.dark-mode .param-reset-btn:hover { background: #324a74; color: #ffffff; }
     display: flex;
     align-items: center;
     gap: 3px; /* ลด gap */
-    font-size: 0.7rem; /* ลดขนาด font */
+    font-size: 0.68rem; /* ลดขนาด font */
     color: #64748b;
 }
 #asset-sort-select {
-    padding: 3px 6px; /* ลด padding */
-    font-size: 0.7rem; /* ลดขนาด font */
+    padding: 2px 5px; /* ลด padding */
+    font-size: 0.68rem; /* ลดขนาด font */
     border-radius: 4px; /* ลดความมน */
-    height: 28px; /* กำหนดความสูง */
+    height: 26px; /* กำหนดความสูง */
 }
 
 .studio-toolbar .dropdown .btn-icon {
-    height: 28px; /* กำหนดความสูง */
-    width: 28px; /* กำหนดความกว้าง */
-    line-height: 28px; /* จัด icon ให้อยู่ตรงกลางแนวตั้ง */
-    font-size: 1rem; /* ลดขนาด icon */
+    height: 26px; /* กำหนดความสูง */
+    width: 26px; /* กำหนดความกว้าง */
+    line-height: 26px; /* จัด icon ให้อยู่ตรงกลางแนวตั้ง */
+    font-size: 0.95rem; /* ลดขนาด icon */
 }
 
 /* --- Model Not Found Warning Banner --- */

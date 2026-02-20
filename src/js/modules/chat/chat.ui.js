@@ -9,7 +9,7 @@ import { debounce } from '../../core/core.utils.js';
 import { buildPayloadMessages, getFullSystemPrompt } from '../../core/core.api.js';
 import * as UserService from '../user/user.service.js'; // <-- Add this import
 import * as ChatHandlers from './chat.handlers.js';
-import { updateAppStatus } from '../../core/core.ui.js';
+import { updateAppStatus, refreshMobileStatusMarquee } from '../../core/core.ui.js';
 
 let latestContextDebuggerSnapshot = null;
 let contextDebuggerSelectedTurn = null;
@@ -1152,16 +1152,23 @@ function renderSummaryBubble(summaryText, targetContainer) {
 }
 
 function updateStatusMetrics() {
-    const { totalTokens, agent, agentNameForDisplay } = getContextData();
+    const { totalTokens, agent, agentNameForDisplay, model } = getContextData();
     const allowedModels = UserService.getAllowedModelsForCurrentUser();
+    const modelName = model && model !== 'N/A' ? model : 'N/A';
 
     const modelStatusSpan = document.getElementById('model-count-status');
     const agentStatusSpan = document.getElementById('active-agent-status');
     const tokenStatusSpan = document.getElementById('token-count-status');
 
     if (modelStatusSpan) modelStatusSpan.textContent = `${allowedModels.length} Models`;
-    if (agentStatusSpan) agentStatusSpan.textContent = `Active: ${agent.icon || ''} ${agentNameForDisplay}`;
+    if (agentStatusSpan) {
+        const nextText = `Active: ${agent.icon || ''} ${agentNameForDisplay} • ${modelName}`;
+        if (agentStatusSpan.textContent !== nextText) {
+            agentStatusSpan.textContent = nextText;
+        }
+    }
     if (tokenStatusSpan) tokenStatusSpan.textContent = `~${totalTokens.toLocaleString()} Tokens`;
+    refreshMobileStatusMarquee();
 }
 
 function initDragAndDrop() {

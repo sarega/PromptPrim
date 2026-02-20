@@ -145,7 +145,6 @@ function setupEventSubscriptions() {
     bus.subscribe('project:loaded', (eventData) => {
         // โค้ดเดิมที่อัปเดต UI ยังอยู่เหมือนเดิม
         ProjectUI.updateProjectTitle(eventData.projectData.name);
-        ProjectUI.renderEntitySelector();
         // เมื่อโปรเจกต์โหลดเสร็จแล้ว ค่อยเรียกคืนสถานะ Composer
         try {
             const savedComposerState = localStorage.getItem('promptPrimComposerState');
@@ -298,6 +297,9 @@ function setupEventSubscriptions() {
     bus.subscribe('memory:importPackage', () => { document.getElementById('load-memory-package-input').click(); });
 
     bus.subscribe('studio:itemClicked', ProjectHandlers.handleStudioItemClick); 
+    bus.subscribe('entity:stagedApply', ProjectHandlers.applyStagedEntitySelection);
+    bus.subscribe('entity:stagedCancel', ProjectHandlers.cancelStagedEntitySelection);
+    bus.subscribe('session:loaded', () => ProjectHandlers.cancelStagedEntitySelection());
     bus.subscribe('summary:editFromChat', ({ logId }) => {
         SummaryUI.showSummarizationCenter();
         setTimeout(() => SummaryUI.selectLog(logId), 50);

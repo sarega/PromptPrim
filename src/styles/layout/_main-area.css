@@ -26,7 +26,7 @@
 }
 
 .chat-header {
-    padding: 8px 20px; /* ปรับ padding ให้เหมาะสม */
+    padding: 8px 14px;
     border-bottom: 1px solid var(--border-color);
     background: var(--white-alpha-95);
     display: flex;
@@ -41,11 +41,12 @@
 .header-left, .header-center, .header-right {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.65rem;
+    min-width: 0;
 }
 
 .header-left {
-    flex: 1;
+    flex: 1.4;
     justify-content: flex-start;
 }
 .header-center {
@@ -53,8 +54,47 @@
     justify-content: center;
 }
 .header-right {
-    flex: 1;
+    flex: 0.8;
     justify-content: flex-end;
+}
+
+.header-brand-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.chat-header .app-main-title {
+    margin: 0;
+    font-size: 1.02rem;
+    line-height: 1.1;
+}
+
+.chat-header .project-title {
+    margin: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--header-project-title-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+.header-chat-divider {
+    width: 1px;
+    height: 20px;
+    background-color: var(--header-chat-divider-color);
+    border-radius: 999px;
+    flex: 0 0 auto;
+}
+
+#project-menu-dropdown .btn {
+    padding: 3px 9px;
+    min-height: 26px;
+    line-height: 1;
 }
 /* --- 2. เพิ่มในไฟล์ใหม่: src/styles/components/_user-profile.css --- */
 
@@ -184,9 +224,9 @@ body.dark-mode .theme-switcher-inline label:hover {
 }
 
 #hamburger-btn, #toggle-composer-btn {
-    font-size: 2rem;
+    font-size: 1.75rem;
     line-height: 1; /* Ensure proper vertical alignment */
-    padding: 0.25rem; /* Adjust padding for a better feel */
+    padding: 0.15rem;
 }
 
 
@@ -199,10 +239,6 @@ body.dark-mode .theme-switcher-inline label:hover {
     transform: scaleX(1);
 }
 
-.chat-header .chat-title {
-    margin-right: auto; /* This pushes elements after it to the right */
-}
-
 #toggle-composer-btn {
     transition: transform 0.3s ease;
 }
@@ -211,9 +247,14 @@ body.dark-mode .theme-switcher-inline label:hover {
     transform: scaleX(1);
 }
 .chat-title {
-    font-size: 1.15rem;
+    font-size: 1rem;
     font-weight: 600;
-    flex-grow: 1;
+    flex: 0 1 auto;
+    margin: 0;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Chat Input & Status Panel styles remain at the bottom */
@@ -236,6 +277,7 @@ body.dark-mode .theme-switcher-inline label:hover {
     will-change: transform, max-height;
     position: relative;
     z-index: 10;
+    width: 100%;
 }
 
 /* [FIX] Rotate the icon inside the button, not the button itself, to prevent alignment shifts. */
@@ -255,6 +297,24 @@ body.dark-mode .theme-switcher-inline label:hover {
     display: flex;
     align-items: center;
     gap: 10px;
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+.status-left {
+    flex: 1 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+#statusText,
+#model-count-status,
+#active-agent-status,
+#token-count-status {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .status-right {
     font-size: 12px;
@@ -264,6 +324,7 @@ body.dark-mode .theme-switcher-inline label:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+    flex: 0 1 auto;
     margin-left: auto;
 }
 #context-inspector-trigger-btn {
@@ -350,48 +411,37 @@ body.dark-mode #model-count-status {
 /* CSS เพื่อให้ปุ่มสลับหน้าจอ (Mode Switcher) ดูเป็น Active/Inactive */
 
 .header-center .menu-toggle-btn {
-    color: #64748b; /* สีเริ่มต้น: Inactive */
-    transition: all 0.2s ease;
+    color: var(--workspace-switcher-inactive-color);
+    border-radius: 6px;
+    transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.header-center .menu-toggle-btn:hover {
+    color: var(--workspace-switcher-active-color);
+    background-color: var(--workspace-switcher-hover-bg);
 }
 
 .header-center .menu-toggle-btn.active {
-    color: var(--text-dark); /* สี Active */
-    background-color: var(--bg-color-secondary);
-    border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-body.dark-mode .header-center .menu-toggle-btn.active {
-    background-color: #3e4c5f;
+    color: var(--workspace-switcher-active-color);
+    background-color: var(--workspace-switcher-active-bg);
+    box-shadow: var(--workspace-switcher-active-shadow);
 }
 
 .header-center {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 0.45rem;
     position: relative; 
     z-index: 50; /* Base Z-index */
 }
 
 /* [✅ NEW FIX: ทำให้ปุ่มสลับ Workspace มี Z-index สูงกว่าตัวแบ่ง] */
 #switch-to-chat-btn, 
-#switch-to-photo-btn, 
-#switch-to-composer-btn {
+#switch-to-composer-btn,
+#switch-to-photo-btn {
     position: relative;
     z-index: 51; /* ให้สูงกว่า 50 เล็กน้อย */
-}
-
-/* [✅ NEW FIX: ทำให้ตัวแบ่งคลิกทะลุได้] */
-.header-center-divider {
-    pointer-events: none; /* ทำให้คลิกทะลุได้ 100% */
-}
-
-/* [✅ NEW FIX: ตรวจสอบ Custom Selector] */
-#custom-entity-selector-wrapper {
-    /* ถ้ามีปัญหานี้เกิดขึ้น, ให้ลองตั้งค่า z-index ต่ำลง หรือ pointer-events: none; */
-    /* แต่ถ้าใช้ Event Delegation แล้ว, z-index 50 ก็น่าจะพอ */
-    /* ถ้ายังไม่ได้ผล ให้เพิ่ม: pointer-events: none; (แต่จะทำให้ selector กดไม่ติด) */
-    /* สำหรับตอนนี้ ให้ปุ่มมี z-index สูงกว่าก็พอครับ */
 }
 
 /* fix visual studio overlay z-index issue */

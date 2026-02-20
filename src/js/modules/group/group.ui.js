@@ -6,7 +6,7 @@ import { ReactBridge } from '../../react-entry.jsx';
 import GroupEditorModal from '../../react-components/GroupEditorModal.jsx';
 import * as GroupHandlers from './group.handlers.js';
 import { stateManager } from '../../core/core.state.js';
-import { toggleDropdown } from '../../core/core.ui.js';
+import { createDropdown } from '../../core/core.ui.js';
 
 const CONTAINER_ID = 'group-editor-container';
 
@@ -21,25 +21,35 @@ function createGroupElement(name) {
     item.className = 'item group-item';
     item.dataset.groupName = name;
 
-    // [FIX] เพิ่ม Logic การไฮไลท์สีเหลืองสำหรับ Staging
+    // [FIX] เพิ่ม Logic การไฮไลท์สำหรับสถานะรอยืนยัน
     if (activeEntity?.type === 'group' && activeEntity.name === name) {
         item.classList.add('active'); // สีเขียว
     } else if (stagedEntity?.type === 'group' && stagedEntity.name === name) {
-        item.classList.add('staged'); // สีเหลืองกระพริบ
+        item.classList.add('staged'); // สีเหลืองรอยืนยัน
     }
 
-    item.innerHTML = `
-     <div class="item-header">
-        <span class="item-name"><span class="item-icon">🤝</span> ${name}</span>
-        <div class="item-actions">
-            <button class="btn-icon" data-action="group:edit" title="Edit Group">
-                <span class="material-symbols-outlined">edit</span>
-            </button>
-            <button class="btn-icon danger" data-action="group:delete" title="Delete Group">
-                <span class="material-symbols-outlined">delete</span>
-            </button>
-        </div>
-    </div>`;
+    const header = document.createElement('div');
+    header.className = 'item-header';
+
+    const itemName = document.createElement('span');
+    itemName.className = 'item-name';
+
+    const icon = document.createElement('span');
+    icon.className = 'item-icon';
+    icon.textContent = '🤝';
+
+    itemName.appendChild(icon);
+    itemName.appendChild(document.createTextNode(` ${name}`));
+
+    const dropdownOptions = [
+        { label: 'Edit...', action: 'group:edit' },
+        { label: 'Delete', action: 'group:delete', isDestructive: true },
+    ];
+    const itemDropdown = createDropdown(dropdownOptions);
+    itemDropdown.querySelector('button')?.setAttribute('title', 'Group actions');
+
+    header.append(itemName, itemDropdown);
+    item.appendChild(header);
     
     return item;
 }

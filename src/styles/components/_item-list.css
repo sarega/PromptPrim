@@ -159,39 +159,12 @@
     border-color: #d1d8e0;
 }
 
-/* --- Staged Item Styling --- */
+/* --- Staged Item Styling (non-animated two-step confirmation) --- */
 .item-list > .item.staged {
-    /* ใช้ outline เพื่อไม่ให้กระทบ layout เดิม */
-    outline: 2px solid #FBCF35; /* สีเหลืองทอง */
-    outline-offset: -2px; /* ทำให้เส้นขอบอยู่ด้านใน */
-    
-    /* เพิ่ม animation การกระพริบของ box-shadow */
-    animation: pulse-yellow 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
-}
-
-@keyframes pulse-yellow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(251, 207, 53, 0.6);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(251, 207, 53, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(251, 207, 53, 0);
-  }
-}
-
-/* --- Staged Item Styling --- */
-.item-list > .item.staged {
-    outline: 2px solid #FBCF35; /* เส้นขอบสีเหลืองทอง */
-    outline-offset: -2px; /* ทำให้เส้นขอบอยู่ด้านใน */
-    animation: pulse-yellow 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
-}
-
-@keyframes pulse-yellow {
-  0% { box-shadow: 0 0 0 0 rgba(251, 207, 53, 0.6); }
-  70% { box-shadow: 0 0 0 10px rgba(251, 207, 53, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(251, 207, 53, 0); }
+    border-color: #f59e0b;
+    border-left-width: 3px;
+    background-color: #fff9e6;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35) inset;
 }
 
 .knowledge-item {

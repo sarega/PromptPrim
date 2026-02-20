@@ -152,8 +152,9 @@ function initializePanelControls() {
     // --- Hamburger Button to OPEN the sidebar ---
     DOM.hamburgerBtn?.addEventListener('click', (e) => {
         if (window.innerWidth <= 1024) { 
-            DOM.sessionsPanel.classList.add('is-open');
-            DOM.mobileOverlay?.classList.add('active');
+            const shouldOpen = !DOM.sessionsPanel.classList.contains('is-open');
+            DOM.sessionsPanel.classList.toggle('is-open', shouldOpen);
+            DOM.mobileOverlay?.classList.toggle('active', shouldOpen);
         } else {
             DOM.appWrapper?.classList.toggle('sidebar-collapsed');
         }

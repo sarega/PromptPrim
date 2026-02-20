@@ -7,6 +7,7 @@ import { saveStudioSession, loadStudioSession } from '../modules/studio/studio.s
 // Import the Suno service to access audio‑specific helpers (WAV and MIDI)
 import * as SunoService from '../modules/suno/suno.service.js';
 import '../../styles/tw-runtime.css'; 
+import '../../styles/layout/_photostudio-theme.css';
 
 // ==========================================
 // 1. Helper Component: FileDropZone (Drag & Drop UI)
@@ -1537,7 +1538,7 @@ export default function PhotoStudioWorkspace({ agentName, models, onGenerate }) 
 
     // Render UI
     return (
-        <div className="studio-content tw-flex tw-flex-col tw-h-full tw-p-6 tw-bg-slate-800 tw-text-white tw-overflow-y-auto">
+        <div className="studio-content photo-studio-workspace tw-flex tw-flex-col tw-h-full tw-p-6 tw-bg-slate-800 tw-text-white tw-overflow-y-auto">
             {/* Header with back buttons and agent name */}
             <div className="tw-flex tw-justify-between tw-items-center tw-mb-4">
                 <h2 className="tw-text-2xl tw-font-extrabold tw-text-cyan-400">{agentName}</h2>

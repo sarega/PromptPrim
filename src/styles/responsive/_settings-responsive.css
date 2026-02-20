@@ -100,7 +100,6 @@ body.dark-mode .mobile-menu-trigger {
 @media (max-width: 768px) {
   /* 1) ให้ overlay เองเลื่อนได้เวลาจอเตี้ย (iOS-friendly) */
   #settings-modal {
-    display: flex;
     align-items: center;
     justify-content: center;
     padding: 8px;
@@ -198,5 +197,4 @@ body.dark-mode .mobile-menu-trigger {
     padding: 6px 10px;
   }
 }
-
 
