@@ -33,11 +33,11 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/app-BF_bSmFg.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-Cr0rqbzZ.js">
+  <script type="module" crossorigin src="/PromptPrim/assets/app-CbNfpCxe.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-C67ynh2C.js">
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/client-CZ2o165L.js">
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-BUDMDT7H.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-CI4iR5I3.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-F0IP4Gh8.css">
   <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-DUbRV5w6.css">
 </head>
 <body class="admin-page">
@@ -79,7 +79,10 @@
                         <h2 id="project-title" class="project-title">Untitled Project</h2>
                     </div>
                     <span class="header-chat-divider" aria-hidden="true"></span>
-                    <h1 id="chat-title" class="chat-title">AI Assistant</h1>
+                    <button id="locate-active-session-btn" class="btn-icon chat-session-locate-btn" title="Locate active chat in sessions">
+                        <span class="material-symbols-outlined">folder_open</span>
+                    </button>
+                    <h1 id="chat-title" class="chat-title" title="Locate active chat in sessions">AI Assistant</h1>
                 </div>
 
                 <div class="header-center">
@@ -138,14 +141,55 @@
                         <div class="sessions-frame">
                             <div class="section-box">
                                 <div class="section-header">
-                                    <h3><span class="material-symbols-outlined">folder</span> Chat Sessions</h3>
-                                    <div id="new-session-menu" class="dropdown align-right">
-                                        <button id="new-chat-btn" class="btn-icon" data-action="toggle-menu" title="Create">
-                                            <span class="material-symbols-outlined">add</span>
-                                        </button>
-                                        <div class="dropdown-content">
-                                            <a href="#" data-action="new-chat">New Chat</a>
-                                            <a href="#" data-action="new-folder">New Folder</a>
+                                    <h3 id="session-list-locate-trigger" class="session-list-locate-trigger" role="button" tabindex="0" title="Locate active chat in sessions">
+                                        <span class="material-symbols-outlined">folder</span>
+                                        <span class="section-title-text">Chat Sessions</span>
+                                    </h3>
+                                    <div class="section-header-actions">
+                                        <div id="session-organize-menu" class="dropdown align-right">
+                                            <button class="btn-icon session-organize-btn" data-action="toggle-menu" aria-label="Organize chat sessions">
+                                                <span class="material-symbols-outlined">tune</span>
+                                            </button>
+                                            <div class="dropdown-content session-organize-dropdown">
+                                                <div class="session-organize-heading">Organize</div>
+                                                <a href="#" class="session-organize-option" data-action="session:organizeSet" data-organize-by="folder">
+                                                    <span>By folder</span>
+                                                    <span class="session-organize-check" aria-hidden="true">✓</span>
+                                                </a>
+                                                <a href="#" class="session-organize-option" data-action="session:organizeSet" data-organize-by="chronological">
+                                                    <span>Chronological list</span>
+                                                    <span class="session-organize-check" aria-hidden="true">✓</span>
+                                                </a>
+                                                <div class="dropdown-divider"></div>
+                                                <div class="session-organize-heading">Sort by</div>
+                                                <a href="#" class="session-organize-option" data-action="session:organizeSet" data-sort-by="created">
+                                                    <span>Created</span>
+                                                    <span class="session-organize-check" aria-hidden="true">✓</span>
+                                                </a>
+                                                <a href="#" class="session-organize-option" data-action="session:organizeSet" data-sort-by="updated">
+                                                    <span>Updated</span>
+                                                    <span class="session-organize-check" aria-hidden="true">✓</span>
+                                                </a>
+                                                <div class="dropdown-divider"></div>
+                                                <div class="session-organize-heading">Show</div>
+                                                <a href="#" class="session-organize-option" data-action="session:organizeSet" data-show-mode="all">
+                                                    <span>All threads</span>
+                                                    <span class="session-organize-check" aria-hidden="true">✓</span>
+                                                </a>
+                                                <a href="#" class="session-organize-option" data-action="session:organizeSet" data-show-mode="relevant">
+                                                    <span>Relevant</span>
+                                                    <span class="session-organize-check" aria-hidden="true">✓</span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                        <div id="new-session-menu" class="dropdown align-right">
+                                            <button id="new-chat-btn" class="btn-icon" data-action="toggle-menu" title="Create">
+                                                <span class="material-symbols-outlined">add</span>
+                                            </button>
+                                            <div class="dropdown-content">
+                                                <a href="#" data-action="new-chat">New Chat</a>
+                                                <a href="#" data-action="new-folder">New Folder</a>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -206,15 +250,42 @@
                 <div id="studio-panel" class="right-sidebar">
                     <div class="studio-header">
                         <h1>Agent & Asset Studio</h1>
+                        <div class="studio-header-actions">
+                            <div id="studio-visibility-menu" class="dropdown align-right">
+                                <button type="button" id="asset-filter-btn" class="btn-icon studio-visibility-btn" data-action="toggle-menu" title="Show or hide sections">
+                                    <span class="material-symbols-outlined">filter_list</span>
+                                </button>
+                                <div class="dropdown-content studio-visibility-dropdown">
+                                    <div class="studio-visibility-heading">Show Sections</div>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="search">
+                                        <span>Search & Sorting</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="agentPresets">
+                                        <span>Agent Presets</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="agentGroups">
+                                        <span>Agent Group</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="commandMemories">
+                                        <span>Command Memories</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="knowledgeFiles">
+                                        <span>Knowledge Files</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="studio-toolbar">
                         <div class="search-wrapper">
                             <span class="material-symbols-outlined">search</span>
                             <input type="text" id="asset-search-input" placeholder="Search Agents...">
                         </div>
-                        <button type="button" id="asset-filter-btn" class="btn-icon" title="Advanced Filters">
-                            <span class="material-symbols-outlined">filter_list</span>
-                        </button>
                         <div class="sort-wrapper">
                             <!-- <label for="asset-sort-select">Sort by:</label> -->
                             <select id="asset-sort-select">
@@ -225,15 +296,6 @@
                                 <option value="name-asc">Name (A-Z)</option>
                                 <option value="name-desc">Name (Z-A)</option>
                             </select>
-                        </div>
-                        <div class="dropdown align-right">
-                            <button class="btn-icon" data-action="toggle-menu" title="More Actions">
-                                <span class="material-symbols-outlined">more_vert</span>
-                            </button>
-                            <div class="dropdown-content">
-                                <a href="#" data-action="agent:import">Import Agent(s)...</a>
-                                <a href="#" data-action="agent:exportAll">Export All Agents...</a>
-                            </div>
                         </div>
                     </div>
                     <div id="studio-selected-entity-slot" class="studio-selected-entity-slot"></div>
