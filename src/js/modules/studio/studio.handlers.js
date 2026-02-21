@@ -3,6 +3,58 @@
 import { stateManager } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 
+const DEFAULT_STUDIO_SECTION_VISIBILITY = Object.freeze({
+    search: true,
+    agentPresets: true,
+    agentGroups: true,
+    commandMemories: true,
+    knowledgeFiles: true
+});
+
+const STUDIO_SECTION_KEYS = Object.keys(DEFAULT_STUDIO_SECTION_VISIBILITY);
+
+function normalizeStudioSectionVisibility(rawValue = {}) {
+    return {
+        search: rawValue?.search !== false,
+        agentPresets: rawValue?.agentPresets !== false,
+        agentGroups: rawValue?.agentGroups !== false,
+        commandMemories: rawValue?.commandMemories !== false,
+        knowledgeFiles: rawValue?.knowledgeFiles !== false
+    };
+}
+
+export function getStudioSectionVisibility(project = stateManager.getProject()) {
+    return normalizeStudioSectionVisibility(project?.globalSettings?.studioSectionVisibility);
+}
+
+export function toggleStudioSectionVisibility({ sectionKey } = {}) {
+    const normalizedKey = String(sectionKey || '').trim();
+    if (!STUDIO_SECTION_KEYS.includes(normalizedKey)) return;
+
+    const project = stateManager.getProject();
+    if (!project) return;
+
+    const currentVisibility = getStudioSectionVisibility(project);
+    const nextVisibility = {
+        ...currentVisibility,
+        [normalizedKey]: !currentVisibility[normalizedKey]
+    };
+
+    if (!project.globalSettings || typeof project.globalSettings !== 'object') {
+        project.globalSettings = {};
+    }
+    project.globalSettings.studioSectionVisibility = nextVisibility;
+
+    if (normalizedKey === 'search' && !nextVisibility.search) {
+        const searchInput = document.getElementById('asset-search-input');
+        if (searchInput) searchInput.value = '';
+    }
+
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('studio:contentShouldRender');
+}
+
 /**
  * ฟังก์ชันกลางสำหรับค้นหา, กรอง, และจัดเรียง Agent ทั้งหมด
  * @returns {Array} - รายชื่อ Agent ที่ผ่านการจัดเรียงและกรองแล้ว

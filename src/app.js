@@ -32,6 +32,7 @@ import * as ChatUI from './js/modules/chat/chat.ui.js';
 import * as ChatHandlers from './js/modules/chat/chat.handlers.js';
 import * as SettingsUI from './js/modules/settings/settings.ui.js';
 import * as StudioUI from './js/modules/studio/studio.ui.js';
+import * as StudioHandlers from './js/modules/studio/studio.handlers.js';
 import * as AgentUI from './js/modules/agent/agent.ui.js';
 import * as AgentHandlers from './js/modules/agent/agent.handlers.js';
 import * as GroupUI from './js/modules/group/group.ui.js';
@@ -402,6 +403,7 @@ function setupEventSubscriptions() {
     bus.subscribe('session:movePrompt', (payload) => SessionHandlers.moveSessionToFolderPrompt(payload));
     bus.subscribe('session:contextMode', (payload) => SessionHandlers.setSessionContextMode(payload));
     bus.subscribe('session:contextModePrompt', (payload) => SessionHandlers.setSessionContextModePrompt(payload));
+    bus.subscribe('session:organizeSet', (payload) => SessionHandlers.setSessionListPreferences(payload));
     bus.subscribe('session:clone', ({ sessionId, event }) => SessionHandlers.cloneSession(sessionId, event));
     bus.subscribe('session:archive', ({ sessionId, event }) => SessionHandlers.archiveSession(sessionId, event));
     bus.subscribe('session:pin', ({ sessionId, event }) => SessionHandlers.togglePinSession(sessionId, event));
@@ -421,6 +423,9 @@ function setupEventSubscriptions() {
     bus.subscribe('agent:save', AgentHandlers.saveAgentPreset);
     bus.subscribe('agent:edit', ({ agentName }) => AgentUI.showAgentEditor(true, agentName));
     bus.subscribe('agent:delete', ({ agentName }) => AgentHandlers.deleteAgentPreset(agentName));
+    bus.subscribe('agent:duplicate', ({ agentName }) => AgentHandlers.duplicateAgentPreset(agentName));
+    bus.subscribe('agent:import', () => document.getElementById('import-agents-input')?.click());
+    bus.subscribe('agent:exportAll', StudioHandlers.exportAllAgents);
     bus.subscribe('agent:generateProfile', AgentHandlers.generateAgentProfile);
 
     bus.subscribe('group:create', () => GroupUI.showAgentGroupEditor(false));
@@ -439,6 +444,7 @@ function setupEventSubscriptions() {
     bus.subscribe('memory:importPackage', () => { document.getElementById('load-memory-package-input').click(); });
 
     bus.subscribe('studio:itemClicked', ProjectHandlers.handleStudioItemClick); 
+    bus.subscribe('studio:toggleSectionVisibility', (payload) => StudioHandlers.toggleStudioSectionVisibility(payload));
     bus.subscribe('entity:stagedApply', ProjectHandlers.applyStagedEntitySelection);
     bus.subscribe('entity:stagedCancel', ProjectHandlers.cancelStagedEntitySelection);
     bus.subscribe('session:loaded', () => ProjectHandlers.cancelStagedEntitySelection());

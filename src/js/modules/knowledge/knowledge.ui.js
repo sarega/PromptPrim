@@ -275,14 +275,29 @@ export function loadAndRenderKnowledgeFiles(assetsContainer) {
 
     const summary = document.createElement('summary');
     summary.className = 'section-header';
-    summary.innerHTML = '<h3>📚 Knowledge Files</h3>';
+
+    const title = document.createElement('h3');
+    title.textContent = '📚 Knowledge Files';
+
+    const actions = document.createElement('div');
+    actions.className = 'section-header-actions';
+
+    const uploadButton = document.createElement('button');
+    uploadButton.className = 'btn-icon';
+    uploadButton.dataset.action = 'knowledge:upload';
+    uploadButton.title = 'Upload Files';
+    uploadButton.textContent = '+';
 
     const summaryDropdown = createDropdown([
         { label: 'Upload Files...', action: 'knowledge:upload' },
         { label: 'Re-index All', action: 'knowledge:reindexAll' },
         { label: 'Clear All', action: 'knowledge:clearAll', isDestructive: true }
     ]);
-    summary.appendChild(summaryDropdown);
+    summaryDropdown.classList.add('section-mini-menu');
+    summaryDropdown.querySelector('button')?.setAttribute('title', 'Knowledge section menu');
+
+    actions.append(uploadButton, summaryDropdown);
+    summary.append(title, actions);
 
     const box = document.createElement('div');
     box.className = 'section-box';

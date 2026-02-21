@@ -198,6 +198,45 @@ export function deleteAgentPreset(agentNameToDelete) {
     }
 }
 
+function createDuplicatedAgentName(project, baseName) {
+    const normalizedBase = String(baseName || '').trim() || 'Agent';
+    const seedName = `${normalizedBase} Copy`;
+    if (!project.agentPresets?.[seedName]) return seedName;
+
+    let suffix = 2;
+    let candidate = `${seedName} ${suffix}`;
+    while (project.agentPresets?.[candidate]) {
+        suffix += 1;
+        candidate = `${seedName} ${suffix}`;
+    }
+    return candidate;
+}
+
+export function duplicateAgentPreset(agentNameToDuplicate) {
+    const project = stateManager.getProject();
+    if (!project || !agentNameToDuplicate) return;
+
+    const sourceAgent = project.agentPresets?.[agentNameToDuplicate];
+    if (!sourceAgent) {
+        showCustomAlert(`Agent "${agentNameToDuplicate}" was not found.`, 'Duplicate Agent');
+        return;
+    }
+
+    const duplicatedName = createDuplicatedAgentName(project, agentNameToDuplicate);
+    const now = Date.now();
+    const duplicatedAgent = JSON.parse(JSON.stringify(sourceAgent));
+    duplicatedAgent.id = `agent_${now}`;
+    duplicatedAgent.createdAt = now;
+    duplicatedAgent.modifiedAt = now;
+    duplicatedAgent.type = duplicatedAgent.type || 'custom';
+
+    project.agentPresets[duplicatedName] = duplicatedAgent;
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('studio:contentShouldRender');
+    showCustomAlert(`Created "${duplicatedName}" from "${agentNameToDuplicate}".`, 'Agent Duplicated');
+}
+
 export async function saveInlineAgentConfig(configData) {
     const project = stateManager.getProject();
     if (!project) return;

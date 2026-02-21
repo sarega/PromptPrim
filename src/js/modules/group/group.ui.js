@@ -66,27 +66,55 @@ export function renderAgentGroups(assetsContainer) {
     const project = stateManager.getProject();
     if (!project || !project.agentGroups) return;
 
-    // [FIX] กลับมาใช้ Template Literal ที่อ่านง่ายและดีกว่า
-    const groupSectionHTML = `
-        <details class="collapsible-section" open>
-            <summary class="section-header">
-                <h3>🤝 Agent Groups</h3>
-                <button class="btn-icon" data-action="group:create" title="Create New Group">+</button>
-            </summary>
-            <div class="section-box">
-                <div id="agentGroupList" class="item-list"></div>
-            </div>
-        </details>
-    `;
-    assetsContainer.insertAdjacentHTML('beforeend', groupSectionHTML);
+    const section = document.createElement('details');
+    section.className = 'collapsible-section agent-groups-section';
+    section.open = true;
 
-    // ค้นหา list container ที่เพิ่งสร้างขึ้น
-    const listContainer = assetsContainer.querySelector('#agentGroupList:last-of-type');
+    const summary = document.createElement('summary');
+    summary.className = 'section-header';
+
+    const title = document.createElement('h3');
+    title.textContent = '🤝 Agent Groups';
+
+    const actions = document.createElement('div');
+    actions.className = 'section-header-actions';
+
+    const createButton = document.createElement('button');
+    createButton.className = 'btn-icon';
+    createButton.dataset.action = 'group:create';
+    createButton.title = 'Create New Group';
+    createButton.textContent = '+';
+
+    const summaryDropdown = createDropdown([
+        { label: 'New Group...', action: 'group:create' }
+    ]);
+    summaryDropdown.classList.add('section-mini-menu');
+    summaryDropdown.querySelector('button')?.setAttribute('title', 'Group section menu');
+
+    actions.append(createButton, summaryDropdown);
+    summary.append(title, actions);
+
+    const box = document.createElement('div');
+    box.className = 'section-box';
+
+    const listContainer = document.createElement('div');
+    listContainer.id = 'agentGroupList';
+    listContainer.className = 'item-list';
+    box.appendChild(listContainer);
+
+    section.append(summary, box);
+    assetsContainer.appendChild(section);
+
     if (!listContainer) return;
 
     // วาด item แต่ละอันลงไป
     const groups = project.agentGroups;
-    for (const name in groups) {
+    const groupNames = Object.keys(groups || {});
+    if (groupNames.length === 0) {
+        listContainer.innerHTML = '<p class="no-items-message">No groups yet.</p>';
+        return;
+    }
+    for (const name of groupNames) {
         listContainer.appendChild(createGroupElement(name));
     }
 }

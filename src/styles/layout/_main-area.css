@@ -256,6 +256,29 @@ body.dark-mode .theme-switcher-inline label:hover {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 2px 4px;
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.chat-title:hover {
+    background: #edf2f7;
+}
+
+.chat-title:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+.chat-session-locate-btn {
+    width: 28px;
+    height: 28px;
+}
+
+.chat-session-locate-btn .material-symbols-outlined {
+    font-size: 18px;
+    line-height: 1;
 }
 
 /* Chat Input & Status Panel styles remain at the bottom */

@@ -39,11 +39,66 @@ import * as ComposerUI from '../composer/composer.ui.js';
  */
 const generateUniqueId = (prefix = 'sid') => `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+const SESSION_LIST_ORGANIZE_FOLDER = 'folder';
+const SESSION_LIST_ORGANIZE_CHRONOLOGICAL = 'chronological';
+const SESSION_LIST_SORT_UPDATED = 'updated';
+const SESSION_LIST_SORT_CREATED = 'created';
+const SESSION_LIST_SHOW_ALL = 'all';
+const SESSION_LIST_SHOW_RELEVANT = 'relevant';
+
 /**
  * A helper function to get the currently active project from the state.
  * @returns {object|null} The active project object or null.
  */
 const getActiveProject = () => stateManager.getProject();
+
+function normalizeSessionListPreferences(rawValue = {}) {
+    return {
+        organizeBy: rawValue?.organizeBy === SESSION_LIST_ORGANIZE_CHRONOLOGICAL
+            ? SESSION_LIST_ORGANIZE_CHRONOLOGICAL
+            : SESSION_LIST_ORGANIZE_FOLDER,
+        sortBy: rawValue?.sortBy === SESSION_LIST_SORT_CREATED
+            ? SESSION_LIST_SORT_CREATED
+            : SESSION_LIST_SORT_UPDATED,
+        showMode: rawValue?.showMode === SESSION_LIST_SHOW_RELEVANT
+            ? SESSION_LIST_SHOW_RELEVANT
+            : SESSION_LIST_SHOW_ALL
+    };
+}
+
+export function getSessionListPreferences(project = getActiveProject()) {
+    return normalizeSessionListPreferences(project?.globalSettings?.sessionListPreferences);
+}
+
+export function setSessionListPreferences({ organizeBy, sortBy, showMode } = {}) {
+    const project = getActiveProject();
+    if (!project) return;
+
+    const currentPreferences = getSessionListPreferences(project);
+    const nextPreferences = normalizeSessionListPreferences({
+        ...currentPreferences,
+        organizeBy,
+        sortBy,
+        showMode
+    });
+
+    if (
+        currentPreferences.organizeBy === nextPreferences.organizeBy &&
+        currentPreferences.sortBy === nextPreferences.sortBy &&
+        currentPreferences.showMode === nextPreferences.showMode
+    ) {
+        return;
+    }
+
+    if (!project.globalSettings || typeof project.globalSettings !== 'object') {
+        project.globalSettings = {};
+    }
+    project.globalSettings.sessionListPreferences = nextPreferences;
+
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('session:listChanged');
+}
 
 function getSessionById(project, sessionId) {
     if (!project || !sessionId) return null;

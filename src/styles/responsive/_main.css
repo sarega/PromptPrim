@@ -151,6 +151,10 @@
         display: none;
     }
 
+    .chat-header .chat-session-locate-btn {
+        display: none;
+    }
+
     .chat-header #project-menu-dropdown {
         display: none;
     }
@@ -215,6 +219,64 @@
         width: 32px;
         height: 32px;
         font-size: 0.9rem;
+    }
+
+    .sessions-panel .sidebar-content {
+        padding: 9px 8px;
+    }
+
+    .sessions-panel .section-box {
+        margin-bottom: 2px;
+    }
+
+    .sessions-panel .section-header {
+        min-height: 26px;
+        margin-bottom: 2px;
+    }
+
+    .sessions-panel .section-header h3 {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.94rem;
+        line-height: 1;
+        font-weight: 650;
+    }
+
+    .sessions-panel .section-header h3 .section-title-text {
+        line-height: 1;
+    }
+
+    .sessions-panel .section-header h3 .material-symbols-outlined {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        line-height: 1;
+        transform: none;
+    }
+
+    .sessions-panel .section-header #new-chat-btn {
+        width: 22px;
+        height: 22px;
+    }
+
+    .sessions-panel .section-header #new-chat-btn .material-symbols-outlined {
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .sessions-panel .section-header-actions {
+        gap: 3px;
+    }
+
+    .sessions-panel .section-header .session-organize-btn {
+        width: 22px;
+        height: 22px;
+    }
+
+    .sessions-panel .section-header .session-organize-btn .material-symbols-outlined {
+        font-size: 17px;
     }
 }
 

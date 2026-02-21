@@ -52,13 +52,30 @@ export function loadAndRenderMemories(assetsContainer) {
 
     const summary = document.createElement('summary');
     summary.className = 'section-header';
-    summary.innerHTML = '<h3>🧠 Command Memories</h3>';
+
+    const title = document.createElement('h3');
+    title.textContent = '🧠 Command Memories';
+
+    const actions = document.createElement('div');
+    actions.className = 'section-header-actions';
+
+    const createButton = document.createElement('button');
+    createButton.className = 'btn-icon';
+    createButton.dataset.action = 'memory:create';
+    createButton.title = 'Create New Memory';
+    createButton.textContent = '+';
+
     const dropdownOptions = [
         { label: 'New Memory...', action: 'memory:create' },
         { label: 'Export Package...', action: 'memory:exportPackage' },
         { label: 'Import Package...', action: 'memory:importPackage' },
     ];
-    summary.appendChild(createDropdown(dropdownOptions));
+    const summaryDropdown = createDropdown(dropdownOptions);
+    summaryDropdown.classList.add('section-mini-menu');
+    summaryDropdown.querySelector('button')?.setAttribute('title', 'Memory section menu');
+
+    actions.append(createButton, summaryDropdown);
+    summary.append(title, actions);
     memorySection.appendChild(summary);
     
     const container = document.createElement('div');

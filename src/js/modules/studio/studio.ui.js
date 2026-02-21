@@ -74,6 +74,18 @@ function focusSelectedEntityInList(payload = {}) {
     }, 1200);
 }
 
+function updateStudioVisibilityMenuState(sectionVisibility) {
+    const menu = document.getElementById('studio-visibility-menu');
+    if (!menu) return;
+
+    menu.querySelectorAll('.studio-visibility-option').forEach(option => {
+        const sectionKey = option.dataset.sectionKey || '';
+        const isSelected = Boolean(sectionVisibility?.[sectionKey]);
+        option.classList.toggle('is-selected', isSelected);
+        option.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    });
+}
+
 function getPendingSwitchText(stagedSnapshot) {
     const remainingSeconds = getStagedEntityRemainingSeconds();
     return `Switch to ${stagedSnapshot.icon} ${stagedSnapshot.name} in ${remainingSeconds}s`;
@@ -196,6 +208,8 @@ function buildSelectedEntitySection(project) {
     card.className = 'selected-entity-current';
     if (activeSnapshot && !activeSnapshot.exists) {
         card.classList.add('is-missing');
+    } else if (activeSnapshot?.exists) {
+        card.classList.add('is-active-entity');
     }
 
     if (activeSnapshot) {
@@ -278,6 +292,13 @@ function renderStudioContent() {
     assetsContainer.innerHTML = ''; 
 
     const project = stateManager.getProject();
+    const sectionVisibility = StudioHandlers.getStudioSectionVisibility(project);
+    const studioToolbar = document.querySelector('#studio-panel .studio-toolbar');
+    if (studioToolbar) {
+        studioToolbar.classList.toggle('hidden', !sectionVisibility.search);
+    }
+    updateStudioVisibilityMenuState(sectionVisibility);
+
     if (selectedEntitySlot) {
         selectedEntitySlot.innerHTML = '';
     }
@@ -285,12 +306,37 @@ function renderStudioContent() {
         selectedEntitySlot.appendChild(buildSelectedEntitySection(project));
     }
 
+    if (!project) {
+        syncStagedCountdownTimer();
+        return;
+    }
+
     const filteredAgents = StudioHandlers.getFilteredAndSortedAgents();
-    
-    renderAgentPresets(assetsContainer, filteredAgents);
-    renderAgentGroups(assetsContainer);
-    loadAndRenderMemories(assetsContainer);
-    loadAndRenderKnowledgeFiles(assetsContainer);
+
+    const shouldRenderAnyAssetSection = (
+        sectionVisibility.agentPresets ||
+        sectionVisibility.agentGroups ||
+        sectionVisibility.commandMemories ||
+        sectionVisibility.knowledgeFiles
+    );
+
+    if (shouldRenderAnyAssetSection) {
+        if (sectionVisibility.agentPresets) {
+            renderAgentPresets(assetsContainer, filteredAgents);
+        }
+        if (sectionVisibility.agentGroups) {
+            renderAgentGroups(assetsContainer);
+        }
+        if (sectionVisibility.commandMemories) {
+            loadAndRenderMemories(assetsContainer);
+        }
+        if (sectionVisibility.knowledgeFiles) {
+            loadAndRenderKnowledgeFiles(assetsContainer);
+        }
+    } else {
+        assetsContainer.innerHTML = '<p class="no-items-message">No sections selected. Use filter menu to show sections.</p>';
+    }
+
     syncStagedCountdownTimer();
 }
 

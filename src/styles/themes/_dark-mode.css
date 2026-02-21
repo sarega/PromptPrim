@@ -309,6 +309,23 @@ body.dark-mode .session-folder-count {
   background: #334155;
   color: #e2e8f0;
 }
+body.dark-mode .session-item.session-locate-highlight {
+  background-color: #10384a;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.38);
+}
+body.dark-mode .session-list-locate-trigger:hover {
+  background: #334155;
+}
+body.dark-mode .session-organize-heading {
+  color: #94a3b8;
+}
+body.dark-mode .session-organize-option.is-selected {
+  background: #334155;
+  color: #e2e8f0;
+}
+body.dark-mode .session-organize-option .session-organize-check {
+  color: #93c5fd;
+}
 body.dark-mode .folder-session-list {
   background: #111827;
   border-top-color: #374151;
@@ -371,6 +388,9 @@ body.dark-mode .btn-icon {
 body.dark-mode .btn-icon:hover {
   background: #334155 !important;
   color: #fff !important;
+}
+body.dark-mode .chat-title:hover {
+  background: #334155;
 }
 
 body.dark-mode .workspace#agent-asset-studio {
@@ -469,6 +489,33 @@ body.dark-mode .selected-entity-section {
     box-shadow: none;
 }
 
+body.dark-mode #studio-panel .studio-assets-container > .collapsible-section {
+    background: #1f2937;
+    border-color: #3f4a5c;
+}
+
+body.dark-mode #studio-panel .studio-assets-container > .collapsible-section > .section-header {
+    background: #253142;
+    border-bottom-color: #3f4a5c;
+}
+
+body.dark-mode #studio-panel .studio-assets-container > .collapsible-section > .section-box {
+    background: #1f2937;
+}
+
+body.dark-mode #studio-panel .studio-visibility-heading {
+    color: #94a3b8;
+}
+
+body.dark-mode #studio-panel .studio-visibility-option.is-selected {
+    background: #334155;
+    color: #e2e8f0;
+}
+
+body.dark-mode #studio-panel .studio-visibility-check {
+    color: #93c5fd;
+}
+
 body.dark-mode .studio-selected-entity-slot {
     background: #1e293b;
     border-bottom-color: #334155;
@@ -493,6 +540,12 @@ body.dark-mode .selected-entity-badge.is-pending {
 body.dark-mode .selected-entity-current {
     border-color: #334155;
     background: #0f172a;
+}
+
+body.dark-mode .selected-entity-current.is-active-entity {
+    border-color: #166534;
+    background: #0f2f21;
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.28) inset;
 }
 
 body.dark-mode .selected-entity-current.is-missing {

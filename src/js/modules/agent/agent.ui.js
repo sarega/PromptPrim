@@ -47,6 +47,7 @@ function createAgentElement(name, preset) {
 
     const dropdownOptions = [
         { label: 'Edit...', action: 'agent:edit' },
+        { label: 'Duplicate', action: 'agent:duplicate' },
         { label: 'Delete', action: 'agent:delete', isDestructive: true },
     ];
     const itemDropdown = createDropdown(dropdownOptions);
@@ -65,19 +66,47 @@ export function renderAgentPresets(assetsContainer, agentsToRender) {
     const agentSection = assetsContainer.querySelector('.agent-presets-section');
     if (agentSection) agentSection.remove(); // ลบของเก่าทิ้งถ้ามี
 
-    const agentSectionHTML = `
-        <details class="collapsible-section agent-presets-section" open>
-            <summary class="section-header">
-                <h3>🤖 Agent Presets</h3>
-                <button class="btn-icon" data-action="agent:create" title="Create New Agent">+</button>
-            </summary>
-            <div class="section-box">
-                <div id="agentPresetList" class="item-list"></div>
-            </div>
-        </details>`;
-    assetsContainer.insertAdjacentHTML('beforeend', agentSectionHTML);
+    const section = document.createElement('details');
+    section.className = 'collapsible-section agent-presets-section';
+    section.open = true;
 
-    const listContainer = assetsContainer.querySelector('#agentPresetList');
+    const summary = document.createElement('summary');
+    summary.className = 'section-header';
+
+    const title = document.createElement('h3');
+    title.textContent = '🤖 Agent Presets';
+
+    const actions = document.createElement('div');
+    actions.className = 'section-header-actions';
+
+    const createButton = document.createElement('button');
+    createButton.className = 'btn-icon';
+    createButton.dataset.action = 'agent:create';
+    createButton.title = 'Create New Agent';
+    createButton.textContent = '+';
+
+    const headerDropdown = createDropdown([
+        { label: 'New Agent...', action: 'agent:create' },
+        { label: 'Import Agent(s)...', action: 'agent:import' },
+        { label: 'Export All Agents...', action: 'agent:exportAll' }
+    ]);
+    headerDropdown.classList.add('section-mini-menu');
+    headerDropdown.querySelector('button')?.setAttribute('title', 'Agent section menu');
+
+    actions.append(createButton, headerDropdown);
+    summary.append(title, actions);
+
+    const box = document.createElement('div');
+    box.className = 'section-box';
+
+    const listContainer = document.createElement('div');
+    listContainer.id = 'agentPresetList';
+    listContainer.className = 'item-list';
+    box.appendChild(listContainer);
+
+    section.append(summary, box);
+    assetsContainer.appendChild(section);
+
     if (!listContainer) return;
 
     if (!agentsToRender || agentsToRender.length === 0) {

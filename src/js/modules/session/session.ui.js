@@ -20,6 +20,217 @@ let draggedSessionId = null;
 let activeDropdownPortal = null;
 let folderExpandHoverTimer = null;
 let pendingFolderExpandId = null;
+let suppressFolderCollapsePersistence = false;
+const SESSION_LIST_ORGANIZE_FOLDER = 'folder';
+const SESSION_LIST_ORGANIZE_CHRONOLOGICAL = 'chronological';
+const SESSION_LIST_SORT_UPDATED = 'updated';
+const SESSION_LIST_SORT_CREATED = 'created';
+const SESSION_LIST_SHOW_ALL = 'all';
+const SESSION_LIST_SHOW_RELEVANT = 'relevant';
+
+function escapeSelectorValue(rawValue = '') {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+        return CSS.escape(rawValue);
+    }
+    return String(rawValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function getSessionSortTimestamp(session, sortBy = SESSION_LIST_SORT_UPDATED) {
+    if (sortBy === SESSION_LIST_SORT_CREATED) {
+        return Number(session?.createdAt || 0);
+    }
+    return Number(session?.updatedAt || 0);
+}
+
+function sortSessionsForList(sessions = [], sortBy = SESSION_LIST_SORT_UPDATED) {
+    return [...sessions].sort((a, b) => {
+        const sortDiff = getSessionSortTimestamp(b, sortBy) - getSessionSortTimestamp(a, sortBy);
+        if (sortDiff !== 0) return sortDiff;
+        return String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' });
+    });
+}
+
+function filterSessionsByShowMode(sessions = [], project, showMode = SESSION_LIST_SHOW_ALL) {
+    if (showMode !== SESSION_LIST_SHOW_RELEVANT || !project?.activeSessionId) {
+        return sessions;
+    }
+
+    const activeSession = (project.chatSessions || []).find(session => session.id === project.activeSessionId);
+    if (!activeSession) return sessions;
+
+    const activeFolderId = activeSession.folderId || null;
+    return sessions.filter(session => (
+        session.id === activeSession.id || (session.folderId || null) === activeFolderId
+    ));
+}
+
+function updateSessionOrganizeMenuState(project) {
+    const menu = document.getElementById('session-organize-menu');
+    if (!menu || !project) return;
+
+    const preferences = SessionHandlers.getSessionListPreferences(project);
+    menu.querySelectorAll('.session-organize-option').forEach(option => {
+        let isSelected = false;
+        if (option.dataset.organizeBy) {
+            isSelected = preferences.organizeBy === option.dataset.organizeBy;
+        } else if (option.dataset.sortBy) {
+            isSelected = preferences.sortBy === option.dataset.sortBy;
+        } else if (option.dataset.showMode) {
+            isSelected = preferences.showMode === option.dataset.showMode;
+        }
+
+        option.classList.toggle('is-selected', isSelected);
+        option.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+    });
+}
+
+function ensureSessionsPanelVisible() {
+    const sessionsPanel = document.querySelector('.sessions-panel');
+    if (!sessionsPanel) return;
+
+    if (window.innerWidth <= 1024) {
+        sessionsPanel.classList.add('is-open');
+        document.getElementById('mobile-overlay')?.classList.add('active');
+        return;
+    }
+
+    document.querySelector('.app-wrapper')?.classList.remove('sidebar-collapsed');
+}
+
+function highlightLocatedSession(item) {
+    if (!item) return;
+    item.classList.remove('session-locate-highlight');
+    void item.offsetWidth;
+    item.classList.add('session-locate-highlight');
+    window.setTimeout(() => {
+        item.classList.remove('session-locate-highlight');
+    }, 1300);
+}
+
+function revealActiveSessionInList() {
+    const project = stateManager.getProject();
+    const activeSessionId = project?.activeSessionId;
+    if (!project || !activeSessionId) return;
+
+    ensureSessionsPanelVisible();
+
+    let targetItem = document.querySelector(`.session-item[data-session-id="${escapeSelectorValue(activeSessionId)}"]`);
+    if (!targetItem) {
+        renderSessionList();
+        targetItem = document.querySelector(`.session-item[data-session-id="${escapeSelectorValue(activeSessionId)}"]`);
+    }
+    if (!targetItem) return;
+
+    const parentFolder = targetItem.closest('.session-folder[data-folder-id]');
+    if (parentFolder && !parentFolder.open) {
+        parentFolder.open = true;
+    }
+
+    requestAnimationFrame(() => {
+        targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightLocatedSession(targetItem);
+    });
+}
+
+function refreshFolderAnimationHeights() {
+    document.querySelectorAll('.session-folder > .folder-session-list').forEach((list) => {
+        if (!(list instanceof HTMLElement)) return;
+
+        const folder = list.closest('.session-folder');
+        const wasOpen = Boolean(folder?.open);
+
+        // Temporarily expose full content height to avoid "instant jump" animation.
+        if (!wasOpen && folder) {
+            suppressFolderCollapsePersistence = true;
+            folder.open = true;
+        }
+
+        list.style.maxHeight = 'none';
+        const contentHeight = Math.max(0, Math.ceil(list.scrollHeight));
+        list.style.maxHeight = '';
+        list.style.setProperty('--folder-content-height', `${contentHeight}px`);
+
+        if (!wasOpen && folder) {
+            folder.open = false;
+            suppressFolderCollapsePersistence = false;
+        }
+    });
+}
+
+function animateSessionFolderToggle(folderItem, shouldOpen) {
+    const list = folderItem?.querySelector(':scope > .folder-session-list');
+    if (!folderItem || !list) {
+        if (folderItem) folderItem.open = Boolean(shouldOpen);
+        return;
+    }
+    if (folderItem.dataset.folderAnimating === '1') return;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+        folderItem.open = Boolean(shouldOpen);
+        refreshFolderAnimationHeights();
+        return;
+    }
+
+    folderItem.dataset.folderAnimating = '1';
+    const durationMs = 230;
+
+    const finish = () => {
+        folderItem.dataset.folderAnimating = '0';
+        list.style.removeProperty('max-height');
+        list.style.removeProperty('opacity');
+        list.style.removeProperty('overflow');
+        refreshFolderAnimationHeights();
+    };
+
+    let fallbackTimerId = null;
+    const onTransitionEnd = (event) => {
+        if (event.target !== list || event.propertyName !== 'max-height') return;
+        list.removeEventListener('transitionend', onTransitionEnd);
+        if (fallbackTimerId) {
+            window.clearTimeout(fallbackTimerId);
+        }
+
+        if (!shouldOpen) {
+            folderItem.open = false;
+        }
+        finish();
+    };
+    list.addEventListener('transitionend', onTransitionEnd);
+    fallbackTimerId = window.setTimeout(() => {
+        list.removeEventListener('transitionend', onTransitionEnd);
+        if (!shouldOpen) {
+            folderItem.open = false;
+        }
+        finish();
+    }, durationMs + 90);
+
+    if (shouldOpen) {
+        folderItem.open = true;
+        const targetHeight = Math.max(0, Math.ceil(list.scrollHeight));
+        list.style.setProperty('--folder-content-height', `${targetHeight}px`);
+        list.style.overflow = 'hidden';
+        list.style.maxHeight = '0px';
+        list.style.opacity = '0';
+
+        requestAnimationFrame(() => {
+            list.style.maxHeight = `${targetHeight}px`;
+            list.style.opacity = '1';
+        });
+        return;
+    }
+
+    const currentHeight = Math.max(Math.ceil(list.scrollHeight), Math.ceil(list.getBoundingClientRect().height));
+    list.style.setProperty('--folder-content-height', `${currentHeight}px`);
+    list.style.overflow = 'hidden';
+    list.style.maxHeight = `${currentHeight}px`;
+    list.style.opacity = '1';
+
+    requestAnimationFrame(() => {
+        list.style.maxHeight = '0px';
+        list.style.opacity = '0';
+    });
+}
 
 function getSessionSortIndex(session, fallback = 0) {
     const parsed = Number(session?.sortIndex);
@@ -78,6 +289,7 @@ function buildPortalMetadataFromDropdown(dropdown, portal) {
     const sessionItem = dropdown.closest('.session-item[data-session-id]');
     const folderItem = dropdown.closest('.session-folder[data-folder-id]');
     const newSessionMenu = dropdown.closest('#new-session-menu');
+    const organizeMenu = dropdown.closest('#session-organize-menu');
 
     if (sessionItem?.dataset.sessionId) {
         portal.dataset.sessionId = sessionItem.dataset.sessionId;
@@ -87,6 +299,9 @@ function buildPortalMetadataFromDropdown(dropdown, portal) {
     }
     if (newSessionMenu) {
         portal.dataset.menuType = 'new-session';
+    }
+    if (organizeMenu) {
+        portal.dataset.menuType = 'session-organize';
     }
 }
 
@@ -777,41 +992,75 @@ export function renderSessionList() {
     regularList.dataset.sessionDropTarget = 'root';
     regularList.dataset.folderId = '';
 
+    const preferences = SessionHandlers.getSessionListPreferences(project);
     const sessions = Array.isArray(project.chatSessions) ? project.chatSessions : [];
-    const activeSessions = sessions.filter(session => !session.archived);
-    const pinnedSessions = activeSessions.filter(session => (session.pinned || session.isPinned) && !session.folderId);
-    const regularRootSessions = activeSessions.filter(session => !(session.pinned || session.isPinned) && !session.folderId);
-    const archivedSessions = sessions.filter(session => session.archived);
+    const activeSessionsAll = sessions.filter(session => !session.archived);
+    const archivedSessionsAll = sessions.filter(session => session.archived);
+    const activeSessions = filterSessionsByShowMode(activeSessionsAll, project, preferences.showMode);
+    const archivedSessions = filterSessionsByShowMode(archivedSessionsAll, project, preferences.showMode);
 
-    pinnedSessions
-        .sort(sortSessionsByManualOrder)
-        .forEach(session => pinnedList.appendChild(createSessionElement(session, project)));
+    if (preferences.organizeBy === SESSION_LIST_ORGANIZE_CHRONOLOGICAL) {
+        const sortedChronological = sortSessionsForList(activeSessions, preferences.sortBy);
+        const pinnedChronological = sortedChronological.filter(session => (session.pinned || session.isPinned) && !session.folderId);
+        const regularChronological = sortedChronological.filter(session => !(session.pinned || session.isPinned) || session.folderId);
 
-    const folderList = Array.isArray(project.chatFolders) ? project.chatFolders : [];
-    folderList.forEach(folder => {
-        const folderSessions = activeSessions
-            .filter(session => session.folderId === folder.id)
-            .sort(sortSessionsByManualOrder);
-        regularList.appendChild(createFolderElement(folder, folderSessions, project));
-    });
+        pinnedChronological.forEach(session => {
+            pinnedList.appendChild(createSessionElement(session, project));
+        });
+        regularChronological.forEach(session => {
+            regularList.appendChild(createSessionElement(session, project));
+        });
+    } else {
+        const pinnedSessions = sortSessionsForList(
+            activeSessions.filter(session => (session.pinned || session.isPinned) && !session.folderId),
+            preferences.sortBy
+        );
+        const regularRootSessions = sortSessionsForList(
+            activeSessions.filter(session => !(session.pinned || session.isPinned) && !session.folderId),
+            preferences.sortBy
+        );
 
-    const ungroupedSessions = regularRootSessions
-        .sort(sortSessionsByManualOrder);
+        pinnedSessions.forEach(session => {
+            pinnedList.appendChild(createSessionElement(session, project));
+        });
 
-    ungroupedSessions.forEach(session => {
-        regularList.appendChild(createSessionElement(session, project));
-    });
+        const folderList = Array.isArray(project.chatFolders) ? project.chatFolders : [];
+        const activeSession = (project.chatSessions || []).find(item => item.id === project.activeSessionId) || null;
+        const relevantFolderId = activeSession?.folderId || null;
+        const foldersToRender = preferences.showMode === SESSION_LIST_SHOW_RELEVANT
+            ? folderList.filter(folder => folder.id === relevantFolderId)
+            : folderList;
+
+        foldersToRender.forEach(folder => {
+            const folderSessions = sortSessionsForList(
+                activeSessions.filter(session => session.folderId === folder.id),
+                preferences.sortBy
+            );
+            if (preferences.showMode !== SESSION_LIST_SHOW_RELEVANT || folderSessions.length > 0) {
+                regularList.appendChild(createFolderElement(folder, folderSessions, project));
+            }
+        });
+
+        regularRootSessions.forEach(session => {
+            regularList.appendChild(createSessionElement(session, project));
+        });
+    }
 
     if (regularList.children.length === 0) {
-        regularList.innerHTML = '<p class="no-items-message">No sessions yet. Create your first chat.</p>';
+        regularList.innerHTML = preferences.showMode === SESSION_LIST_SHOW_RELEVANT
+            ? '<p class="no-items-message">No relevant sessions for this chat.</p>'
+            : '<p class="no-items-message">No sessions yet. Create your first chat.</p>';
     }
 
     archivedSessions
-        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .sort((a, b) => getSessionSortTimestamp(b, preferences.sortBy) - getSessionSortTimestamp(a, preferences.sortBy))
         .forEach(session => archivedList.appendChild(createSessionElement(session, project)));
 
     archivedSection.classList.toggle('hidden', archivedSessions.length === 0);
+    updateSessionOrganizeMenuState(project);
     updateActiveSessionUI(project.activeSessionId);
+
+    requestAnimationFrame(refreshFolderAnimationHeights);
 }
 
 export function openSessionInfoModal({ sessionId } = {}) {
@@ -869,6 +1118,18 @@ function handleFolderAction(action, folderId) {
     }
 }
 
+function handleSessionOrganizeAction(actionLink) {
+    if (!actionLink || actionLink.dataset.action !== 'session:organizeSet') return false;
+
+    const payload = {};
+    if (actionLink.dataset.organizeBy) payload.organizeBy = actionLink.dataset.organizeBy;
+    if (actionLink.dataset.sortBy) payload.sortBy = actionLink.dataset.sortBy;
+    if (actionLink.dataset.showMode) payload.showMode = actionLink.dataset.showMode;
+
+    stateManager.bus.publish('session:organizeSet', payload);
+    return true;
+}
+
 export function initSessionUI() {
     if (isSessionUIInitialized) {
         return;
@@ -894,6 +1155,7 @@ export function initSessionUI() {
                 const sessionItem = actionLink.closest('.session-item[data-session-id]');
                 const folderItem = actionLink.closest('.session-folder[data-folder-id]');
                 const newSessionMenu = actionLink.closest('#new-session-menu');
+                const sessionOrganizeMenu = actionLink.closest('#session-organize-menu');
 
                 if (sessionItem) {
                     handleSessionAction(action, sessionItem.dataset.sessionId, e);
@@ -905,6 +1167,8 @@ export function initSessionUI() {
                     } else if (action === 'new-folder') {
                         openFolderNameModal({ mode: 'create' });
                     }
+                } else if (sessionOrganizeMenu) {
+                    handleSessionOrganizeAction(actionLink);
                 }
 
                 actionLink.closest('.dropdown.open')?.classList.remove('open', 'portal-open');
@@ -925,11 +1189,19 @@ export function initSessionUI() {
                 return;
             }
 
+            if (target.closest('#session-list-locate-trigger')) {
+                e.preventDefault();
+                revealActiveSessionInList();
+                return;
+            }
+
             const folderSummary = target.closest('.session-folder-summary');
             if (folderSummary) {
                 const folderItem = folderSummary.closest('.session-folder[data-folder-id]');
                 if (folderItem?.dataset.folderId) {
+                    e.preventDefault();
                     stateManager.bus.publish('folder:activate', { folderId: folderItem.dataset.folderId });
+                    animateSessionFolderToggle(folderItem, !folderItem.open);
                 }
             }
 
@@ -988,6 +1260,7 @@ export function initSessionUI() {
         sessionsPanel.addEventListener('toggle', (event) => {
             const folderItem = event.target.closest('.session-folder[data-folder-id]');
             if (!folderItem || event.target !== folderItem) return;
+            if (suppressFolderCollapsePersistence || folderItem.dataset.folderAnimating === '1') return;
             stateManager.bus.publish('folder:collapse', {
                 folderId: folderItem.dataset.folderId,
                 collapsed: !folderItem.open
@@ -1017,6 +1290,8 @@ export function initSessionUI() {
                 } else if (action === 'new-folder') {
                     openFolderNameModal({ mode: 'create' });
                 }
+            } else if (menuType === 'session-organize') {
+                handleSessionOrganizeAction(portalAction);
             }
             closeSessionDropdownPortal();
             return;
@@ -1043,6 +1318,7 @@ export function initSessionUI() {
         if (activeDropdownPortal) {
             positionSessionDropdownPortal();
         }
+        refreshFolderAnimationHeights();
     });
 
     const sessionInfoModal = document.getElementById('session-info-modal');
@@ -1135,7 +1411,22 @@ export function initSessionUI() {
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && activeDropdownPortal) {
             closeSessionDropdownPortal();
+            return;
         }
+        if ((event.key === 'Enter' || event.key === ' ') && event.target?.id === 'session-list-locate-trigger') {
+            event.preventDefault();
+            revealActiveSessionInList();
+        }
+    });
+
+    document.getElementById('locate-active-session-btn')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        revealActiveSessionInList();
+    });
+
+    document.getElementById('chat-title')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        revealActiveSessionInList();
     });
 
     console.log('✅ Session UI initialized with folder support.');
