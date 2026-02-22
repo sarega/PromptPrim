@@ -24,8 +24,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # แนะนำให้ใช้เวอร์ชัน LTS ล่าสุด
+          node-version: '22' # ใช้ Node 22 เพื่อให้เข้ากับ Vite 7 และลดความเสี่ยง version mismatch
           cache: 'npm' # <-- เพิ่มบรรทัดนี้เข้ามา
+
+      - name: Print Node/npm versions
+        run: |
+          node -v
+          npm -v
 
       # 3. ติดตั้ง Dependencies ทั้งหมดจากไฟล์ package.json
       - name: Install dependencies
@@ -33,6 +38,8 @@ jobs:
 
       # 4. Build โปรเจกต์ด้วย Vite (ขั้นตอนนี้จะสร้างโฟลเดอร์ 'dist')
       - name: Build project
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build
 
       # 5. Deploy โฟลเดอร์ 'dist' ที่ได้จากการ build ไปที่ GitHub Pages
