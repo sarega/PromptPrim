@@ -455,6 +455,7 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
             timestamp: Date.now(),
             rag: payloadMeta.rag || null,
             folderContext: payloadMeta.folderContext || null,
+            worldContext: payloadMeta.worldContext || null,
             stats: {
                 ...response.usage,
                 duration: response.duration,

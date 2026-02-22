@@ -13,6 +13,7 @@ import { updateAppStatus, refreshMobileStatusMarquee } from '../../core/core.ui.
 
 let latestContextDebuggerSnapshot = null;
 let contextDebuggerSelectedTurn = null;
+const userBubbleExpandedMessageIds = new Set();
 
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
@@ -33,6 +34,13 @@ function enhanceCodeBlocks(messageElement) {
         // 3. ดึงชื่อภาษาจาก class ของ <code>
         const languageClass = Array.from(block.classList).find(cls => cls.startsWith('language-'));
         const languageName = languageClass ? languageClass.replace('language-', '') : 'text';
+        const normalizedLanguage = String(languageName || '').trim().toLowerCase();
+        const isPlainTextBlock = ['text', 'plain', 'plaintext', 'txt'].includes(normalizedLanguage);
+        wrapper.dataset.language = normalizedLanguage || 'text';
+        if (isPlainTextBlock) {
+            wrapper.classList.add('is-plain-text');
+            pre.classList.add('is-plain-text-pre');
+        }
         
         const langSpan = document.createElement('span');
         langSpan.className = 'language-name';
@@ -59,12 +67,59 @@ function enhanceCodeBlocks(messageElement) {
         wrapper.appendChild(pre);
 
         // 6. เรียกใช้ highlight.js เพื่อลงสี
-        if (window.hljs) {
+        if (window.hljs && !isPlainTextBlock) {
             hljs.highlightElement(block);
         }
         
         block.dataset.enhanced = 'true';
     });
+}
+
+function enhanceAssistantRichContent(messageElement) {
+    if (!messageElement) return;
+
+    enhanceCodeBlocks(messageElement);
+
+    // Normalize links for safer, more predictable behavior (ChatGPT-like UX).
+    messageElement.querySelectorAll('a[href]').forEach((linkEl) => {
+        const href = linkEl.getAttribute('href') || '';
+        if (href.startsWith('#')) return;
+        linkEl.setAttribute('target', '_blank');
+        linkEl.setAttribute('rel', 'noopener noreferrer');
+    });
+
+    // Wrap tables so wide markdown tables scroll horizontally instead of
+    // stretching the whole bubble.
+    messageElement.querySelectorAll('table').forEach((tableEl) => {
+        if (tableEl.closest('.message-table-wrapper')) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message-table-wrapper';
+        tableEl.parentNode.insertBefore(wrapper, tableEl);
+        wrapper.appendChild(tableEl);
+    });
+}
+
+function extractUserPlainText(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content
+        .filter(part => part?.type === 'text' && typeof part.text === 'string')
+        .map(part => part.text)
+        .join('\n');
+}
+
+function getUserBubblePresentationMeta(content, messageId) {
+    const plainText = extractUserPlainText(content);
+    const hasMedia = Array.isArray(content) && content.some(part => part?.type === 'image_url' && part.url);
+    const lineCount = plainText ? plainText.split(/\r?\n/).length : 0;
+    const normalizedLength = plainText.trim().length;
+    const isCollapsible = !hasMedia && (
+        normalizedLength > 320 ||
+        lineCount > 6
+    );
+    const isCollapsed = isCollapsible && !userBubbleExpandedMessageIds.has(String(messageId));
+
+    return { plainText, hasMedia, lineCount, isCollapsible, isCollapsed };
 }
 
 function lazyRenderContent(textContent, targetContainer) {
@@ -195,8 +250,10 @@ function buildContextDebuggerSnapshot() {
             tokenEstimate: estimateTokens(text || JSON.stringify(message?.content || '')),
             hasRag: Boolean(message?.rag),
             hasFolderContext: Boolean(message?.folderContext),
+            hasWorldContext: Boolean(message?.worldContext),
             rag: message?.rag || null,
-            folderContext: message?.folderContext || null
+            folderContext: message?.folderContext || null,
+            worldContext: message?.worldContext || null
         };
     });
 
@@ -222,14 +279,16 @@ function renderContextDebuggerSummary(snapshot) {
     const folderModeEl = document.getElementById('context-debugger-folder-mode');
     const folderBudgetEl = document.getElementById('context-debugger-folder-budget');
     const ragBudgetEl = document.getElementById('context-debugger-rag-budget');
+    const worldBudgetEl = document.getElementById('context-debugger-world-budget');
     const payloadMetaEl = document.getElementById('context-debugger-payload-meta');
 
-    if (!sessionNameEl || !folderModeEl || !folderBudgetEl || !ragBudgetEl || !payloadMetaEl) return;
+    if (!sessionNameEl || !folderModeEl || !folderBudgetEl || !ragBudgetEl || !worldBudgetEl || !payloadMetaEl) return;
 
     const contextMode = snapshot.session?.contextMode === 'session_only' ? 'Session only' : 'Folder aware';
     const folderName = snapshot.folder?.name || 'Main list';
     const folderMeta = snapshot.payloadMeta?.folderContext || null;
     const ragMeta = snapshot.payloadMeta?.rag || null;
+    const worldMeta = snapshot.payloadMeta?.worldContext || null;
 
     sessionNameEl.textContent = snapshot.session?.name || 'Untitled';
     folderModeEl.textContent = `${contextMode} • ${folderName}`;
@@ -253,6 +312,22 @@ function renderContextDebuggerSummary(snapshot) {
         }
     } else {
         ragBudgetEl.textContent = 'No RAG metadata';
+    }
+
+    if (worldMeta) {
+        const diagnostics = worldMeta.diagnostics || {};
+        if (worldMeta.enabled === false) {
+            worldBudgetEl.textContent = `Disabled • ${normalizeWorldContextReason(worldMeta.reason)}`;
+        } else {
+            const selected = Number.isFinite(diagnostics.selectedItemCount) ? diagnostics.selectedItemCount : (worldMeta.selectedItems?.length || 0);
+            const visible = Number.isFinite(diagnostics.visibleItemCount) ? diagnostics.visibleItemCount : (worldMeta.selectedItems?.length || 0);
+            const hidden = Number.isFinite(diagnostics.hiddenItemCount) ? diagnostics.hiddenItemCount : 0;
+            const mode = diagnostics.mode || worldMeta.access?.mode || 'writing';
+            const asOf = Number.isFinite(diagnostics.asOfChapter) ? diagnostics.asOfChapter : (Number.isFinite(worldMeta.access?.asOfChapter) ? worldMeta.access.asOfChapter : null);
+            worldBudgetEl.textContent = `${formatDebuggerNumber(selected)}/${formatDebuggerNumber(visible)} items • ${formatDebuggerNumber(hidden)} gated out • ${mode}${asOf ? ` • as-of ch${asOf}` : ''}`;
+        }
+    } else {
+        worldBudgetEl.textContent = 'No World metadata';
     }
 
     payloadMetaEl.textContent = `${formatDebuggerNumber(snapshot.payloadMessages?.length || 0)} messages • ~${formatDebuggerNumber(snapshot.payloadTokenEstimate)} tokens`;
@@ -283,7 +358,8 @@ function renderContextDebuggerTurns(snapshot) {
         const titleText = (turn.text || '(no text)').replace(/\s+/g, ' ').slice(0, 120);
         const markers = [
             turn.hasFolderContext ? 'folder-context' : '',
-            turn.hasRag ? 'rag' : ''
+            turn.hasRag ? 'rag' : '',
+            turn.hasWorldContext ? 'world-context' : ''
         ].filter(Boolean).join(', ');
 
         item.innerHTML = `
@@ -333,6 +409,26 @@ function renderContextDebuggerTurnDetail(snapshot) {
                 lines.push('- Selected chunks:');
                 turn.rag.usedChunks.forEach((chunk, idx) => {
                     lines.push(`  ${idx + 1}. ${chunk.fileName || 'Unknown'} #chunk${Number.isFinite(chunk.chunkIndex) ? chunk.chunkIndex + 1 : 1} • score ${chunk.score || 0}`);
+                });
+            }
+            lines.push('');
+        }
+
+        if (turn.worldContext) {
+            const worldCtx = turn.worldContext;
+            const diagnostics = worldCtx.diagnostics || {};
+            lines.push('World Context (turn metadata):');
+            lines.push(`- Reason: ${normalizeWorldContextReason(worldCtx.reason || '')}`);
+            lines.push(`- World: ${diagnostics.worldName || worldCtx.world?.name || '-'}`);
+            lines.push(`- Book: ${diagnostics.bookName || worldCtx.book?.name || '-'}`);
+            lines.push(`- Mode: ${diagnostics.mode || worldCtx.access?.mode || '-'}`);
+            lines.push(`- As-of chapter: ${formatDebuggerNumber(Number(diagnostics.asOfChapter ?? worldCtx.access?.asOfChapter))}`);
+            lines.push(`- Visible/Total: ${formatDebuggerNumber(Number(diagnostics.visibleItemCount))} / ${formatDebuggerNumber(Number(diagnostics.totalItemCount))}`);
+            lines.push(`- Selected items: ${formatDebuggerNumber(Number(diagnostics.selectedItemCount))} (gated excluded: ${formatDebuggerNumber(Number(diagnostics.hiddenItemCount))})`);
+            if (Array.isArray(worldCtx.selectedItems) && worldCtx.selectedItems.length > 0) {
+                lines.push('- Selected world items:');
+                worldCtx.selectedItems.forEach((item, idx) => {
+                    lines.push(`  ${idx + 1}. [${item.type || 'item'}] ${item.title || item.id || 'Untitled'}`);
                 });
             }
             lines.push('');
@@ -390,6 +486,30 @@ function renderContextDebuggerTurnDetail(snapshot) {
         assemblyLines.push('');
     }
 
+    if (snapshot.payloadMeta?.worldContext) {
+        const worldCtx = snapshot.payloadMeta.worldContext;
+        const diagnostics = worldCtx.diagnostics || {};
+        assemblyLines.push('World Context (current assembly):');
+        assemblyLines.push(`- Reason: ${normalizeWorldContextReason(worldCtx.reason || '')}`);
+        assemblyLines.push(`- Enabled: ${worldCtx.enabled === false ? 'no' : 'yes'}`);
+        assemblyLines.push(`- World: ${diagnostics.worldName || worldCtx.world?.name || '-'}`);
+        assemblyLines.push(`- Book: ${diagnostics.bookName || worldCtx.book?.name || '-'}`);
+        assemblyLines.push(`- Mode: ${diagnostics.mode || worldCtx.access?.mode || '-'}`);
+        assemblyLines.push(`- As-of chapter: ${formatDebuggerNumber(Number(diagnostics.asOfChapter ?? worldCtx.access?.asOfChapter))}`);
+        assemblyLines.push(`- Visible/Total: ${formatDebuggerNumber(Number(diagnostics.visibleItemCount))} / ${formatDebuggerNumber(Number(diagnostics.totalItemCount))}`);
+        assemblyLines.push(`- Selected/Max: ${formatDebuggerNumber(Number(diagnostics.selectedItemCount))} / ${formatDebuggerNumber(Number(diagnostics.maxItems))}`);
+        assemblyLines.push(`- Gated excluded: ${formatDebuggerNumber(Number(diagnostics.hiddenItemCount))}`);
+        if (Array.isArray(worldCtx.selectedItems) && worldCtx.selectedItems.length > 0) {
+            worldCtx.selectedItems.forEach((item, index) => {
+                const summary = typeof item.summary === 'string' && item.summary.trim()
+                    ? ` • ${item.summary.trim().slice(0, 90)}`
+                    : '';
+                assemblyLines.push(`  ${index + 1}. [${item.type || 'item'}] ${item.title || item.id || 'Untitled'}${summary}`);
+            });
+        }
+        assemblyLines.push('');
+    }
+
     assemblyLines.push('Payload roles:');
     (snapshot.payloadMessages || []).forEach((message, index) => {
         const text = extractTextFromAnyContent(message.content || '');
@@ -406,6 +526,7 @@ function renderContextDebugger(snapshot) {
         const folderModeEl = document.getElementById('context-debugger-folder-mode');
         const folderBudgetEl = document.getElementById('context-debugger-folder-budget');
         const ragBudgetEl = document.getElementById('context-debugger-rag-budget');
+        const worldBudgetEl = document.getElementById('context-debugger-world-budget');
         const payloadMetaEl = document.getElementById('context-debugger-payload-meta');
         const turnList = document.getElementById('context-debugger-turn-list');
         const turnDetail = document.getElementById('context-debugger-turn-detail');
@@ -414,6 +535,7 @@ function renderContextDebugger(snapshot) {
         folderModeEl && (folderModeEl.textContent = '-');
         folderBudgetEl && (folderBudgetEl.textContent = '-');
         ragBudgetEl && (ragBudgetEl.textContent = '-');
+        worldBudgetEl && (worldBudgetEl.textContent = '-');
         payloadMetaEl && (payloadMetaEl.textContent = '-');
         turnList && (turnList.innerHTML = '<p class="no-items-message">No active session.</p>');
         turnDetail && (turnDetail.innerHTML = '<p class="context-debugger-empty">No active session.</p>');
@@ -506,6 +628,19 @@ function normalizeFolderContextReason(reason = '') {
             return 'budget limited';
         case 'folder_auto_disabled':
             return 'auto shared context disabled in folder settings';
+        default:
+            return reason || 'not available';
+    }
+}
+
+function normalizeWorldContextReason(reason = '') {
+    switch (reason) {
+        case 'ok':
+            return 'world context included';
+        case 'no_world':
+            return 'no linked world';
+        case 'no_visible_items':
+            return 'no visible items matched current reveal scope/query';
         default:
             return reason || 'not available';
     }
@@ -646,11 +781,20 @@ function createMessageElement(message, index, session) {
     turnWrapper.className = `message-turn-wrapper ${role}-turn`;
     turnWrapper.dataset.index = index;
     turnWrapper.dataset.messageId = message.id || `msg_idx_${index}`; // <-- [ADD THIS] เพิ่ม message ID
+    const userBubbleMeta = role === 'user'
+        ? getUserBubblePresentationMeta(content, turnWrapper.dataset.messageId)
+        : null;
 
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${role}`;
     if (isError) msgDiv.classList.add('error');
     if (isSummary) msgDiv.classList.add('system-summary-message');
+    if (role === 'user' && userBubbleMeta?.isCollapsible) {
+        msgDiv.classList.add('user-collapsible');
+        if (userBubbleMeta.isCollapsed) {
+            msgDiv.classList.add('is-user-collapsed');
+        }
+    }
 
     if (role === 'assistant' && speaker) {
         const speakerAgent = project.agentPresets?.[speaker];
@@ -725,6 +869,9 @@ function createMessageElement(message, index, session) {
         // ✅ [THE FIX - PART 1] สร้างเป้าหมายสำหรับ streaming เสมอ
         const streamingContentSpan = document.createElement('span');
         streamingContentSpan.className = 'streaming-content';
+        if (role === 'user') {
+            streamingContentSpan.classList.add('user-content-stream');
+        }
 
         if (isLoading) {
             // ถ้ากำลังโหลด ให้ใส่ spinner เข้าไปข้างใน
@@ -735,7 +882,7 @@ function createMessageElement(message, index, session) {
             try {
                 if (role === 'assistant') {
                     streamingContentSpan.innerHTML = marked.parse(content || '', { gfm: true, breaks: false });
-                    enhanceCodeBlocks(streamingContentSpan);
+                    enhanceAssistantRichContent(streamingContentSpan);
                     ragUi = createRagDebugElements(message.rag, message.folderContext);
                 } else if (role === 'user') {
                     // ... (Logic การ render ของ User bubble เหมือนเดิม)
@@ -743,6 +890,7 @@ function createMessageElement(message, index, session) {
                         content.forEach(part => {
                             if (part.type === 'text' && part.text) {
                                 const p = document.createElement('p');
+                                p.className = 'user-text-paragraph';
                                 p.textContent = part.text;
                                 streamingContentSpan.appendChild(p);
                             } else if (part.type === 'image_url' && part.url) {
@@ -754,6 +902,7 @@ function createMessageElement(message, index, session) {
                         });
                     } else if (typeof content === 'string') {
                         const p = document.createElement('p');
+                        p.className = 'user-text-paragraph';
                         p.textContent = content;
                         streamingContentSpan.appendChild(p);
                     }
@@ -791,6 +940,34 @@ function createMessageElement(message, index, session) {
             const actions = document.createElement('div');
             actions.className = 'message-actions';
             const iconStyle = 'style="font-size: 18px;"';
+            if (role === 'user' && userBubbleMeta?.isCollapsible) {
+                const btnToggleCollapse = document.createElement('button');
+                const toggleIcon = document.createElement('span');
+                toggleIcon.className = 'material-symbols-outlined';
+                toggleIcon.style.fontSize = '18px';
+                const applyCollapseButtonState = () => {
+                    const isCollapsedNow = msgDiv.classList.contains('is-user-collapsed');
+                    toggleIcon.textContent = isCollapsedNow ? 'unfold_more' : 'unfold_less';
+                    btnToggleCollapse.title = isCollapsedNow ? 'Expand message' : 'Collapse message';
+                    btnToggleCollapse.setAttribute('aria-expanded', String(!isCollapsedNow));
+                    btnToggleCollapse.classList.toggle('active', !isCollapsedNow);
+                };
+                btnToggleCollapse.appendChild(toggleIcon);
+                btnToggleCollapse.onclick = (event) => {
+                    event.stopPropagation();
+                    const messageId = turnWrapper.dataset.messageId;
+                    const shouldCollapse = !msgDiv.classList.contains('is-user-collapsed');
+                    msgDiv.classList.toggle('is-user-collapsed', shouldCollapse);
+                    if (shouldCollapse) {
+                        userBubbleExpandedMessageIds.delete(String(messageId));
+                    } else {
+                        userBubbleExpandedMessageIds.add(String(messageId));
+                    }
+                    applyCollapseButtonState();
+                };
+                applyCollapseButtonState();
+                actions.appendChild(btnToggleCollapse);
+            }
             const btnEdit = document.createElement('button');
             btnEdit.innerHTML = `<span class="material-symbols-outlined" ${iconStyle}>edit</span>`;
             btnEdit.title = 'Edit';

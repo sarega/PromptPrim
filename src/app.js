@@ -40,6 +40,8 @@ import * as GroupHandlers from './js/modules/group/group.handlers.js';
 import * as MemoryUI from './js/modules/memory/memory.ui.js';
 import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
 import * as KnowledgeHandlers from './js/modules/knowledge/knowledge.handlers.js';
+import * as WorldHandlers from './js/modules/world/world.handlers.js';
+import * as WorldUI from './js/modules/world/world.ui.js';
 import * as ComposerUI from './js/modules/composer/composer.ui.js';
 import * as ComposerHandlers from './js/modules/composer/composer.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
@@ -134,6 +136,11 @@ function initMobileGestures() {
 
 function setWorkspaceToggleActive(workspace = 'chat') {
     document.querySelectorAll('.header-center .menu-toggle-btn').forEach(btn => btn.classList.remove('active'));
+
+    if (workspace === 'world') {
+        document.getElementById('switch-to-world-btn')?.classList.add('active');
+        return;
+    }
 
     if (workspace === 'photo') {
         document.getElementById('switch-to-photo-btn')?.classList.add('active');
@@ -286,7 +293,43 @@ function isPhotoWorkspaceActive() {
     return Boolean(photoWorkspace && !photoWorkspace.classList.contains('hidden'));
 }
 
+function isWorldWorkspaceActive() {
+    const worldWorkspace = document.getElementById('world-workspace');
+    return Boolean(worldWorkspace && !worldWorkspace.classList.contains('hidden'));
+}
+
+function setEmbeddedWorldWorkspaceMode(isActive) {
+    const mainContentWrapper = document.querySelector('#main-chat-panel .main-content-wrapper');
+    if (mainContentWrapper) {
+        mainContentWrapper.classList.toggle('world-workspace-active', !!isActive);
+    }
+}
+
+function hideWorldWorkspace() {
+    const worldWorkspace = document.getElementById('world-workspace');
+    if (!worldWorkspace) return;
+    setEmbeddedWorldWorkspaceMode(false);
+    worldWorkspace.classList.add('hidden');
+}
+
+function showWorldWorkspace() {
+    try {
+        WorldUI.renderWorldWorkspace();
+    } catch (_) {
+        // ignore if world UI has not been initialized yet
+    }
+    const worldWorkspace = document.getElementById('world-workspace');
+    if (!worldWorkspace) return;
+    worldWorkspace.classList.remove('hidden');
+    setEmbeddedWorldWorkspaceMode(true);
+}
+
 function syncWorkspaceToggleActive() {
+    if (isWorldWorkspaceActive()) {
+        setWorkspaceToggleActive('world');
+        return;
+    }
+
     if (isPhotoWorkspaceActive()) {
         setWorkspaceToggleActive('photo');
         return;
@@ -416,6 +459,7 @@ function setupEventSubscriptions() {
     bus.subscribe('folder:newChat', (payload) => SessionHandlers.createChatInFolder(payload));
     bus.subscribe('folder:activate', (payload) => SessionHandlers.activateSessionFolder(payload));
     bus.subscribe('folder:collapse', (payload) => SessionHandlers.setFolderCollapsedState(payload));
+    bus.subscribe('folder:sortMode', (payload) => SessionHandlers.setFolderSessionSortMode(payload));
 
 
     // Agent & Studio Actions
@@ -445,6 +489,7 @@ function setupEventSubscriptions() {
 
     bus.subscribe('studio:itemClicked', ProjectHandlers.handleStudioItemClick); 
     bus.subscribe('studio:toggleSectionVisibility', (payload) => StudioHandlers.toggleStudioSectionVisibility(payload));
+    bus.subscribe('studio:setAllSectionVisibility', (payload) => StudioHandlers.setAllStudioSectionVisibility(payload));
     bus.subscribe('entity:stagedApply', ProjectHandlers.applyStagedEntitySelection);
     bus.subscribe('entity:stagedCancel', ProjectHandlers.cancelStagedEntitySelection);
     bus.subscribe('session:loaded', () => ProjectHandlers.cancelStagedEntitySelection());
@@ -472,19 +517,33 @@ function setupEventSubscriptions() {
     bus.subscribe('open-composer', () => { stateManager.bus.publish('ui:toggleComposer');});
     bus.subscribe('composer:heightChanged', SessionHandlers.saveComposerHeight);
     bus.subscribe('ui:requestComposerOpen', () => {
+        hideWorldWorkspace();
         KieAI_UI.unmountPhotoStudio();
         setComposerState(SESSION_COMPOSER_MODE_NORMAL);
         persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_COMPOSER, SESSION_COMPOSER_MODE_NORMAL);
         syncWorkspaceToggleActive();
     });
     bus.subscribe('ui:toggleComposer', () => {
+        hideWorldWorkspace();
         KieAI_UI.unmountPhotoStudio();
         setComposerState(SESSION_COMPOSER_MODE_NORMAL);
         persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_COMPOSER, SESSION_COMPOSER_MODE_NORMAL);
         syncWorkspaceToggleActive();
     });
+    bus.subscribe('ui:openWorldWorkspace', () => {
+        withWorkspacePreferenceSyncSuspended(() => {
+            try {
+                setComposerState('collapsed');
+            } catch (_) {
+                // ignore if unavailable
+            }
+        });
+        KieAI_UI.unmountPhotoStudio();
+        showWorldWorkspace();
+        setWorkspaceToggleActive('world');
+    });
     bus.subscribe('composer:visibilityChanged', () => {
-        if (!suppressWorkspacePreferenceSync && !isPhotoWorkspaceActive()) {
+        if (!suppressWorkspacePreferenceSync && !isPhotoWorkspaceActive() && !isWorldWorkspaceActive()) {
             persistActiveSessionWorkspacePreference(
                 isComposerWorkspaceActive() ? SESSION_WORKSPACE_COMPOSER : SESSION_WORKSPACE_CHAT,
                 getCurrentComposerMode()
@@ -515,6 +574,37 @@ function setupEventSubscriptions() {
     bus.subscribe('knowledge:setScopeSource', (payload) => KnowledgeHandlers.setActiveSessionRagScopeSource(payload));
     bus.subscribe('knowledge:focusChunk', (payload) => KnowledgeHandlers.focusKnowledgeChunk(payload));
     bus.subscribe('knowledge:clearFocus', KnowledgeHandlers.clearKnowledgeFocus);
+
+    // --- World / Book / Chapter (MVP foundation) ---
+    bus.subscribe('world:create', (payload) => WorldHandlers.createWorld(payload));
+    bus.subscribe('world:createPrompt', (payload) => WorldHandlers.createWorldPrompt(payload));
+    bus.subscribe('world:update', (payload) => WorldHandlers.updateWorld(payload));
+    bus.subscribe('world:renamePrompt', (payload) => WorldHandlers.renameWorldPrompt(payload));
+    bus.subscribe('world:delete', (payload) => WorldHandlers.deleteWorld(payload));
+    bus.subscribe('world:setActive', (payload) => WorldHandlers.setActiveWorld(payload));
+    bus.subscribe('world:itemCreate', (payload) => WorldHandlers.createWorldItem(payload));
+    bus.subscribe('world:itemCreatePrompt', (payload) => WorldHandlers.createWorldItemPrompt(payload));
+    bus.subscribe('world:itemUpdate', (payload) => WorldHandlers.updateWorldItem(payload));
+    bus.subscribe('world:itemEditPrompt', (payload) => WorldHandlers.editWorldItemPrompt(payload));
+    bus.subscribe('world:itemDelete', (payload) => WorldHandlers.deleteWorldItem(payload));
+    bus.subscribe('world:changeCreate', (payload) => WorldHandlers.createWorldChangeProposal(payload));
+    bus.subscribe('world:changeReview', (payload) => WorldHandlers.reviewWorldChangeProposal(payload));
+    bus.subscribe('world:proposeFromCurrentChat', (payload) => WorldHandlers.proposeWorldUpdatesFromCurrentChat(payload));
+
+    bus.subscribe('book:create', (payload) => WorldHandlers.createBook(payload));
+    bus.subscribe('book:createPrompt', (payload) => WorldHandlers.createBookPrompt(payload));
+    bus.subscribe('book:update', (payload) => WorldHandlers.updateBook(payload));
+    bus.subscribe('book:renamePrompt', (payload) => WorldHandlers.renameBookPrompt(payload));
+    bus.subscribe('book:delete', (payload) => WorldHandlers.deleteBook(payload));
+    bus.subscribe('book:setActive', (payload) => WorldHandlers.setActiveBook(payload));
+    bus.subscribe('book:linkWorld', (payload) => WorldHandlers.linkBookToWorld(payload));
+    bus.subscribe('book:linkWorldPrompt', (payload) => WorldHandlers.linkBookToWorldPrompt(payload));
+
+    bus.subscribe('chapter:assignToBook', (payload) => WorldHandlers.assignSessionToBook(payload));
+    bus.subscribe('chapter:assignToBookPrompt', (payload) => WorldHandlers.assignSessionToBookPrompt(payload));
+    bus.subscribe('chapter:detachFromBook', (payload) => WorldHandlers.detachSessionFromBook(payload));
+    bus.subscribe('chapter:updateMeta', (payload) => WorldHandlers.updateChapterMetadata(payload));
+    bus.subscribe('chapter:updateMetaPrompt', (payload) => WorldHandlers.updateChapterMetadataPrompt(payload));
 
     bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);
     bus.subscribe('chat:clearSummary', ChatHandlers.unloadSummaryFromActiveSession);
@@ -568,10 +658,14 @@ function setupEventSubscriptions() {
                 // ignore if unavailable
             }
         });
-        // Let the application know we selected the visual studio agent.  Use the new
-        // agent name "Visual Studio" so that the photo studio logic
-        // recognizes it correctly and displays the correct heading.
-        stateManager.bus.publish('entity:select', { type: 'agent', name: 'Visual Studio' });
+        hideWorldWorkspace();
+        // Prefer the newer workspace label if the project has that agent, while
+        // keeping backward compatibility with existing "Visual Studio" setups.
+        const project = stateManager.getProject();
+        const studioAgentName = project?.agentPresets?.['Media Studio']
+            ? 'Media Studio'
+            : (project?.agentPresets?.['Visual Studio'] ? 'Visual Studio' : 'Media Studio');
+        stateManager.bus.publish('entity:select', { type: 'agent', name: studioAgentName });
         setWorkspaceToggleActive('photo');
     });
 
@@ -584,6 +678,7 @@ function setupEventSubscriptions() {
         }
         persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_CHAT);
         // Ensure any photo studio view is closed
+        hideWorldWorkspace();
         KieAI_UI.unmountPhotoStudio();
         
         // [FIX] Set a flag to prevent auto-mounting photo studio when loading the session
@@ -603,6 +698,7 @@ function setupEventSubscriptions() {
 
     document.getElementById('switch-to-composer-btn')?.addEventListener('click', () => {
         // Restore the preferred composer mode for the active session.
+        hideWorldWorkspace();
         KieAI_UI.unmountPhotoStudio();
         const project = stateManager.getProject();
         const activeSession = project?.chatSessions?.find((item) => item.id === project.activeSessionId);
@@ -627,6 +723,19 @@ function setupEventSubscriptions() {
         persistActiveSessionWorkspacePreference(SESSION_WORKSPACE_COMPOSER, preferredMode);
         setWorkspaceToggleActive('composer');
     });
+
+    document.getElementById('switch-to-world-btn')?.addEventListener('click', () => {
+        withWorkspacePreferenceSyncSuspended(() => {
+            try {
+                setComposerState('collapsed');
+            } catch (_) {
+                // ignore if unavailable
+            }
+        });
+        KieAI_UI.unmountPhotoStudio();
+        showWorldWorkspace();
+        setWorkspaceToggleActive('world');
+    });
     
     // [✅ CRITICAL FIX: แก้ไข logic สลับหน้าใน entity:selected]
     bus.subscribe('entity:selected', (payload) => {
@@ -638,6 +747,7 @@ function setupEventSubscriptions() {
         // [FIX] Be more specific about which agents trigger Photo Studio
         // Only exact match for "Visual Studio" or agents with KieAI/Wan/Seedance in their names
         const isKieAIAgent = type === 'agent' && (
+            name === 'Media Studio' ||
             name === 'Visual Studio' ||
             name.includes('KieAI') ||
             name.includes('Wan') ||
@@ -648,6 +758,7 @@ function setupEventSubscriptions() {
         
         // 1. จัดการ Workspace
         if (isKieAIAgent && !preventAutoMount) {
+            hideWorldWorkspace();
             KieAI_UI.mountPhotoStudio(name);
             setWorkspaceToggleActive('photo');
         } else if (!preventAutoMount) {
@@ -674,6 +785,7 @@ function initializeUI() {
     KieAI_UI.initKieAiUI();   
     ProjectUI.initProjectUI();
     SessionUI.initSessionUI();
+    WorldUI.initWorldUI();
     ChatUI.initChatUI();
     SettingsUI.initSettingsUI();
     // ComposerUI.initComposerUI();

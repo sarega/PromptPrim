@@ -5,6 +5,7 @@ import { showCustomAlert } from '../../core/core.ui.js';
 
 const DEFAULT_STUDIO_SECTION_VISIBILITY = Object.freeze({
     search: true,
+    worldPeek: true,
     agentPresets: true,
     agentGroups: true,
     commandMemories: true,
@@ -16,6 +17,7 @@ const STUDIO_SECTION_KEYS = Object.keys(DEFAULT_STUDIO_SECTION_VISIBILITY);
 function normalizeStudioSectionVisibility(rawValue = {}) {
     return {
         search: rawValue?.search !== false,
+        worldPeek: rawValue?.worldPeek !== false,
         agentPresets: rawValue?.agentPresets !== false,
         agentGroups: rawValue?.agentGroups !== false,
         commandMemories: rawValue?.commandMemories !== false,
@@ -46,6 +48,38 @@ export function toggleStudioSectionVisibility({ sectionKey } = {}) {
     project.globalSettings.studioSectionVisibility = nextVisibility;
 
     if (normalizedKey === 'search' && !nextVisibility.search) {
+        const searchInput = document.getElementById('asset-search-input');
+        if (searchInput) searchInput.value = '';
+    }
+
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    stateManager.bus.publish('studio:contentShouldRender');
+}
+
+export function setAllStudioSectionVisibility({ visibilityMode } = {}) {
+    const mode = String(visibilityMode || '').trim();
+    if (mode !== 'show' && mode !== 'hide') return;
+
+    const project = stateManager.getProject();
+    if (!project) return;
+
+    const visibleValue = mode === 'show';
+    const nextVisibility = {
+        search: visibleValue,
+        worldPeek: visibleValue,
+        agentPresets: visibleValue,
+        agentGroups: visibleValue,
+        commandMemories: visibleValue,
+        knowledgeFiles: visibleValue
+    };
+
+    if (!project.globalSettings || typeof project.globalSettings !== 'object') {
+        project.globalSettings = {};
+    }
+    project.globalSettings.studioSectionVisibility = nextVisibility;
+
+    if (!visibleValue) {
         const searchInput = document.getElementById('asset-search-input');
         if (searchInput) searchInput.value = '';
     }

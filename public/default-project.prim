@@ -42,6 +42,11 @@
     "updatedAt": 0,
     "chunks": []
   },
+  "worlds": [],
+  "worldChanges": [],
+  "books": [],
+  "activeWorldId": null,
+  "activeBookId": null,
   "chatFolders": [],
   "folderMemoryCards": [],
   "activeFolderId": null,

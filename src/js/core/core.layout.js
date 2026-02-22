@@ -65,6 +65,122 @@ function cacheDOMElements() {
     DOM.mobileOverlay = document.getElementById('mobile-overlay');
     DOM.composerPanel = document.querySelector('.composer-panel');
     DOM.resizerRow = document.getElementById('resizer-row');
+    DOM.rightSidebar = document.getElementById('studio-panel');
+    DOM.rightSidebarResizer = document.getElementById('right-sidebar-resizer');
+}
+
+export function initRightSidebarResizer(resizer, sidebar) {
+    if (!resizer || !sidebar) return;
+    if (resizer.dataset.rightSidebarResizerBound === 'true') return;
+    resizer.dataset.rightSidebarResizerBound = 'true';
+
+    const STORAGE_KEY = 'promptPrimRightSidebarWidth';
+    const MIN_WIDTH = 280;
+    const MAX_WIDTH = 760;
+
+    let dragPointerId = null;
+    let initialPointerX = 0;
+    let initialWidth = 0;
+    let lastPointerX = 0;
+    let rafId = null;
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    const getMaxWidth = () => {
+        const wrapper = sidebar.parentElement;
+        const wrapperWidth = wrapper?.getBoundingClientRect().width || window.innerWidth;
+        return clamp(wrapperWidth * 0.55, MIN_WIDTH, MAX_WIDTH);
+    };
+
+    const applyWidth = (widthPx) => {
+        const maxWidth = getMaxWidth();
+        const clamped = clamp(Math.round(widthPx), MIN_WIDTH, maxWidth);
+        document.documentElement.style.setProperty('--promptprim-right-sidebar-width', `${clamped}px`);
+        sidebar.style.width = `${clamped}px`;
+        sidebar.style.flexBasis = `${clamped}px`;
+        return clamped;
+    };
+
+    const applySavedWidth = () => {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed > 0) {
+            applyWidth(parsed);
+        } else {
+            applyWidth(sidebar.getBoundingClientRect().width || 380);
+        }
+    };
+
+    const stopDragging = () => {
+        if (dragPointerId === null) return;
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
+        const finalWidth = sidebar.getBoundingClientRect().width || initialWidth;
+        localStorage.setItem(STORAGE_KEY, String(Math.round(finalWidth)));
+        try {
+            resizer.releasePointerCapture(dragPointerId);
+        } catch (_) {
+            // ignore pointer capture release failures
+        }
+        resizer.classList.remove('active');
+        sidebar.classList.remove('is-resizing');
+        document.body.style.cursor = '';
+        dragPointerId = null;
+    };
+
+    const onPointerMove = (e) => {
+        if (dragPointerId === null || e.pointerId !== dragPointerId) return;
+        lastPointerX = e.clientX;
+
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+            const deltaX = initialPointerX - lastPointerX;
+            applyWidth(initialWidth + deltaX);
+            rafId = null;
+        });
+    };
+
+    const onPointerUp = (e) => {
+        if (dragPointerId === null || e.pointerId !== dragPointerId) return;
+        stopDragging();
+    };
+
+    const onPointerCancel = (e) => {
+        if (dragPointerId === null || e.pointerId !== dragPointerId) return;
+        stopDragging();
+    };
+
+    const onPointerDown = (e) => {
+        if (window.innerWidth <= 900) return;
+        if (sidebar.classList.contains('collapsed') || DOM.appWrapper?.classList.contains('with-right-collapsed')) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+        e.preventDefault();
+        dragPointerId = e.pointerId;
+        initialPointerX = e.clientX;
+        initialWidth = sidebar.getBoundingClientRect().width || 380;
+        lastPointerX = e.clientX;
+
+        resizer.classList.add('active');
+        sidebar.classList.add('is-resizing');
+        document.body.style.cursor = 'col-resize';
+        resizer.setPointerCapture(e.pointerId);
+    };
+
+    applySavedWidth();
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 900) return;
+        const current = sidebar.getBoundingClientRect().width || Number(localStorage.getItem(STORAGE_KEY)) || 380;
+        applyWidth(current);
+    });
+
+    resizer.addEventListener('pointerdown', onPointerDown);
+    resizer.addEventListener('pointermove', onPointerMove);
+    resizer.addEventListener('pointerup', onPointerUp);
+    resizer.addEventListener('pointercancel', onPointerCancel);
 }
 
 export function initHorizontalResizer(resizer, panelToResize) {
@@ -215,6 +331,9 @@ export function setupLayout() {
     
     if (DOM.resizerRow && DOM.composerPanel) {
         initHorizontalResizer(DOM.resizerRow, DOM.composerPanel);
+    }
+    if (DOM.rightSidebarResizer && DOM.rightSidebar) {
+        initRightSidebarResizer(DOM.rightSidebarResizer, DOM.rightSidebar);
     }
     
     initializePanelControls();

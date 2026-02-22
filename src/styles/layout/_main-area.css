@@ -38,6 +38,15 @@
     z-index: 200;
 }
 
+/* Header/status are control surfaces; avoid accidental text highlighting. */
+.chat-header,
+.chat-header *,
+#status-panel,
+#status-panel * {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 /* [NEW] สร้าง Container สำหรับแต่ละส่วนใน Header */
 .header-left, .header-center, .header-right {
     display: flex;
@@ -155,7 +164,7 @@
     justify-content: space-between;
     padding: 9px 12px;
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: var(--dropdown-menu-item-font-size);
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
@@ -463,7 +472,8 @@ body.dark-mode #model-count-status {
 /* [✅ NEW FIX: ทำให้ปุ่มสลับ Workspace มี Z-index สูงกว่าตัวแบ่ง] */
 #switch-to-chat-btn, 
 #switch-to-composer-btn,
-#switch-to-photo-btn {
+#switch-to-photo-btn,
+#switch-to-world-btn {
     position: relative;
     z-index: 51; /* ให้สูงกว่า 50 เล็กน้อย */
 }
@@ -501,6 +511,7 @@ body.dark-mode #model-count-status {
     flex-grow: 1;
     flex-shrink: 0;
     min-width: 0;
+    min-height: 0;
     width: 100%;
     
     /* [✅ CRITICAL FIX: ตั้ง Background และ Display: flex] */
@@ -514,6 +525,133 @@ body.dark-mode #model-count-status {
 
 #kieai-studio-workspace:not(.hidden) {
     display: flex; /* เมื่อไม่ถูกซ่อน ให้แสดงผลเป็น flex */
+}
+
+#world-workspace {
+    position: relative;
+    top: auto;
+    left: auto;
+    flex-grow: 1;
+    flex-shrink: 0;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    background-color: var(--bg-workspace-chat);
+    display: none;
+    z-index: 50;
+}
+
+#world-workspace:not(.hidden) {
+    display: flex;
+}
+
+/* Embedded Media Studio mode: keep header/status/sidebars visible,
+   replace only the center content area. */
+.main-content-wrapper.photo-studio-active .chat-messages,
+.main-content-wrapper.photo-studio-active #resizer-row,
+.main-content-wrapper.photo-studio-active .composer-panel,
+.main-content-wrapper.photo-studio-active .chat-input-wrapper {
+    display: none !important;
+}
+
+.main-content-wrapper.photo-studio-active #kieai-studio-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.main-content-wrapper.world-workspace-active .chat-messages,
+.main-content-wrapper.world-workspace-active #resizer-row,
+.main-content-wrapper.world-workspace-active .composer-panel,
+.main-content-wrapper.world-workspace-active .chat-input-wrapper,
+.main-content-wrapper.world-workspace-active #kieai-studio-workspace {
+    display: none !important;
+}
+
+.main-content-wrapper.world-workspace-active #world-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.world-workspace-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    padding: 14px 16px 16px;
+    gap: 12px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(148, 163, 184, 0.10) 0%, rgba(148, 163, 184, 0) 40%),
+        radial-gradient(circle at 0% 100%, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0) 45%),
+        var(--bg-workspace-chat);
+}
+
+.world-workspace-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--white-alpha-95);
+    flex-shrink: 0;
+}
+
+.world-workspace-heading {
+    min-width: 0;
+}
+
+.world-workspace-heading h2 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.15;
+}
+
+.world-workspace-heading p {
+    margin: 4px 0 0;
+    font-size: 0.8rem;
+    color: #516072;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: min(72vw, 700px);
+}
+
+.world-workspace-header-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.world-workspace-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.world-workspace-content > .collapsible-section {
+    margin: 0 0 12px;
+    border: 1px solid #d5deea;
+    border-radius: 10px;
+    background: #ffffff;
+    overflow: visible;
+}
+
+.world-workspace-content > .collapsible-section > .section-header {
+    min-height: 38px;
+    padding: 8px 10px;
+    background: #f7fbff;
+    border-bottom: 1px solid #e5edf6;
+}
+
+.world-workspace-content > .collapsible-section > .section-box {
+    padding: 10px;
+    background: #ffffff;
 }
 
 /* [✅ FIX: ซ่อน Chat Workspace หลัก] */

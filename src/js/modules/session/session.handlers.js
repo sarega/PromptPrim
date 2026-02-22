@@ -15,12 +15,18 @@ import {
     createFolderId,
     createFolderName,
     ensureProjectFolders,
+    FOLDER_SESSION_SORT_MANUAL,
     getFolderById,
     normalizeFolderContextPolicy,
     normalizeFolderRagSettings,
+    normalizeFolderSessionSortMode,
     normalizeSessionContextMode,
     normalizeSessionRagSettings
 } from './session.folder-utils.js';
+import {
+    ensureProjectBooks,
+    normalizeChapterSessionMetadata
+} from '../world/world.schema-utils.js';
 
 
 // --- UI Module Imports ---
@@ -226,6 +232,7 @@ export function createNewChatSession(payload = {}) {
     const project = stateManager.getProject();
     if (!project) return;
     ensureProjectFolders(project);
+    ensureProjectBooks(project);
     const activeEntity = resolveEntityForSession(project, { linkedEntity: project.activeEntity }).entity;
     if (!activeEntity) {
         showCustomAlert("Cannot create chat session: no valid Agent/Group is available.", "Error");
@@ -239,6 +246,8 @@ export function createNewChatSession(payload = {}) {
         scopeSource: resolvedFolderId ? 'folder' : 'session',
         ...(payload?.ragSettings || {})
     });
+    const validBookIds = new Set((project.books || []).map(book => book.id));
+    const chapterMetadata = normalizeChapterSessionMetadata(payload, { validBookIds });
 
     const newSession = {
         id: `sid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -256,6 +265,7 @@ export function createNewChatSession(payload = {}) {
         sortIndex: getTopSortIndexForGroup(project, resolvedFolderId),
         contextMode,
         linkedEntity: { ...activeEntity },
+        ...chapterMetadata,
         summaryState: {
             activeSummaryId: null,
             summarizedUntilIndex: -1
@@ -286,6 +296,7 @@ export function loadChatSession(sessionId) {
     const project = stateManager.getProject();
     if (!project) return;
     ensureProjectFolders(project);
+    ensureProjectBooks(project);
 
     // --- กรณีไม่มี sessionId, ทำการเคลียร์หน้าจอ ---
     if (!sessionId) {
@@ -320,6 +331,12 @@ export function loadChatSession(sessionId) {
     session.ragSettings = normalizeSessionRagSettings(session.ragSettings, {
         scopeSource: session.folderId ? 'folder' : 'session'
     });
+    Object.assign(
+        session,
+        normalizeChapterSessionMetadata(session, {
+            validBookIds: new Set((project.books || []).map(book => book.id))
+        })
+    );
     if (!session.folderId && session.ragSettings.scopeSource === 'folder') {
         session.ragSettings.scopeSource = 'session';
     }
@@ -549,6 +566,24 @@ export function setFolderCollapsedState({ folderId, collapsed }) {
     stateManager.setProject(project);
 }
 
+export function setFolderSessionSortMode({ folderId, sortMode }) {
+    const project = stateManager.getProject();
+    if (!project) return;
+    ensureProjectFolders(project);
+
+    const folder = getFolderById(project, folderId);
+    if (!folder) return;
+
+    const nextMode = normalizeFolderSessionSortMode(sortMode);
+    if (folder.sessionSortMode === nextMode) return;
+
+    folder.sessionSortMode = nextMode;
+    folder.updatedAt = Date.now();
+    stateManager.setProject(project);
+    stateManager.updateAndPersistState();
+    publishSessionStructureChanged();
+}
+
 export function createChatInFolder({ folderId }) {
     createNewChatSession({ folderId });
 }
@@ -581,6 +616,12 @@ export function moveSessionToFolder({ sessionId, folderId = null, targetSessionI
 
     const requestedPosition = position === 'before' ? 'before' : 'after';
     placeSessionInGroupOrder(project, session, resolvedFolderId, targetSessionId, requestedPosition);
+    if (resolvedFolderId && targetSessionId) {
+        const targetFolder = getFolderById(project, resolvedFolderId);
+        if (targetFolder) {
+            targetFolder.sessionSortMode = FOLDER_SESSION_SORT_MANUAL;
+        }
+    }
     if (previousFolderId !== resolvedFolderId) {
         normalizeGroupOrdering(project, previousFolderId);
     }

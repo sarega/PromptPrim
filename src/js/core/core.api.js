@@ -15,6 +15,7 @@ import {
     normalizeSessionContextMode,
     normalizeSessionRagSettings
 } from '../modules/session/session.folder-utils.js';
+import { buildWorldStructuredContextPack } from '../modules/world/world.retrieval.js';
 
 // import { recommendedModelIds } from './core.state.js';
 
@@ -1011,8 +1012,20 @@ export function buildPayloadMessages(history, targetAgentName, payloadOptions = 
         messages.push({ role: 'system', content: folderContext.contextText });
     }
 
-    // --- ส่วนที่ 3.5: เพิ่ม Retrieved Knowledge Context (RAG) ---
     const retrievalQueryText = getRetrievalQueryText(relevantHistory);
+
+    // --- ส่วนที่ 3.4: เพิ่ม World Context (structured-only, spoiler-safe) ---
+    const worldContextPack = buildWorldStructuredContextPack(project, session, {
+        queryText: retrievalQueryText
+    });
+    if (payloadOptions && payloadOptions.__collect === true) {
+        payloadOptions.worldContext = worldContextPack;
+    }
+    if (worldContextPack?.enabled && worldContextPack?.contextText) {
+        messages.push({ role: 'system', content: worldContextPack.contextText });
+    }
+
+    // --- ส่วนที่ 3.5: เพิ่ม Retrieved Knowledge Context (RAG) ---
     const retrievalResult = buildRetrievedKnowledgeContext(retrievalQueryText, project, session);
     if (payloadOptions && payloadOptions.__collect === true) {
         payloadOptions.rag = retrievalResult;

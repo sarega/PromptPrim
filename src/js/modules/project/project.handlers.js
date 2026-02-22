@@ -23,6 +23,12 @@ import {
     normalizeSessionRagSettings,
     normalizeSessionContextMode
 } from '../session/session.folder-utils.js';
+import {
+    ensureProjectWorlds,
+    ensureProjectWorldChanges,
+    ensureProjectBooks,
+    normalizeChapterSessionMetadata
+} from '../world/world.schema-utils.js';
 import * as UserService from '../user/user.service.js'; // <-- เพิ่ม Import นี้เข้ามา
 
 const STAGED_ENTITY_TIMEOUT_MS = 10000;
@@ -583,9 +589,14 @@ export function migrateProjectData(projectData) {
         }
     }
 
+    ensureProjectWorlds(projectData);
+    ensureProjectWorldChanges(projectData);
+    ensureProjectBooks(projectData);
+
     if (Array.isArray(projectData.chatSessions)) {
         const firstAgentName = Object.keys(projectData.agentPresets || {})[0] || null;
         const firstGroupName = Object.keys(projectData.agentGroups || {})[0] || null;
+        const validBookIds = new Set((projectData.books || []).map(book => book.id));
 
         const normalizeLinkedEntity = (entity) => {
             if (entity?.type === 'agent' && entity?.name && projectData.agentPresets?.[entity.name]) {
@@ -612,6 +623,7 @@ export function migrateProjectData(projectData) {
         projectData.chatSessions = projectData.chatSessions.map(session => {
             const rawSettings = session?.ragSettings || {};
             const normalizedLinkedEntity = normalizeLinkedEntity(session?.linkedEntity);
+            const normalizedChapterMetadata = normalizeChapterSessionMetadata(session, { validBookIds });
             return {
                 ...session,
                 workspaceView: normalizeWorkspaceView(session?.workspaceView),
@@ -622,7 +634,8 @@ export function migrateProjectData(projectData) {
                     ? session.folderId
                     : null,
                 contextMode: normalizeSessionContextMode(session?.contextMode),
-                ragSettings: normalizeSessionRagSettings(rawSettings)
+                ragSettings: normalizeSessionRagSettings(rawSettings),
+                ...normalizedChapterMetadata
             };
         });
 
@@ -745,6 +758,7 @@ export async function selectEntity(type, name) {
     // Only exact match for "Visual Studio" or agents with KieAI/Wan/Seedance in their names
     // This prevents false positives from agents that happen to contain "Visual" in their name
     const isKieAIAgent = type === 'agent' && (
+        name === 'Media Studio' ||
         name === 'Visual Studio' ||
         name.includes('KieAI') ||
         name.includes('Veo') ||

@@ -164,6 +164,8 @@ async function executeAgentTurn(project, session, agentName) {
             timestamp: Date.now(),
             rag: payloadMeta.rag || null,
             folderContext: payloadMeta.folderContext || null
+            ,
+            worldContext: payloadMeta.worldContext || null
         };
 
         // อัปเดต State ด้วย Message ที่สมบูรณ์

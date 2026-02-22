@@ -10,6 +10,7 @@ import { renderAgentGroups } from '../group/group.ui.js';
 import { loadAndRenderMemories } from '../memory/memory.ui.js';
 import { loadAndRenderKnowledgeFiles } from '../knowledge/knowledge.ui.js';
 import { getStagedEntityRemainingSeconds } from '../project/project.handlers.js';
+import { renderWorldPeekSection } from '../world/world.ui.js';
 import * as StudioHandlers from './studio.handlers.js'; // <-- Import handler ใหม่
 
 let stagedCountdownIntervalId = null;
@@ -19,6 +20,90 @@ function escapeSelectorValue(rawValue = '') {
         return CSS.escape(rawValue);
     }
     return String(rawValue).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function animateStudioSectionToggle(section, shouldOpen) {
+    const box = section?.querySelector(':scope > .section-box');
+    if (!section || !box) {
+        if (section) section.open = Boolean(shouldOpen);
+        return;
+    }
+
+    if (section.dataset.sectionAnimating === '1') return;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+        section.open = Boolean(shouldOpen);
+        return;
+    }
+
+    section.dataset.sectionAnimating = '1';
+    const durationMs = 180;
+
+    const cleanup = () => {
+        section.dataset.sectionAnimating = '0';
+        box.style.removeProperty('max-height');
+        box.style.removeProperty('opacity');
+        box.style.removeProperty('transform');
+        box.style.removeProperty('overflow');
+        box.style.removeProperty('transition');
+    };
+
+    const finish = () => {
+        if (!shouldOpen) {
+            section.open = false;
+        }
+        cleanup();
+    };
+
+    let transitionHandled = false;
+    let fallbackTimerId = 0;
+    const onTransitionEnd = (event) => {
+        if (event.target !== box || event.propertyName !== 'max-height') return;
+        transitionHandled = true;
+        box.removeEventListener('transitionend', onTransitionEnd);
+        if (fallbackTimerId) {
+            window.clearTimeout(fallbackTimerId);
+            fallbackTimerId = 0;
+        }
+        finish();
+    };
+
+    box.addEventListener('transitionend', onTransitionEnd);
+    fallbackTimerId = window.setTimeout(() => {
+        if (transitionHandled) return;
+        box.removeEventListener('transitionend', onTransitionEnd);
+        finish();
+    }, durationMs + 90);
+
+    box.style.transition = `max-height ${durationMs}ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 140ms ease, transform ${durationMs}ms ease`;
+    box.style.overflow = 'hidden';
+
+    if (shouldOpen) {
+        section.open = true;
+        const targetHeight = Math.max(0, Math.ceil(box.scrollHeight));
+        box.style.maxHeight = '0px';
+        box.style.opacity = '0';
+        box.style.transform = 'translateY(-3px)';
+
+        requestAnimationFrame(() => {
+            box.style.maxHeight = `${targetHeight}px`;
+            box.style.opacity = '1';
+            box.style.transform = 'translateY(0)';
+        });
+        return;
+    }
+
+    const currentHeight = Math.max(Math.ceil(box.scrollHeight), Math.ceil(box.getBoundingClientRect().height));
+    box.style.maxHeight = `${currentHeight}px`;
+    box.style.opacity = '1';
+    box.style.transform = 'translateY(0)';
+
+    requestAnimationFrame(() => {
+        box.style.maxHeight = '0px';
+        box.style.opacity = '0';
+        box.style.transform = 'translateY(-3px)';
+    });
 }
 
 function findStudioEntityListItem(entity) {
@@ -36,6 +121,13 @@ function focusSelectedEntityInList(payload = {}) {
         name: payload.entityName || payload.name || ''
     };
     if (!entity.type || !entity.name) return;
+
+    const sectionVisibility = StudioHandlers.getStudioSectionVisibility();
+    if (entity.type === 'agent' && !sectionVisibility.agentPresets) {
+        StudioHandlers.toggleStudioSectionVisibility({ sectionKey: 'agentPresets' });
+    } else if (entity.type === 'group' && !sectionVisibility.agentGroups) {
+        StudioHandlers.toggleStudioSectionVisibility({ sectionKey: 'agentGroups' });
+    }
 
     const searchInput = document.getElementById('asset-search-input');
     let targetItem = findStudioEntityListItem(entity);
@@ -78,8 +170,18 @@ function updateStudioVisibilityMenuState(sectionVisibility) {
     const menu = document.getElementById('studio-visibility-menu');
     if (!menu) return;
 
+    const allSectionKeys = ['search', 'worldPeek', 'agentPresets', 'agentGroups', 'commandMemories', 'knowledgeFiles'];
+    const areAllVisible = allSectionKeys.every(key => sectionVisibility?.[key] !== false);
+    menu.querySelectorAll('.studio-visibility-option[data-visibility-mode]').forEach(option => {
+        const mode = option.dataset.visibilityMode || '';
+        const shouldShow = (mode === 'hide' && areAllVisible) || (mode === 'show' && !areAllVisible);
+        option.classList.toggle('hidden', !shouldShow);
+        option.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    });
+
     menu.querySelectorAll('.studio-visibility-option').forEach(option => {
         const sectionKey = option.dataset.sectionKey || '';
+        if (!sectionKey) return;
         const isSelected = Boolean(sectionVisibility?.[sectionKey]);
         option.classList.toggle('is-selected', isSelected);
         option.setAttribute('aria-checked', isSelected ? 'true' : 'false');
@@ -314,6 +416,7 @@ function renderStudioContent() {
     const filteredAgents = StudioHandlers.getFilteredAndSortedAgents();
 
     const shouldRenderAnyAssetSection = (
+        sectionVisibility.worldPeek ||
         sectionVisibility.agentPresets ||
         sectionVisibility.agentGroups ||
         sectionVisibility.commandMemories ||
@@ -321,6 +424,9 @@ function renderStudioContent() {
     );
 
     if (shouldRenderAnyAssetSection) {
+        if (sectionVisibility.worldPeek) {
+            renderWorldPeekSection(assetsContainer, project);
+        }
         if (sectionVisibility.agentPresets) {
             renderAgentPresets(assetsContainer, filteredAgents);
         }
@@ -358,6 +464,17 @@ export function initStudioUI() {
                 stateManager.bus.publish('memory:toggle', { name: memoryItem.dataset.name });
             }
             return;
+        }
+
+        const sectionSummary = target.closest('.studio-assets-container > .collapsible-section > summary.section-header');
+        if (sectionSummary && !target.closest('.section-header-actions')) {
+            const section = sectionSummary.closest('.collapsible-section');
+            if (section) {
+                e.preventDefault();
+                e.stopPropagation();
+                animateStudioSectionToggle(section, !section.open);
+                return;
+            }
         }
 
         // Case 2: Generic Action Button Click (e.g., Edit, Delete, More Actions)
