@@ -1,5 +1,12 @@
 export const SESSION_CONTEXT_MODE_SESSION_ONLY = 'session_only';
 export const SESSION_CONTEXT_MODE_FOLDER_AWARE = 'folder_aware';
+export const FOLDER_SESSION_SORT_MANUAL = 'manual';
+export const FOLDER_SESSION_SORT_MODIFIED_DESC = 'modified-desc';
+export const FOLDER_SESSION_SORT_MODIFIED_ASC = 'modified-asc';
+export const FOLDER_SESSION_SORT_CREATED_DESC = 'created-desc';
+export const FOLDER_SESSION_SORT_CREATED_ASC = 'created-asc';
+export const FOLDER_SESSION_SORT_NAME_ASC = 'name-asc';
+export const FOLDER_SESSION_SORT_NAME_DESC = 'name-desc';
 
 export const DEFAULT_SESSION_CONTEXT_MODE = SESSION_CONTEXT_MODE_FOLDER_AWARE;
 
@@ -99,6 +106,21 @@ export function normalizeFolderContextPolicy(rawPolicy = {}) {
     };
 }
 
+export function normalizeFolderSessionSortMode(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    switch (normalized) {
+        case FOLDER_SESSION_SORT_MODIFIED_DESC:
+        case FOLDER_SESSION_SORT_MODIFIED_ASC:
+        case FOLDER_SESSION_SORT_CREATED_DESC:
+        case FOLDER_SESSION_SORT_CREATED_ASC:
+        case FOLDER_SESSION_SORT_NAME_ASC:
+        case FOLDER_SESSION_SORT_NAME_DESC:
+            return normalized;
+        default:
+            return FOLDER_SESSION_SORT_MANUAL;
+    }
+}
+
 export function createFolderId() {
     return `fld_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -131,6 +153,7 @@ export function normalizeFolder(folder = {}) {
         createdAt: normalizeTimestamp(folder?.createdAt, now),
         updatedAt: normalizeTimestamp(folder?.updatedAt, now),
         collapsed: Boolean(folder?.collapsed),
+        sessionSortMode: normalizeFolderSessionSortMode(folder?.sessionSortMode),
         ragSettings: normalizeFolderRagSettings(folder?.ragSettings),
         contextPolicy: normalizeFolderContextPolicy(folder?.contextPolicy)
     };
