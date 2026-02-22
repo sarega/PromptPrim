@@ -33,12 +33,12 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/app-CbNfpCxe.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-C67ynh2C.js">
+  <script type="module" crossorigin src="/PromptPrim/assets/app-PImx0_7Y.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-Dyp81Bwh.js">
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/client-CZ2o165L.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-BUDMDT7H.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-F0IP4Gh8.css">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-DUbRV5w6.css">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-BHzEODEc.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-BPe8W1jW.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-Bb7ErUO1.css">
 </head>
 <body class="admin-page">
     <div id="dropzone-overlay" class="dropzone-overlay">
@@ -92,8 +92,11 @@
                     <button id="switch-to-composer-btn" class="menu-toggle-btn" title="Switch to Composer Editor">
                         <span class="material-symbols-outlined">edit_square</span>
                     </button>
-                    <button id="switch-to-photo-btn" class="menu-toggle-btn" title="Switch to Visual Studio">
+                    <button id="switch-to-photo-btn" class="menu-toggle-btn" title="Switch to Media Studio">
                         <span class="material-symbols-outlined">camera_roll</span>
+                    </button>
+                    <button id="switch-to-world-btn" class="menu-toggle-btn" title="Switch to World Workspace">
+                        <span class="material-symbols-outlined">public</span>
                     </button>
                     <button id="toggle-right-sidebar-btn" class="menu-toggle-btn" title="Toggle Agent & Asset Studio">
                         <span class="material-symbols-outlined">smart_toy</span>
@@ -139,6 +142,7 @@
                 <div id="sessions-panel" class="sessions-panel sidebar">
                     <div class="sidebar-content">
                         <div class="sessions-frame">
+                            <div id="book-sidebar-slot"></div>
                             <div class="section-box">
                                 <div class="section-header">
                                     <h3 id="session-list-locate-trigger" class="session-list-locate-trigger" role="button" tabindex="0" title="Locate active chat in sessions">
@@ -243,10 +247,28 @@
                         <div id="kieai-studio-workspace" class="workspace hidden">
                             <div id="photo-studio-root"></div>
                         </div>
+                        <div id="world-workspace" class="workspace hidden">
+                            <div class="world-workspace-shell">
+                                <div class="world-workspace-header">
+                                    <div class="world-workspace-heading">
+                                        <h2 id="world-workspace-title">World</h2>
+                                        <p id="world-workspace-meta">Open a project to start building worlds.</p>
+                                    </div>
+                                    <div class="world-workspace-header-actions">
+                                        <button type="button" class="btn btn-small" data-action="worldui:worldCreateStart">New World</button>
+                                        <button type="button" class="btn btn-small btn-secondary" data-action="worldui:itemCreateStart">New Item</button>
+                                        <button type="button" class="btn btn-small btn-secondary" data-action="worldui:bookCreateStart">New Book</button>
+                                        <button type="button" class="btn btn-small btn-secondary" data-action="world:proposeFromCurrentChat">Propose Updates</button>
+                                    </div>
+                                </div>
+                                <div id="world-workspace-content" class="world-workspace-content"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- STUDIO PANEL (SIDEBAR ขวา) -->
+                <div id="right-sidebar-resizer" class="right-sidebar-resizer" aria-hidden="true"></div>
                 <div id="studio-panel" class="right-sidebar">
                     <div class="studio-header">
                         <h1>Agent & Asset Studio</h1>
@@ -257,8 +279,19 @@
                                 </button>
                                 <div class="dropdown-content studio-visibility-dropdown">
                                     <div class="studio-visibility-heading">Show Sections</div>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:setAllSectionVisibility" data-visibility-mode="show">
+                                        <span>Show all</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:setAllSectionVisibility" data-visibility-mode="hide">
+                                        <span>Hide all</span>
+                                    </a>
+                                    <div class="dropdown-divider"></div>
                                     <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="search">
                                         <span>Search & Sorting</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="worldPeek">
+                                        <span>World Peek</span>
                                         <span class="studio-visibility-check" aria-hidden="true">✓</span>
                                     </a>
                                     <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="agentPresets">
@@ -281,6 +314,7 @@
                             </div>
                         </div>
                     </div>
+                    <div id="studio-selected-entity-slot" class="studio-selected-entity-slot"></div>
                     <div class="studio-toolbar">
                         <div class="search-wrapper">
                             <span class="material-symbols-outlined">search</span>
@@ -298,7 +332,6 @@
                             </select>
                         </div>
                     </div>
-                    <div id="studio-selected-entity-slot" class="studio-selected-entity-slot"></div>
                     <div class="studio-content">
                         <div class="studio-assets-container"></div>
                     </div>
@@ -335,6 +368,10 @@
                         <div class="context-debugger-card">
                             <div class="label">RAG</div>
                             <div id="context-debugger-rag-budget" class="value">-</div>
+                        </div>
+                        <div class="context-debugger-card">
+                            <div class="label">World Context</div>
+                            <div id="context-debugger-world-budget" class="value">-</div>
                         </div>
                         <div class="context-debugger-card">
                             <div class="label">Payload</div>
