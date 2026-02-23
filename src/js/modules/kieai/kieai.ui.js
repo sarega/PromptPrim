@@ -6,6 +6,7 @@ import * as UserService from '../user/user.service.js';
 
 const WORKSPACE_ID = 'kieai-studio-workspace';
 const MOUNT_ID = 'photo-studio-root';
+let mediaStudioSidePanelSnapshot = null;
 
 const KieAI_MODELS = [
     { id: 'video/wan-2-6-text-to-video', name: 'Wan 2.6 T2V', type: 'video' },
@@ -30,7 +31,7 @@ function ensureWorkspaceDOM() {
         workspace = document.createElement('div');
         workspace.id = WORKSPACE_ID;
         workspace.className = 'workspace hidden';
-        document.querySelector('.main-view-container').appendChild(workspace);
+        (document.querySelector('#main-chat-panel .main-content-wrapper') || document.querySelector('.main-view-container'))?.appendChild(workspace);
         
         // Create the inner div for React to mount into
         const reactRoot = document.createElement('div');
@@ -40,37 +41,101 @@ function ensureWorkspaceDOM() {
     return workspace;
 }
 
+function setEmbeddedPhotoStudioMode(isActive) {
+    const mainContentWrapper = document.querySelector('#main-chat-panel .main-content-wrapper');
+    if (mainContentWrapper) {
+        mainContentWrapper.classList.toggle('photo-studio-active', !!isActive);
+    }
+}
+
+function captureAndHideSidePanelsForMediaStudio() {
+    if (mediaStudioSidePanelSnapshot) return;
+
+    const appWrapper = document.querySelector('.app-wrapper');
+    const sessionsPanel = document.getElementById('sessions-panel') || document.querySelector('.sessions-panel');
+    const studioPanel = document.getElementById('studio-panel');
+    const leftOverlay = document.getElementById('mobile-overlay');
+    const rightOverlay = document.getElementById('right-sidebar-overlay');
+
+    mediaStudioSidePanelSnapshot = {
+        appWrapper: {
+            sidebarCollapsed: !!appWrapper?.classList.contains('sidebar-collapsed'),
+            rightSidebarCollapsed: !!appWrapper?.classList.contains('right-sidebar-collapsed'),
+            withRightCollapsed: !!appWrapper?.classList.contains('with-right-collapsed'),
+        },
+        sessionsPanel: {
+            isOpen: !!sessionsPanel?.classList.contains('is-open'),
+        },
+        studioPanel: {
+            collapsed: !!studioPanel?.classList.contains('collapsed'),
+            open: !!studioPanel?.classList.contains('open'),
+        },
+        overlays: {
+            leftActive: !!leftOverlay?.classList.contains('active'),
+            rightActive: !!rightOverlay?.classList.contains('active'),
+        },
+        bodyOverflow: document.body.style.overflow || '',
+    };
+
+    // Hide left sessions panel across desktop/mobile.
+    appWrapper?.classList.add('sidebar-collapsed');
+    sessionsPanel?.classList.remove('is-open');
+    leftOverlay?.classList.remove('active');
+
+    // Hide right studio panel across desktop/mobile.
+    studioPanel?.classList.add('collapsed');
+    studioPanel?.classList.remove('open');
+    appWrapper?.classList.add('with-right-collapsed');
+    appWrapper?.classList.add('right-sidebar-collapsed');
+    rightOverlay?.classList.remove('active');
+
+    // Right sidebar mobile overlay may have locked body scrolling.
+    document.body.style.overflow = '';
+}
+
+function restoreSidePanelsAfterMediaStudio() {
+    if (!mediaStudioSidePanelSnapshot) return;
+
+    const snapshot = mediaStudioSidePanelSnapshot;
+    mediaStudioSidePanelSnapshot = null;
+
+    const appWrapper = document.querySelector('.app-wrapper');
+    const sessionsPanel = document.getElementById('sessions-panel') || document.querySelector('.sessions-panel');
+    const studioPanel = document.getElementById('studio-panel');
+    const leftOverlay = document.getElementById('mobile-overlay');
+    const rightOverlay = document.getElementById('right-sidebar-overlay');
+
+    if (appWrapper) {
+        appWrapper.classList.toggle('sidebar-collapsed', snapshot.appWrapper.sidebarCollapsed);
+        appWrapper.classList.toggle('right-sidebar-collapsed', snapshot.appWrapper.rightSidebarCollapsed);
+        appWrapper.classList.toggle('with-right-collapsed', snapshot.appWrapper.withRightCollapsed);
+    }
+
+    sessionsPanel?.classList.toggle('is-open', snapshot.sessionsPanel.isOpen);
+    studioPanel?.classList.toggle('collapsed', snapshot.studioPanel.collapsed);
+    studioPanel?.classList.toggle('open', snapshot.studioPanel.open);
+    leftOverlay?.classList.toggle('active', snapshot.overlays.leftActive);
+    rightOverlay?.classList.toggle('active', snapshot.overlays.rightActive);
+    document.body.style.overflow = snapshot.bodyOverflow;
+}
+
 export function mountPhotoStudio(agentName) {
     const workspace = ensureWorkspaceDOM();
-    const chatWorkspace = document.getElementById('chat-compose-workspace'); // << [FIX] ต้องหา Chat Workspace
+    const chatWorkspace = document.getElementById('chat-compose-workspace');
 
-    // 1. ซ่อน Chat Workspace และแสดง Photo Studio
-    chatWorkspace.classList.add('hidden');
+    // Embedded mode: keep the app frame (header/status/sidebars) visible and
+    // switch only the main content area.
+    workspace.removeAttribute('style');
+    if (chatWorkspace) chatWorkspace.classList.remove('hidden');
+    captureAndHideSidePanelsForMediaStudio();
+    setEmbeddedPhotoStudioMode(true);
     workspace.classList.remove('hidden');
-    // Expand the studio to completely cover the chat view.  We assign a
-    // fixed position so that the workspace floats above the existing
-    // application layout, taking up the full viewport.  Without this, the
-    // chat panel underneath still occupies space and squeezes the studio when
-    // many results are rendered.  The zIndex ensures the overlay appears
-    // above other elements within the same document.  When the studio is
-    // unmounted these styles are cleared in `unmountPhotoStudio()`.
-    workspace.style.position = 'fixed';
-    workspace.style.top = '0';
-    workspace.style.left = '0';
-    workspace.style.right = '0';
-    workspace.style.bottom = '0';
-    workspace.style.zIndex = '9999';
-    workspace.style.overflowY = 'auto';
 
-    const chatInputWrapper = document.querySelector('.chat-input-wrapper');
-    if (chatInputWrapper) chatInputWrapper.classList.add('hidden');
-
-    // Use the provided agentName directly for display.  Previously, this logic
-    // prefixed non-KieAI agent names with "Visual Studio -", which resulted
-    // in confusing titles like "Visual Studio - Visual Studio" when the agent
-    // itself is named "Visual Studio".  Passing the agent name through
-    // unchanged ensures the header displays exactly what was specified.
-    const displayAgentName = agentName;
+    // Present the workspace with the newer generic label while remaining
+    // compatible with existing projects that still use the legacy agent name.
+    const displayAgentName = typeof agentName === 'string'
+        ? agentName.replace(/^Visual Studio\b/, 'Media Studio')
+        : agentName;
     
     const props = {
         agentName: displayAgentName,
@@ -82,19 +147,15 @@ export function mountPhotoStudio(agentName) {
 }
 
 export function unmountPhotoStudio() {
-const workspace = document.getElementById(WORKSPACE_ID);
+    const workspace = document.getElementById(WORKSPACE_ID);
     const chatWorkspace = document.getElementById('chat-compose-workspace'); 
-    const chatInputWrapper = document.querySelector('.chat-input-wrapper');
 
     if (workspace) {
-        // Reset any inline styles that were applied when mounting the photo studio.
         workspace.removeAttribute('style');
-        // 1. [✅ FIX] แสดง Chat Workspace หลัก
+        setEmbeddedPhotoStudioMode(false);
         workspace.classList.add('hidden');
-        chatWorkspace.classList.remove('hidden');
-
-        // 2. [✅ NEW] แสดง Chat Input Bar
-        if (chatInputWrapper) chatInputWrapper.classList.remove('hidden');
+        if (chatWorkspace) chatWorkspace.classList.remove('hidden');
+        restoreSidePanelsAfterMediaStudio();
 
         ReactBridge.unmount(document.getElementById(MOUNT_ID));
     }

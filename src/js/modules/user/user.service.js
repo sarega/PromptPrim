@@ -6,12 +6,21 @@ import { showCustomAlert } from "../../core/core.ui.js";
 const USER_DB_KEY = 'promptPrimUserDatabase_v1';
 const BILLING_DB_KEY = 'promptPrimAdminBilling_v1';
 const MASTER_PRESETS_DB_KEY = 'promptPrimMasterPresets_v1'; // <-- NEW: Dedicated key for admin presets
+const ACTIVE_USER_STORAGE_KEY = 'promptPrimActiveUserId';
+const PENDING_ACTIVE_USER_STORAGE_KEY = 'promptPrimPendingActiveUserId';
 export const ADMIN_USER_ID = 'user_master'; 
 const DEFAULT_PROVIDER_ENABLED = Object.freeze({ openrouter: true, ollama: true, kieai: true });
 
 let userDatabase = [];
 let masterPresets = {}; // <-- NEW: In-memory variable for admin presets
 let activeUserId = null;
+
+function normalizeStoredUserId(rawValue) {
+    if (typeof rawValue !== 'string') return '';
+    const trimmed = rawValue.trim();
+    if (!trimmed) return '';
+    return trimmed.replace(/^"+|"+$/g, '');
+}
 
 async function loadMasterPresets() {
     const storedPresets = localStorage.getItem(MASTER_PRESETS_DB_KEY);
@@ -353,11 +362,41 @@ function saveUserDatabase() {
 
 // --- MOCK LOGIN / USER SWITCHING ---
 export function setActiveUserId(userId) {
-    activeUserId = userId;
-    // [CRITICAL FIX] บันทึก ID ผู้ใช้ล่าสุดลง localStorage
-    localStorage.setItem('promptPrimActiveUserId', userId); 
-    console.log(`👤 Active user switched to: ${userId}`);
-    // ไม่ต้อง init ซ้ำ เพราะเราจะ reload หน้าเว็บ
+    if (userDatabase.length === 0) {
+        loadUserDatabase();
+    }
+
+    const normalizedUserId = normalizeStoredUserId(userId);
+    if (!normalizedUserId) {
+        console.warn('setActiveUserId called with empty userId');
+        return null;
+    }
+
+    const targetUser = userDatabase.find(user => user?.userId === normalizedUserId) || null;
+    if (!targetUser) {
+        console.warn(`setActiveUserId could not find user: ${normalizedUserId}`);
+        return null;
+    }
+
+    activeUserId = normalizedUserId;
+    try {
+        // Primary key used by the app.
+        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, normalizedUserId);
+        // One-shot override to survive reload-time race/overwrite scenarios.
+        localStorage.setItem(PENDING_ACTIVE_USER_STORAGE_KEY, normalizedUserId);
+    } catch (error) {
+        console.error('Failed to persist active user ID to localStorage:', error);
+    }
+
+    console.log(`👤 Active user switched to: ${normalizedUserId}`);
+
+    const profile = getCurrentUserProfile();
+    if (profile) {
+        stateManager.bus.publish('user:settingsLoaded', profile);
+        stateManager.bus.publish('user:settingsUpdated', profile);
+    }
+
+    return profile;
 }
 
 // --- Admin-specific Functions ---
@@ -397,7 +436,7 @@ export function getCurrentUserProfile() {
     let profile = userDatabase.find(u => u.userId === activeUserId) || null;
     if (!profile && userDatabase.length > 0) {
         activeUserId = userDatabase[0].userId;
-        localStorage.setItem('promptPrimActiveUserId', activeUserId);
+        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, activeUserId);
         profile = userDatabase[0];
     }
     return profile;
@@ -407,11 +446,14 @@ export async function initUserSettings() {
     await loadMasterPresets();
     loadUserDatabase();
     
-    // [CRITICAL FIX] อ่าน ID ผู้ใช้ล่าสุดจาก localStorage
-    const lastUserId = localStorage.getItem('promptPrimActiveUserId');
-    
-    if (lastUserId && userDatabase.some(u => u.userId === lastUserId)) {
-        activeUserId = lastUserId;
+    const pendingUserId = normalizeStoredUserId(localStorage.getItem(PENDING_ACTIVE_USER_STORAGE_KEY));
+    const lastUserId = normalizeStoredUserId(localStorage.getItem(ACTIVE_USER_STORAGE_KEY));
+    const preferredUserId = [pendingUserId, lastUserId].find(candidate => (
+        candidate && userDatabase.some(u => u.userId === candidate)
+    ));
+
+    if (preferredUserId) {
+        activeUserId = preferredUserId;
     } else if (!activeUserId || !userDatabase.some(u => u.userId === activeUserId)) {
         if (userDatabase.length > 0) {
             activeUserId = userDatabase[0].userId;
@@ -419,10 +461,17 @@ export async function initUserSettings() {
     }
 
     if (activeUserId) {
-        localStorage.setItem('promptPrimActiveUserId', activeUserId);
+        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, activeUserId);
     } else if (userDatabase.length > 0) {
         activeUserId = userDatabase[0].userId;
-        localStorage.setItem('promptPrimActiveUserId', activeUserId);
+        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, activeUserId);
+    }
+    if (pendingUserId) {
+        try {
+            localStorage.removeItem(PENDING_ACTIVE_USER_STORAGE_KEY);
+        } catch (_) {
+            // ignore localStorage cleanup failures
+        }
     }
     
     const currentUser = getCurrentUserProfile();

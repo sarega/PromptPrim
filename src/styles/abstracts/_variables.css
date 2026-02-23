@@ -23,6 +23,7 @@
     --shadow-dark: rgba(0, 0, 0, 0.1);
     --main-font-family: 'Sarabun', sans-serif;
     --main-font-size: 16px;
+    --dropdown-menu-item-font-size: 0.875rem;
     --bg-workspace-chat: #f8fafc;   /* สีเทาเกือบขาวสำหรับหน้าแชท */
     --bg-workspace-studio: #f1f5f9; /* สีเทาที่เข้มขึ้นเล็กน้อยสำหรับหน้า Studio */
     --user-bubble-edit-text-color: #1a202c; /* <--- แก้ไขสีสำหรับ Light Mode ที่นี่ (เปลี่ยนเป็นสีดำเข้ม) */

@@ -29,6 +29,24 @@
     flex-direction: column;
 }
 
+/* Modal content often contains text users need to copy/read. Re-enable selection. */
+.modal-box,
+.modal-box * {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Keep interactive controls from getting highlighted while clicking. */
+.modal-box button,
+.modal-box .btn,
+.modal-box .btn-icon,
+.modal-box .modal-close-btn,
+.modal-box .dropdown-content a,
+.modal-box .material-symbols-outlined {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 /* 3. [NEW] คลาสเสริมสำหรับ Modal ที่ต้องการให้ปรับขนาดได้เท่านั้น */
 .modal-box.is-resizable {
     overflow: auto;   /* ต้องมีเพื่อให้ resize ทำงาน */

@@ -400,6 +400,35 @@ body.dark-mode .chat-title:hover {
   background: #334155;
 }
 
+body.dark-mode .book-agent-header-badge {
+  background: rgba(49, 46, 129, 0.28);
+  border-color: #4f46e5;
+  color: #c7d2fe;
+}
+body.dark-mode .book-agent-header-badge:hover {
+  background: rgba(79, 70, 229, 0.32);
+  border-color: #6366f1;
+  color: #e0e7ff;
+}
+body.dark-mode .book-agent-header-badge.is-auto-on {
+  background: rgba(30, 58, 138, 0.30);
+  border-color: #3b82f6;
+  color: #bfdbfe;
+}
+body.dark-mode .book-agent-header-badge.has-pending {
+  background: rgba(120, 53, 15, 0.30);
+  border-color: #f59e0b;
+  color: #fde68a;
+}
+body.dark-mode .book-agent-header-badge.has-new {
+  background: rgba(124, 45, 18, 0.34);
+  border-color: #f97316;
+  color: #fdba74;
+}
+body.dark-mode .book-agent-header-badge.is-flash {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
+}
+
 body.dark-mode .workspace#agent-asset-studio {
     background-color: var(--bg-workspace-studio);
 }
@@ -610,42 +639,51 @@ body.dark-mode .world-workspace-content > .collapsible-section > .section-box {
     background: #1f2937;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-focus-card,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-quick-actions {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-focus-card,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-quick-actions {
     background: #111827;
     border-color: #334155;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-quick-actions {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-quick-actions {
     border-color: #475569;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-focus-meta,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-note,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-item-meta {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-focus-meta,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-note,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-item-meta {
     color: #94a3b8;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-continuity-block {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .book-changes-actions.is-secondary {
     border-top-color: #334155;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-continuity-heading,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-continuity-text {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .book-changes-setup-note {
+    border-color: #475569;
+    background: #0f172a;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-continuity-block {
+    border-top-color: #334155;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-continuity-heading,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-continuity-text {
     color: #e2e8f0;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-continuity-row {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-continuity-row {
     border-color: #334155;
     background: #111827;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-continuity-row.is-warning {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-continuity-row.is-warning {
     border-color: #92400e;
     background: #2a1f11;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-continuity-row.is-info {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-continuity-row.is-info {
     border-color: #1d4ed8;
     background: #101f3a;
 }
@@ -674,58 +712,235 @@ body.dark-mode #studio-panel .studio-world-continuity-row.is-info {
     background: #101f3a;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-pill {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill {
     background: #1f2937;
     border-color: #475569;
     color: #e2e8f0;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-pill.is-active {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-active {
     background: #123a2a;
     border-color: #166534;
     color: #bbf7d0;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-pill.is-linked {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-linked {
     background: #172554;
     border-color: #1d4ed8;
     color: #bfdbfe;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-pill.is-pending {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-pending {
     background: #3a2a12;
     border-color: #b45309;
     color: #fde68a;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-pill.is-danger {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-danger {
     background: #3b1111;
     border-color: #b91c1c;
     color: #fecaca;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-pill.is-muted {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-muted {
     background: #111827;
     border-color: #334155;
     color: #cbd5e1;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-editor {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-editor {
     background: #0f172a;
     border-color: #334155;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-field,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-checkbox {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-checkbox {
     color: #cbd5e1;
 }
 
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-input,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-select,
-body.dark-mode :is(#world-workspace, #book-sidebar-slot) .studio-world-inline-textarea {
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-input,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-select,
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-textarea {
     background: #111827;
     border-color: #475569;
     color: #e5e7eb;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-book-block {
+    background: #111827;
+    border-color: #334155;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-book-block.is-active-book {
+    border-color: #1d4ed8;
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-book {
+    background: #172030;
+    border-bottom-color: #334155;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-book.active {
+    background: #152844;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-collapse-toggle {
+    color: #94a3b8;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-collapse-toggle:hover {
+    background: #243244;
+    color: #dbeafe;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-collapse-toggle:focus-visible {
+    outline-color: #3b82f6;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-act {
+    background: #101826;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-chapter {
+    background: #111827;
+    border-top-color: #243244;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-chapter:hover {
+    background: #162131;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-chapter.is-drop-before::before,
+body.dark-mode #book-sidebar-slot .book-tree-row.is-chapter.is-drop-after::after {
+    background: #60a5fa;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-chapter.active {
+    background: #172554;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row-primary {
+    color: #e5e7eb;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row.is-act .book-tree-row-primary {
+    color: #94a3b8;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-row-secondary {
+    color: #94a3b8;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-act-block + .book-tree-act-block .book-tree-row.is-act {
+    border-top-color: #243244;
+}
+
+body.dark-mode #book-sidebar-slot .book-tree-empty {
+    background: #0f172a;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+body.dark-mode .book-workspace-header {
+    background: rgba(15, 23, 42, 0.92);
+    border-color: #334155;
+}
+
+body.dark-mode .book-workspace-heading p {
+    color: #94a3b8;
+}
+
+body.dark-mode .book-workspace-tab-btn {
+    background: #0f172a;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+
+body.dark-mode .book-workspace-tab-btn:hover {
+    background: #172554;
+    border-color: #3b82f6;
+    color: #dbeafe;
+}
+
+body.dark-mode .book-workspace-tab-btn.active {
+    background: #1e3a8a;
+    border-color: #60a5fa;
+    color: #eff6ff;
+}
+
+body.dark-mode .book-overview-act-column,
+body.dark-mode .book-composer-doc-card {
+    background: #111827;
+    border-color: #334155;
+}
+
+body.dark-mode .book-composer-doc-card.is-selectable:hover {
+    background: #152034;
+    border-color: #3b82f6;
+}
+
+body.dark-mode .book-composer-doc-card.is-selectable.active {
+    background: #172554;
+    border-color: #2563eb;
+}
+
+body.dark-mode .book-overview-act-title,
+body.dark-mode .book-composer-doc-title,
+body.dark-mode .book-overview-chapter-title {
+    color: #e5e7eb;
+}
+
+body.dark-mode .book-overview-act-meta,
+body.dark-mode .book-overview-chapter-kicker,
+body.dark-mode .book-composer-doc-meta {
+    color: #94a3b8;
+}
+
+body.dark-mode .book-composer-editor {
+    background: rgba(15, 23, 42, 0.9);
+    border-color: #334155;
+}
+
+body.dark-mode .book-composer-active-doc-title {
+    color: #e5e7eb;
+}
+
+body.dark-mode .book-composer-active-doc-meta {
+    color: #94a3b8;
+}
+
+body.dark-mode .book-composer-export-card {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+body.dark-mode .book-composer-export-title {
+    color: #cbd5e1;
+}
+
+body.dark-mode .book-overview-chapter-card {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+body.dark-mode .book-overview-chapter-card.is-active {
+    background: #111f3a;
+    border-color: #2563eb;
+}
+
+body.dark-mode .book-overview-chapter-summary {
+    color: #cbd5e1;
+}
+
+body.dark-mode .book-overview-empty {
+    background: #0f172a;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+body.dark-mode .world-book-settings-modal-meta {
+    color: #94a3b8;
 }
 
 body.dark-mode #world-workspace .studio-world-preview,

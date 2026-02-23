@@ -83,6 +83,21 @@
     flex-direction: column;
 }
 
+/* Prevent accidental text selection in Chat Sessions panel (folders/items/labels). */
+#sessions-panel .sessions-frame,
+#sessions-panel .sessions-frame * {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Keep form controls selectable if any are added later. */
+#sessions-panel .sessions-frame input,
+#sessions-panel .sessions-frame textarea,
+#sessions-panel .sessions-frame select {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
 /* --- Chat Sessions section compact alignment (desktop + mobile base) --- */
 .sessions-panel .section-box {
     margin-bottom: 3px;
@@ -187,7 +202,7 @@
 
 .session-organize-option {
     padding: 6px 10px !important;
-    font-size: 0.79rem !important;
+    font-size: 0.82rem !important;
     line-height: 1.2;
     justify-content: space-between;
     gap: 8px;
@@ -204,6 +219,45 @@
 }
 
 .session-organize-option.is-selected .session-organize-check {
+    opacity: 1;
+}
+
+/* Keep folder action menu sizing consistent when sort rows are injected.
+   Also applies to portal dropdown clones rendered under body because class is copied. */
+.dropdown-content.folder-session-dropdown > a {
+    padding: 6px 10px;
+    font-size: var(--dropdown-menu-item-font-size) !important;
+    font-weight: 400;
+    line-height: 1.2;
+}
+
+.dropdown-content.folder-session-dropdown > a.folder-session-sort-option {
+    justify-content: space-between;
+    gap: 8px;
+    font-weight: 400;
+}
+
+/* Force text label spans in sort rows to render with the same metrics as other folder menu items. */
+.dropdown-content.folder-session-dropdown > a.folder-session-sort-option > span:not(.folder-session-sort-check) {
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+}
+
+.dropdown-content.folder-session-dropdown .folder-session-sort-check {
+    opacity: 0;
+    transition: opacity 0.14s ease;
+    font-size: 16px;
+    line-height: 1;
+    min-width: 16px;
+}
+
+.dropdown-content.folder-session-dropdown > a.folder-session-sort-option.is-selected {
+    background: #e9eef7;
+    color: #1f2937;
+}
+
+.dropdown-content.folder-session-dropdown > a.folder-session-sort-option.is-selected .folder-session-sort-check {
     opacity: 1;
 }
 

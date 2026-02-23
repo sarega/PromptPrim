@@ -99,10 +99,19 @@ export function initUserProfileUI() {
         const userButton = target.closest('button[data-user-id]');
         if (userButton) {
             const userIdToSwitch = userButton.dataset.userId;
-            UserService.setActiveUserId(userIdToSwitch);
-            showCustomAlert(`Switched to ${userIdToSwitch}. The app will now reload.`, "Success");
+            const switchedProfile = UserService.setActiveUserId(userIdToSwitch);
+            if (!switchedProfile) {
+                showCustomAlert(`Could not switch to ${userIdToSwitch}. Please try again.`, "Switch Failed");
+                return;
+            }
+
+            const profileLabel = UserService.isMasterProfile(switchedProfile)
+                ? 'Admin (Master)'
+                : (switchedProfile.userName || switchedProfile.userId || userIdToSwitch);
+
+            showCustomAlert(`Switched to ${profileLabel}. Reloading app...`, "Success");
             userSwitcherModal.style.display = 'none';
-            setTimeout(() => window.location.reload(), 1500);
+            setTimeout(() => window.location.reload(), 350);
         }
         if (target.matches('.modal-close-btn') || target === userSwitcherModal) {
             userSwitcherModal.style.display = 'none';

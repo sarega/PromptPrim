@@ -42,6 +42,7 @@ import * as MemoryHandlers from './js/modules/memory/memory.handlers.js';
 import * as KnowledgeHandlers from './js/modules/knowledge/knowledge.handlers.js';
 import * as WorldHandlers from './js/modules/world/world.handlers.js';
 import * as WorldUI from './js/modules/world/world.ui.js';
+import { getBookLinkedSessionDisplayTitle } from './js/modules/world/world.schema-utils.js';
 import * as ComposerUI from './js/modules/composer/composer.ui.js';
 import * as ComposerHandlers from './js/modules/composer/composer.handlers.js';
 import * as SummaryUI from './js/modules/summary/summary.ui.js';
@@ -295,7 +296,11 @@ function isPhotoWorkspaceActive() {
 
 function isWorldWorkspaceActive() {
     const worldWorkspace = document.getElementById('world-workspace');
-    return Boolean(worldWorkspace && !worldWorkspace.classList.contains('hidden'));
+    const bookWorkspace = document.getElementById('book-workspace');
+    return Boolean(
+        (worldWorkspace && !worldWorkspace.classList.contains('hidden'))
+        || (bookWorkspace && !bookWorkspace.classList.contains('hidden'))
+    );
 }
 
 function setEmbeddedWorldWorkspaceMode(isActive) {
@@ -307,9 +312,11 @@ function setEmbeddedWorldWorkspaceMode(isActive) {
 
 function hideWorldWorkspace() {
     const worldWorkspace = document.getElementById('world-workspace');
-    if (!worldWorkspace) return;
+    const bookWorkspace = document.getElementById('book-workspace');
+    if (!worldWorkspace && !bookWorkspace) return;
     setEmbeddedWorldWorkspaceMode(false);
-    worldWorkspace.classList.add('hidden');
+    worldWorkspace?.classList.add('hidden');
+    bookWorkspace?.classList.add('hidden');
 }
 
 function showWorldWorkspace() {
@@ -320,6 +327,7 @@ function showWorldWorkspace() {
     }
     const worldWorkspace = document.getElementById('world-workspace');
     if (!worldWorkspace) return;
+    document.getElementById('book-workspace')?.classList.add('hidden');
     worldWorkspace.classList.remove('hidden');
     setEmbeddedWorldWorkspaceMode(true);
 }
@@ -363,7 +371,7 @@ function setupEventSubscriptions() {
 
     bus.subscribe('session:loaded', ({ session }) => {
         // --- ส่วนที่ 1: วาด Chat UI ทั้งหมด (เหมือนเดิม) ---
-        ChatUI.updateChatTitle(session.name);
+        ChatUI.updateChatTitle(getBookLinkedSessionDisplayTitle(session, { fallback: session?.name || 'AI Assistant', includeAct: true }));
         ChatUI.renderMessages();
         SessionUI.renderSessionList();
         
@@ -557,6 +565,7 @@ function setupEventSubscriptions() {
 
     bus.subscribe('chat:sendMessage', ChatHandlers.sendMessage);
     bus.subscribe('chat:stopGeneration', ChatHandlers.stopGeneration);
+    bus.subscribe('chat:assistantTurnCompleted', (payload) => WorldHandlers.handleBookAgentAssistantTurnCompleted(payload));
     bus.subscribe('chat:editMessage', ({ index }) => ChatHandlers.editMessage({ index }));
     bus.subscribe('chat:copyMessage', ({ index, event }) => ChatHandlers.copyMessageToClipboard({ index, event }));
     bus.subscribe('chat:regenerateMessage', ({ index }) => ChatHandlers.regenerateMessage({ index }));
@@ -590,19 +599,28 @@ function setupEventSubscriptions() {
     bus.subscribe('world:changeCreate', (payload) => WorldHandlers.createWorldChangeProposal(payload));
     bus.subscribe('world:changeReview', (payload) => WorldHandlers.reviewWorldChangeProposal(payload));
     bus.subscribe('world:proposeFromCurrentChat', (payload) => WorldHandlers.proposeWorldUpdatesFromCurrentChat(payload));
+    bus.subscribe('world:bookAgentScanProposals', (payload) => WorldHandlers.scanBookAgentForWorldProposals(payload));
+    bus.subscribe('world:bookAgentResetScanCursor', (payload) => WorldHandlers.resetBookAgentProposalScanCursor(payload));
 
     bus.subscribe('book:create', (payload) => WorldHandlers.createBook(payload));
     bus.subscribe('book:createPrompt', (payload) => WorldHandlers.createBookPrompt(payload));
     bus.subscribe('book:update', (payload) => WorldHandlers.updateBook(payload));
+    bus.subscribe('book:actUpsert', (payload) => WorldHandlers.upsertBookAct(payload));
+    bus.subscribe('book:renumberChapters', (payload) => WorldHandlers.renumberBookChapters(payload));
     bus.subscribe('book:renamePrompt', (payload) => WorldHandlers.renameBookPrompt(payload));
     bus.subscribe('book:delete', (payload) => WorldHandlers.deleteBook(payload));
+    bus.subscribe('book:ensureWorld', (payload) => WorldHandlers.ensureBookWorld(payload));
     bus.subscribe('book:setActive', (payload) => WorldHandlers.setActiveBook(payload));
     bus.subscribe('book:linkWorld', (payload) => WorldHandlers.linkBookToWorld(payload));
     bus.subscribe('book:linkWorldPrompt', (payload) => WorldHandlers.linkBookToWorldPrompt(payload));
+    bus.subscribe('book:openWorkspace', (payload) => WorldUI.openBookWorkspaceFromExternal(payload));
 
     bus.subscribe('chapter:assignToBook', (payload) => WorldHandlers.assignSessionToBook(payload));
     bus.subscribe('chapter:assignToBookPrompt', (payload) => WorldHandlers.assignSessionToBookPrompt(payload));
     bus.subscribe('chapter:detachFromBook', (payload) => WorldHandlers.detachSessionFromBook(payload));
+    bus.subscribe('chapter:moveInBookOrder', (payload) => WorldHandlers.moveChapterInBookOrder(payload));
+    bus.subscribe('chapter:reorderInBook', (payload) => WorldHandlers.reorderChapterInBook(payload));
+    bus.subscribe('chapter:moveToAct', (payload) => WorldHandlers.moveChapterToAct(payload));
     bus.subscribe('chapter:updateMeta', (payload) => WorldHandlers.updateChapterMetadata(payload));
     bus.subscribe('chapter:updateMetaPrompt', (payload) => WorldHandlers.updateChapterMetadataPrompt(payload));
 

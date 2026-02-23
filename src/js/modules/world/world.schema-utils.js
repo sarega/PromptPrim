@@ -10,6 +10,9 @@ export const WORLD_ITEM_STATUS_DEPRECATED = 'deprecated';
 
 export const WORLD_ITEM_VISIBILITY_REVEALED = 'revealed';
 export const WORLD_ITEM_VISIBILITY_GATED = 'gated';
+export const WORLD_SCOPE_BOOK = 'book';
+export const WORLD_SCOPE_SHARED = 'shared';
+export const WORLD_SCOPE_UNASSIGNED = 'unassigned';
 
 export const REVEAL_GATE_KIND_CHAPTER_THRESHOLD = 'chapter_threshold';
 export const REVEAL_GATE_KIND_MANUAL_UNLOCK = 'manual_unlock';
@@ -21,6 +24,9 @@ export const CHAPTER_STATUS_OUTLINE = 'outline';
 export const CHAPTER_STATUS_DRAFTING = 'drafting';
 export const CHAPTER_STATUS_REVISING = 'revising';
 export const CHAPTER_STATUS_DONE = 'done';
+export const SESSION_KIND_CHAT = 'chat';
+export const SESSION_KIND_CHAPTER = 'chapter';
+export const SESSION_KIND_BOOK_AGENT = 'book_agent';
 
 const ALLOWED_WORLD_ITEM_TYPES = new Set([
     'entity',
@@ -154,11 +160,20 @@ export function normalizeWorldItem(item = {}) {
 export function normalizeWorld(world = {}) {
     const now = Date.now();
     const items = Array.isArray(world?.items) ? world.items.map(normalizeWorldItem) : [];
+    const ownerBookId = normalizeNullableString(world?.ownerBookId);
+    const sharedBookIds = uniqueStringArray(world?.sharedBookIds);
+    const rawScope = String(world?.scope || '').trim().toLowerCase();
+    const scope = rawScope === WORLD_SCOPE_SHARED
+        ? WORLD_SCOPE_SHARED
+        : (rawScope === WORLD_SCOPE_BOOK ? WORLD_SCOPE_BOOK : WORLD_SCOPE_UNASSIGNED);
 
     return {
         id: normalizeNullableString(world?.id) || createWorldId(),
         name: normalizeString(world?.name, 'New World'),
         description: normalizeString(world?.description, ''),
+        scope,
+        ownerBookId,
+        sharedBookIds,
         version: normalizePositiveInteger(world?.version, 1),
         createdAt: normalizeTimestamp(world?.createdAt, now),
         updatedAt: normalizeTimestamp(world?.updatedAt, now),
@@ -216,6 +231,63 @@ function normalizeBookAct(act = {}, index = 0) {
     };
 }
 
+function normalizeBookExportProfile(raw = {}, bookName = 'New Book') {
+    const source = isPlainObject(raw) ? raw : {};
+    const chapterTitleModeRaw = String(source.chapterTitleMode || '').trim().toLowerCase();
+    const chapterTitleMode = chapterTitleModeRaw === 'title_only'
+        ? 'title_only'
+        : (chapterTitleModeRaw === 'number_and_title' ? 'number_and_title' : 'number_and_title');
+    const sceneBreakMarkerRaw = String(source.sceneBreakMarker || '').trim();
+    return {
+        title: normalizeString(source.title, normalizeString(bookName, 'New Book')),
+        subtitle: normalizeString(source.subtitle, ''),
+        author: normalizeString(source.author, ''),
+        chapterTitleMode,
+        includeChapterSummaries: source.includeChapterSummaries === true,
+        sceneBreakMarker: sceneBreakMarkerRaw || '***',
+        frontMatterNotes: normalizeString(source.frontMatterNotes, '')
+    };
+}
+
+function normalizeBookAgentAutomation(raw = {}) {
+    const source = isPlainObject(raw) ? raw : {};
+    const worldProposalsSource = isPlainObject(source.worldProposals)
+        ? source.worldProposals
+        : {};
+
+    const lastScannedMessageCountRaw = Number(worldProposalsSource.lastScannedMessageCount);
+    const lastScannedMessageCount = Number.isFinite(lastScannedMessageCountRaw)
+        ? Math.max(0, Math.round(lastScannedMessageCountRaw))
+        : 0;
+
+    return {
+        worldProposals: {
+            autoProposeEnabled: worldProposalsSource.autoProposeEnabled === true,
+            lastScannedMessageCount,
+            lastScannedAt: Number.isFinite(worldProposalsSource.lastScannedAt)
+                ? worldProposalsSource.lastScannedAt
+                : null
+        }
+    };
+}
+
+function normalizeBookSurfaceAgentConfig(raw = {}, { defaults = {} } = {}) {
+    const source = isPlainObject(raw) ? raw : {};
+    return {
+        agentPresetName: normalizeNullableString(source.agentPresetName ?? source.agentName) || null,
+        systemPromptOverride: normalizeString(source.systemPromptOverride, normalizeString(defaults.systemPromptOverride, ''))
+    };
+}
+
+function normalizeBookCodexAgentConfig(raw = {}) {
+    const source = isPlainObject(raw) ? raw : {};
+    const base = normalizeBookSurfaceAgentConfig(source, { defaults: { systemPromptOverride: '' } });
+    return {
+        ...base,
+        useBookAgent: source.useBookAgent !== false
+    };
+}
+
 export function normalizeBook(book = {}, options = {}) {
     const now = Date.now();
     const validWorldIds = options?.validWorldIds instanceof Set ? options.validWorldIds : null;
@@ -231,16 +303,34 @@ export function normalizeBook(book = {}, options = {}) {
     const chapterSessionIds = uniqueStringArray(
         structureSource.chapterSessionIds || book?.chapterSessionIds || []
     );
+    const composerDocsSource = isPlainObject(book?.composerDocs) ? book.composerDocs : {};
+    const composerDocs = {
+        treatment: normalizeString(composerDocsSource.treatment, ''),
+        synopsis: normalizeString(composerDocsSource.synopsis, ''),
+        outline: normalizeString(composerDocsSource.outline, ''),
+        sceneBeats: normalizeString(composerDocsSource.sceneBeats, '')
+    };
+    const bookAgentSessionId = normalizeNullableString(book?.bookAgentSessionId);
+    const exportProfile = normalizeBookExportProfile(book?.exportProfile, book?.name);
+    const agentAutomation = normalizeBookAgentAutomation(book?.agentAutomation);
+    const bookAgentConfig = normalizeBookSurfaceAgentConfig(book?.bookAgentConfig);
+    const codexAgentConfig = normalizeBookCodexAgentConfig(book?.codexAgentConfig);
 
     return {
         id: normalizeNullableString(book?.id) || createBookId(),
         name: normalizeString(book?.name, 'New Book'),
         description: normalizeString(book?.description, ''),
         linkedWorldId,
+        bookAgentSessionId,
         createdAt: normalizeTimestamp(book?.createdAt, now),
         updatedAt: normalizeTimestamp(book?.updatedAt, now),
         autoNumberChapters: book?.autoNumberChapters !== false,
         constraints: isPlainObject(book?.constraints) ? cloneJsonish(book.constraints) : {},
+        composerDocs,
+        exportProfile,
+        bookAgentConfig,
+        codexAgentConfig,
+        agentAutomation,
         structure: {
             acts,
             chapterSessionIds
@@ -260,6 +350,59 @@ export function ensureProjectWorlds(project) {
     project.activeWorldId = requestedActiveWorldId && validWorldIds.has(requestedActiveWorldId)
         ? requestedActiveWorldId
         : (project.worlds[0]?.id || null);
+}
+
+export function ensureProjectWorldBookOwnership(project) {
+    if (!project || typeof project !== 'object') return;
+    const worlds = Array.isArray(project.worlds) ? project.worlds : [];
+    const books = Array.isArray(project.books) ? project.books : [];
+    const validBookIds = new Set(books.map(book => normalizeNullableString(book?.id)).filter(Boolean));
+    const worldToLinkedBooks = new Map();
+
+    books.forEach((book) => {
+        const bookId = normalizeNullableString(book?.id);
+        const worldId = normalizeNullableString(book?.linkedWorldId);
+        if (!bookId || !worldId) return;
+        if (!worldToLinkedBooks.has(worldId)) {
+            worldToLinkedBooks.set(worldId, []);
+        }
+        const list = worldToLinkedBooks.get(worldId);
+        if (!list.includes(bookId)) list.push(bookId);
+    });
+
+    worlds.forEach((world) => {
+        const linkedBookIds = uniqueStringArray(worldToLinkedBooks.get(world.id) || []);
+        let ownerBookId = normalizeNullableString(world?.ownerBookId);
+        if (ownerBookId && !validBookIds.has(ownerBookId)) ownerBookId = null;
+
+        let sharedBookIds = uniqueStringArray(world?.sharedBookIds).filter(bookId => validBookIds.has(bookId));
+        linkedBookIds.forEach((bookId) => {
+            if (!sharedBookIds.includes(bookId)) sharedBookIds.push(bookId);
+        });
+
+        if (linkedBookIds.length === 0) {
+            sharedBookIds = [];
+            world.scope = ownerBookId ? WORLD_SCOPE_BOOK : WORLD_SCOPE_UNASSIGNED;
+            world.ownerBookId = ownerBookId;
+            world.sharedBookIds = sharedBookIds;
+            return;
+        }
+
+        if (linkedBookIds.length === 1) {
+            const onlyBookId = linkedBookIds[0];
+            world.ownerBookId = ownerBookId || onlyBookId;
+            world.sharedBookIds = [world.ownerBookId];
+            world.scope = WORLD_SCOPE_BOOK;
+            return;
+        }
+
+        const preferredOwner = ownerBookId && linkedBookIds.includes(ownerBookId)
+            ? ownerBookId
+            : linkedBookIds[0];
+        world.ownerBookId = preferredOwner || null;
+        world.sharedBookIds = linkedBookIds;
+        world.scope = WORLD_SCOPE_SHARED;
+    });
 }
 
 export function ensureProjectWorldChanges(project) {
@@ -282,6 +425,8 @@ export function ensureProjectBooks(project) {
     project.activeBookId = requestedActiveBookId && validBookIds.has(requestedActiveBookId)
         ? requestedActiveBookId
         : (project.books[0]?.id || null);
+
+    ensureProjectWorldBookOwnership(project);
 }
 
 function normalizeChapterStatus(value) {
@@ -309,6 +454,7 @@ export function normalizeChapterSessionMetadata(session = {}, options = {}) {
         actNumber,
         chapterNumber,
         chapterTitle: normalizeString(session?.chapterTitle, ''),
+        chapterSummary: normalizeString(session?.chapterSummary, ''),
         chapterStatus: normalizeChapterStatus(session?.chapterStatus),
         revealScope: {
             asOfChapter
@@ -317,6 +463,66 @@ export function normalizeChapterSessionMetadata(session = {}, options = {}) {
             ? CHAPTER_WRITING_MODE_AUTHOR
             : CHAPTER_WRITING_MODE_WRITING
     };
+}
+
+export function normalizeSessionKind(session = {}) {
+    const raw = String(session?.kind || '').trim().toLowerCase();
+    if (raw === SESSION_KIND_CHAPTER) return SESSION_KIND_CHAPTER;
+    if (raw === SESSION_KIND_BOOK_AGENT) return SESSION_KIND_BOOK_AGENT;
+    if (raw === SESSION_KIND_CHAT) return SESSION_KIND_CHAT;
+    if (normalizeNullableString(session?.bookAgentBookId)) return SESSION_KIND_BOOK_AGENT;
+    return session?.bookId ? SESSION_KIND_CHAPTER : SESSION_KIND_CHAT;
+}
+
+export function isChapterSession(session = {}) {
+    return normalizeSessionKind(session) === SESSION_KIND_CHAPTER;
+}
+
+export function isBookAgentSession(session = {}) {
+    return normalizeSessionKind(session) === SESSION_KIND_BOOK_AGENT;
+}
+
+export function isRegularChatSession(session = {}) {
+    return normalizeSessionKind(session) === SESSION_KIND_CHAT;
+}
+
+export function getBookLinkedSessionDisplayTitle(session = {}, options = {}) {
+    const fallback = typeof options?.fallback === 'string' && options.fallback
+        ? options.fallback
+        : 'New Chat';
+    if (!session || typeof session !== 'object') return fallback;
+
+    const isBookLinked = Boolean(session.bookId);
+    const actNumber = Number.isFinite(Number(session?.actNumber)) ? Math.round(Number(session.actNumber)) : null;
+    const chapterNumber = Number.isFinite(Number(session?.chapterNumber)) ? Math.round(Number(session.chapterNumber)) : null;
+    const chapterTitle = String(session?.chapterTitle || '').trim();
+    const includeAct = options?.includeAct === true;
+
+    if (!isBookLinked) {
+        return String(session?.name || '').trim() || fallback;
+    }
+
+    let chapterLabel = '';
+    if (chapterNumber && chapterTitle) {
+        chapterLabel = `Chapter ${chapterNumber}: ${chapterTitle}`;
+    } else if (chapterNumber) {
+        chapterLabel = `Chapter ${chapterNumber}`;
+    } else if (chapterTitle) {
+        chapterLabel = `Chapter: ${chapterTitle}`;
+    } else if (actNumber) {
+        chapterLabel = `Act ${actNumber} Chapter`;
+    } else {
+        chapterLabel = 'Chapter';
+    }
+
+    if (includeAct && actNumber) {
+        const actPrefix = `Act ${actNumber}`;
+        if (!chapterLabel.toLowerCase().startsWith(actPrefix.toLowerCase())) {
+            return `${actPrefix} • ${chapterLabel}`;
+        }
+    }
+
+    return chapterLabel;
 }
 
 export function isWorldItemVisibleForChapter(item, context = {}) {
@@ -347,4 +553,3 @@ export function isWorldItemVisibleForChapter(item, context = {}) {
 
     return false;
 }
-

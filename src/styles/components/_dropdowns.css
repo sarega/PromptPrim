@@ -28,6 +28,17 @@
     overflow: hidden;
 }
 
+/* Dropdown menus are interactive UI, not reading surfaces. */
+.dropdown-content,
+.dropdown-content *,
+.dropdown-content.dropdown-content-portal,
+.dropdown-content.dropdown-content-portal *,
+.searchable-select-options,
+.searchable-select-options * {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 .dropdown.open .dropdown-content {
     display: block;
 }
@@ -67,7 +78,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.9rem;
+    font-size: var(--dropdown-menu-item-font-size);
     cursor: pointer;
 }
 
@@ -122,7 +133,7 @@
     padding: 10px 12px;
     cursor: pointer;
     border-radius: 6px;
-    font-size: 0.9rem;
+    font-size: var(--dropdown-menu-item-font-size);
     transition: background-color 0.2s ease;
 }
 

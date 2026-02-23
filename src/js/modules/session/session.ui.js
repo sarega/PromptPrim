@@ -8,12 +8,21 @@ import { showCustomAlert } from '../../core/core.ui.js';
 import * as SessionHandlers from './session.handlers.js';
 import {
     ensureProjectFolders,
+    FOLDER_SESSION_SORT_CREATED_ASC,
+    FOLDER_SESSION_SORT_CREATED_DESC,
+    FOLDER_SESSION_SORT_MANUAL,
+    FOLDER_SESSION_SORT_MODIFIED_ASC,
+    FOLDER_SESSION_SORT_MODIFIED_DESC,
+    FOLDER_SESSION_SORT_NAME_ASC,
+    FOLDER_SESSION_SORT_NAME_DESC,
     getFolderById,
     normalizeFolderContextPolicy,
     normalizeFolderRagSettings,
+    normalizeFolderSessionSortMode,
     normalizeSessionContextMode,
     normalizeSessionRagSettings
 } from './session.folder-utils.js';
+import { getBookLinkedSessionDisplayTitle, isChapterSession, isRegularChatSession } from '../world/world.schema-utils.js';
 
 let isSessionUIInitialized = false;
 let draggedSessionId = null;
@@ -27,6 +36,15 @@ const SESSION_LIST_SORT_UPDATED = 'updated';
 const SESSION_LIST_SORT_CREATED = 'created';
 const SESSION_LIST_SHOW_ALL = 'all';
 const SESSION_LIST_SHOW_RELEVANT = 'relevant';
+const FOLDER_SORT_OPTIONS = [
+    { value: FOLDER_SESSION_SORT_MANUAL, label: 'Manual (Drag Order)' },
+    { value: FOLDER_SESSION_SORT_MODIFIED_DESC, label: 'Modified Date (Newest)' },
+    { value: FOLDER_SESSION_SORT_MODIFIED_ASC, label: 'Modified Date (Oldest)' },
+    { value: FOLDER_SESSION_SORT_CREATED_DESC, label: 'Created Date (Newest)' },
+    { value: FOLDER_SESSION_SORT_CREATED_ASC, label: 'Created Date (Oldest)' },
+    { value: FOLDER_SESSION_SORT_NAME_ASC, label: 'Name (A-Z)' },
+    { value: FOLDER_SESSION_SORT_NAME_DESC, label: 'Name (Z-A)' }
+];
 
 function escapeSelectorValue(rawValue = '') {
     if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -56,7 +74,7 @@ function filterSessionsByShowMode(sessions = [], project, showMode = SESSION_LIS
     }
 
     const activeSession = (project.chatSessions || []).find(session => session.id === project.activeSessionId);
-    if (!activeSession) return sessions;
+    if (!activeSession || isChapterSession(activeSession)) return sessions;
 
     const activeFolderId = activeSession.folderId || null;
     return sessions.filter(session => (
@@ -159,8 +177,20 @@ function refreshFolderAnimationHeights() {
 
 function animateSessionFolderToggle(folderItem, shouldOpen) {
     const list = folderItem?.querySelector(':scope > .folder-session-list');
+    const persistFolderCollapsedState = () => {
+        const folderId = folderItem?.dataset?.folderId;
+        if (!folderId) return;
+        stateManager.bus.publish('folder:collapse', {
+            folderId,
+            collapsed: !Boolean(shouldOpen)
+        });
+    };
+
     if (!folderItem || !list) {
-        if (folderItem) folderItem.open = Boolean(shouldOpen);
+        if (folderItem) {
+            folderItem.open = Boolean(shouldOpen);
+            persistFolderCollapsedState();
+        }
         return;
     }
     if (folderItem.dataset.folderAnimating === '1') return;
@@ -168,6 +198,7 @@ function animateSessionFolderToggle(folderItem, shouldOpen) {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReducedMotion) {
         folderItem.open = Boolean(shouldOpen);
+        persistFolderCollapsedState();
         refreshFolderAnimationHeights();
         return;
     }
@@ -180,6 +211,7 @@ function animateSessionFolderToggle(folderItem, shouldOpen) {
         list.style.removeProperty('max-height');
         list.style.removeProperty('opacity');
         list.style.removeProperty('overflow');
+        persistFolderCollapsedState();
         refreshFolderAnimationHeights();
     };
 
@@ -241,6 +273,57 @@ function sortSessionsByManualOrder(a, b) {
     const sortDiff = getSessionSortIndex(a) - getSessionSortIndex(b);
     if (sortDiff !== 0) return sortDiff;
     return (b?.updatedAt || 0) - (a?.updatedAt || 0);
+}
+
+function compareSessionNames(a, b) {
+    return String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' });
+}
+
+function sortSessionsForFolderDisplay(sessions = [], folder) {
+    const sortMode = normalizeFolderSessionSortMode(folder?.sessionSortMode);
+    const list = [...sessions];
+
+    switch (sortMode) {
+        case FOLDER_SESSION_SORT_MODIFIED_DESC:
+            return list.sort((a, b) => {
+                const diff = Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0);
+                if (diff !== 0) return diff;
+                return compareSessionNames(a, b);
+            });
+        case FOLDER_SESSION_SORT_MODIFIED_ASC:
+            return list.sort((a, b) => {
+                const diff = Number(a?.updatedAt || 0) - Number(b?.updatedAt || 0);
+                if (diff !== 0) return diff;
+                return compareSessionNames(a, b);
+            });
+        case FOLDER_SESSION_SORT_CREATED_DESC:
+            return list.sort((a, b) => {
+                const diff = Number(b?.createdAt || 0) - Number(a?.createdAt || 0);
+                if (diff !== 0) return diff;
+                return compareSessionNames(a, b);
+            });
+        case FOLDER_SESSION_SORT_CREATED_ASC:
+            return list.sort((a, b) => {
+                const diff = Number(a?.createdAt || 0) - Number(b?.createdAt || 0);
+                if (diff !== 0) return diff;
+                return compareSessionNames(a, b);
+            });
+        case FOLDER_SESSION_SORT_NAME_ASC:
+            return list.sort((a, b) => {
+                const diff = compareSessionNames(a, b);
+                if (diff !== 0) return diff;
+                return Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0);
+            });
+        case FOLDER_SESSION_SORT_NAME_DESC:
+            return list.sort((a, b) => {
+                const diff = compareSessionNames(b, a);
+                if (diff !== 0) return diff;
+                return Number(b?.updatedAt || 0) - Number(a?.updatedAt || 0);
+            });
+        case FOLDER_SESSION_SORT_MANUAL:
+        default:
+            return list.sort(sortSessionsByManualOrder);
+    }
 }
 
 function closeSessionDropdownPortal() {
@@ -315,7 +398,7 @@ function openSessionDropdownPortal(button) {
     closeSessionDropdownPortal();
 
     const portal = document.createElement('div');
-    portal.className = 'dropdown-content dropdown-content-portal';
+    portal.className = `${sourceContent.className || 'dropdown-content'} dropdown-content-portal`;
     portal.innerHTML = sourceContent.innerHTML;
     buildPortalMetadataFromDropdown(dropdown, portal);
     document.body.appendChild(portal);
@@ -409,10 +492,19 @@ function createSessionElement(session, project) {
         item.classList.add('archived');
     }
 
-    const sessionName = session.name || 'New Chat';
+    const sessionName = getBookLinkedSessionDisplayTitle(session, { fallback: 'New Chat' });
     const contextLabel = getSessionContextLabel(contextMode);
     const folderLabel = folder ? `Folder: ${folder.name}` : 'Main list';
     const sessionIcon = getSessionIcon(project, session);
+    const linkedBook = session.bookId
+        ? (Array.isArray(project?.books) ? project.books.find(book => book.id === session.bookId) : null)
+        : null;
+    const chapterPathParts = [];
+    if (Number.isFinite(Number(session?.actNumber))) chapterPathParts.push(`Act ${Math.round(Number(session.actNumber))}`);
+    if (Number.isFinite(Number(session?.chapterNumber))) chapterPathParts.push(`Ch ${Math.round(Number(session.chapterNumber))}`);
+    const bookLabel = session.bookId
+        ? `Book: ${linkedBook?.name || 'Unknown'}${chapterPathParts.length ? ` (${chapterPathParts.join(' / ')})` : ''}`
+        : null;
 
     item.innerHTML = `
         <div class="item-header">
@@ -437,13 +529,31 @@ function createSessionElement(session, project) {
                 </div>
             </div>
         </div>
-        <div class="session-item-meta">${folderLabel} • ${contextLabel} • ${ragSourceLabel}</div>
+        <div class="session-item-meta">${[bookLabel, folderLabel, contextLabel, ragSourceLabel].filter(Boolean).join(' • ')}</div>
     `;
 
     return item;
 }
 
 function createFolderElement(folder, sessions, project) {
+    const folderSortMode = normalizeFolderSessionSortMode(folder?.sessionSortMode);
+    const folderSortOptionsMarkup = FOLDER_SORT_OPTIONS.map((option) => {
+        const isSelected = option.value === folderSortMode;
+        return `
+            <a
+                href="#"
+                data-action="folder:sort-mode"
+                data-folder-sort-mode="${option.value}"
+                class="folder-session-sort-option${isSelected ? ' is-selected' : ''}"
+                role="menuitemradio"
+                aria-checked="${isSelected ? 'true' : 'false'}"
+            >
+                <span>${option.label}</span>
+                <span class="folder-session-sort-check material-symbols-outlined" aria-hidden="true">check</span>
+            </a>
+        `;
+    }).join('');
+
     const details = document.createElement('details');
     details.className = 'session-folder';
     details.dataset.folderId = folder.id;
@@ -463,10 +573,13 @@ function createFolderElement(folder, sessions, project) {
         <div class="item-actions">
             <div class="dropdown align-right">
                 <button class="btn-icon" data-action="toggle-menu" title="Folder options">&#8942;</button>
-                <div class="dropdown-content">
+                <div class="dropdown-content session-organize-dropdown folder-session-dropdown">
                     <a href="#" data-action="folder:new-chat">New Chat in Folder</a>
                     <a href="#" data-action="folder:rename">Rename Folder</a>
                     <a href="#" data-action="folder:settings">Folder Context Budget...</a>
+                    <div class="dropdown-divider"></div>
+                    <div class="session-organize-heading">Sort Chats</div>
+                    ${folderSortOptionsMarkup}
                     <div class="dropdown-divider"></div>
                     <a href="#" data-action="folder:delete" class="is-destructive">Delete Folder</a>
                 </div>
@@ -994,8 +1107,9 @@ export function renderSessionList() {
 
     const preferences = SessionHandlers.getSessionListPreferences(project);
     const sessions = Array.isArray(project.chatSessions) ? project.chatSessions : [];
-    const activeSessionsAll = sessions.filter(session => !session.archived);
-    const archivedSessionsAll = sessions.filter(session => session.archived);
+    const regularSessions = sessions.filter(session => isRegularChatSession(session));
+    const activeSessionsAll = regularSessions.filter(session => !session.archived);
+    const archivedSessionsAll = regularSessions.filter(session => session.archived);
     const activeSessions = filterSessionsByShowMode(activeSessionsAll, project, preferences.showMode);
     const archivedSessions = filterSessionsByShowMode(archivedSessionsAll, project, preferences.showMode);
 
@@ -1032,9 +1146,9 @@ export function renderSessionList() {
             : folderList;
 
         foldersToRender.forEach(folder => {
-            const folderSessions = sortSessionsForList(
+            const folderSessions = sortSessionsForFolderDisplay(
                 activeSessions.filter(session => session.folderId === folder.id),
-                preferences.sortBy
+                folder
             );
             if (preferences.showMode !== SESSION_LIST_SHOW_RELEVANT || folderSessions.length > 0) {
                 regularList.appendChild(createFolderElement(folder, folderSessions, project));
@@ -1092,9 +1206,16 @@ function handleSessionAction(action, sessionId, event) {
     stateManager.bus.publish(`session:${action}`, { sessionId, event });
 }
 
-function handleFolderAction(action, folderId) {
+function handleFolderAction(action, folderId, payload = {}) {
     if (action === 'folder:new-chat') {
         stateManager.bus.publish('folder:newChat', { folderId });
+        return;
+    }
+    if (action === 'folder:sort-mode') {
+        stateManager.bus.publish('folder:sortMode', {
+            folderId,
+            sortMode: payload.folderSortMode
+        });
         return;
     }
     if (action === 'folder:rename') {
@@ -1156,11 +1277,12 @@ export function initSessionUI() {
                 const folderItem = actionLink.closest('.session-folder[data-folder-id]');
                 const newSessionMenu = actionLink.closest('#new-session-menu');
                 const sessionOrganizeMenu = actionLink.closest('#session-organize-menu');
+                const folderSortMode = actionLink.dataset.folderSortMode || '';
 
                 if (sessionItem) {
                     handleSessionAction(action, sessionItem.dataset.sessionId, e);
                 } else if (folderItem) {
-                    handleFolderAction(action, folderItem.dataset.folderId);
+                    handleFolderAction(action, folderItem.dataset.folderId, { folderSortMode });
                 } else if (newSessionMenu) {
                     if (action === 'new-chat') {
                         stateManager.bus.publish('session:new');
@@ -1202,6 +1324,7 @@ export function initSessionUI() {
                     e.preventDefault();
                     stateManager.bus.publish('folder:activate', { folderId: folderItem.dataset.folderId });
                     animateSessionFolderToggle(folderItem, !folderItem.open);
+                    return;
                 }
             }
 
@@ -1279,11 +1402,12 @@ export function initSessionUI() {
             const sessionId = portal?.dataset.sessionId || '';
             const folderId = portal?.dataset.folderId || '';
             const menuType = portal?.dataset.menuType || '';
+            const folderSortMode = portalAction.dataset.folderSortMode || '';
 
             if (sessionId) {
                 handleSessionAction(action, sessionId, event);
             } else if (folderId) {
-                handleFolderAction(action, folderId);
+                handleFolderAction(action, folderId, { folderSortMode });
             } else if (menuType === 'new-session') {
                 if (action === 'new-chat') {
                     stateManager.bus.publish('session:new');

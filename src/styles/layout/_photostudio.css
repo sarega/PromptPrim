@@ -12,3 +12,248 @@
     width: 100%;
     height: 100%;
 }
+
+#photo-studio-root .photo-studio-workspace {
+    box-sizing: border-box;
+    min-height: 100%;
+    overflow-x: hidden;
+    padding: 12px 14px !important;
+}
+
+#photo-studio-root .photo-studio-layout {
+    min-height: 0;
+    gap: 14px !important;
+}
+
+#photo-studio-root .photo-studio-results-column {
+    min-height: 0;
+}
+
+#photo-studio-root .photo-studio-topbar {
+    justify-content: flex-start !important;
+    margin-bottom: 8px !important;
+    min-height: 0;
+}
+
+#photo-studio-root .photo-studio-title {
+    margin: 0;
+    line-height: 1.15;
+    font-size: 1.05rem !important;
+    letter-spacing: -0.01em;
+}
+
+#photo-studio-root .photo-studio-mobile-panel-toggle {
+    display: none;
+}
+
+#photo-studio-root .photo-studio-mobile-panel-body {
+    display: block;
+}
+
+#photo-studio-root .photo-studio-mobile-panel-body-inner {
+    min-height: 0;
+}
+
+@media (max-width: 768px) {
+    #photo-studio-root .photo-studio-workspace {
+        padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)) 10px !important;
+    }
+
+    #photo-studio-root .photo-studio-topbar {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 12px !important;
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        padding: 8px;
+        border-radius: 12px;
+        border: 1px solid var(--ps-border-500, rgba(148, 163, 184, 0.35));
+        background: var(--ps-bg-800, #1e293b);
+        background: color-mix(in srgb, var(--ps-bg-800, #1e293b) 92%, transparent);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+    }
+
+    #photo-studio-root .photo-studio-title {
+        font-size: 1.1rem !important;
+        line-height: 1.25;
+        word-break: break-word;
+        margin: 0;
+    }
+
+    #photo-studio-root .photo-studio-topbar-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        width: 100%;
+    }
+
+    #photo-studio-root .photo-studio-topbar-btn {
+        width: 100%;
+        min-height: 36px;
+        padding: 8px 10px !important;
+        font-size: 0.8rem;
+        line-height: 1.15;
+    }
+
+    #photo-studio-root .photo-studio-layout {
+        display: flex;
+        flex-direction: column;
+        gap: 12px !important;
+        overflow: visible !important;
+    }
+
+    #photo-studio-root .photo-studio-form-column,
+    #photo-studio-root .photo-studio-results-column {
+        width: 100% !important;
+        min-width: 0;
+    }
+
+    #photo-studio-root .photo-studio-form-panel {
+        padding: 12px !important;
+        gap: 12px !important;
+    }
+
+    #photo-studio-root .photo-studio-form-column .photo-studio-form-panel > h4:first-child,
+    #photo-studio-root .photo-studio-results-column .photo-studio-results > h4:first-child {
+        display: none;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-toggle {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--ps-border-500, rgba(148, 163, 184, 0.35));
+        background: var(--ps-bg-700, #334155);
+        color: var(--ps-text-primary, #ffffff);
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-toggle:focus-visible {
+        outline: 2px solid var(--ps-accent-cyan, #22d3ee);
+        outline-offset: 1px;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-weight: 700;
+        font-size: 0.88rem;
+        line-height: 1.1;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-title .material-symbols-outlined {
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--ps-bg-600, #475569);
+        color: var(--ps-text-200, #e5e7eb);
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-meta {
+        margin-left: auto;
+        color: var(--ps-text-400, #94a3b8);
+        font-size: 0.72rem;
+        white-space: nowrap;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-toggle-icon {
+        font-size: 18px;
+        line-height: 1;
+        color: var(--ps-text-300, #cbd5e1);
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-body {
+        display: grid;
+        grid-template-rows: 1fr;
+        transition: grid-template-rows 180ms ease, opacity 180ms ease;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel.is-collapsed .photo-studio-mobile-panel-body {
+        grid-template-rows: 0fr;
+        opacity: 0.2;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-body-inner {
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #photo-studio-root .photo-studio-form-panel h4 {
+        font-size: 1rem !important;
+    }
+
+    #photo-studio-root .photo-studio-two-col-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    #photo-studio-root .photo-studio-form-panel .tw-flex.tw-gap-2 {
+        flex-wrap: wrap;
+    }
+
+    #photo-studio-root .photo-studio-form-panel .tw-flex.tw-gap-2 > * {
+        min-width: 0;
+    }
+
+    #photo-studio-root .photo-studio-results {
+        margin-top: 0 !important;
+    }
+
+    #photo-studio-root .photo-studio-workspace img.tw-max-h-40 {
+        max-height: 28vh !important;
+    }
+
+    #photo-studio-root .photo-studio-workspace .tw-max-h-\[60vh\] {
+        max-height: 42vh !important;
+    }
+}
+
+@media (max-width: 420px) {
+    #photo-studio-root .photo-studio-topbar-actions {
+        grid-template-columns: 1fr;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-toggle {
+        min-height: 38px;
+        padding: 7px 9px;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-title {
+        font-size: 0.84rem;
+    }
+
+    #photo-studio-root .photo-studio-mobile-panel-meta {
+        font-size: 0.68rem;
+        max-width: 34vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}

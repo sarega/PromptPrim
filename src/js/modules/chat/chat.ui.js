@@ -10,10 +10,99 @@ import { buildPayloadMessages, getFullSystemPrompt } from '../../core/core.api.j
 import * as UserService from '../user/user.service.js'; // <-- Add this import
 import * as ChatHandlers from './chat.handlers.js';
 import { updateAppStatus, refreshMobileStatusMarquee } from '../../core/core.ui.js';
+import { isBookAgentSession } from '../world/world.schema-utils.js';
 
 let latestContextDebuggerSnapshot = null;
 let contextDebuggerSelectedTurn = null;
 const userBubbleExpandedMessageIds = new Set();
+let lastBookAgentBadgeFlashAt = 0;
+
+function ensureBookAgentHeaderBadge() {
+    const chatTitle = document.getElementById('chat-title');
+    if (!chatTitle) return null;
+
+    let badge = document.getElementById('book-agent-header-badge');
+    if (badge) return badge;
+
+    badge = document.createElement('button');
+    badge.type = 'button';
+    badge.id = 'book-agent-header-badge';
+    badge.className = 'book-agent-header-badge hidden';
+    badge.title = 'Open Book > Changes';
+    badge.setAttribute('aria-label', 'Open Book Changes');
+    badge.addEventListener('click', () => {
+        const bookId = String(badge.dataset.bookId || '').trim();
+        if (!bookId) return;
+        stateManager.bus.publish('book:openWorkspace', { bookId, tab: 'changes' });
+    });
+
+    chatTitle.insertAdjacentElement('afterend', badge);
+    return badge;
+}
+
+function getActiveBookAgentBadgeData() {
+    const project = stateManager.getProject();
+    if (!project) return null;
+    const session = (project.chatSessions || []).find(s => s?.id === project.activeSessionId);
+    if (!session || !isBookAgentSession(session)) return null;
+
+    const book = (project.books || []).find((entry) => entry?.id === session.bookAgentBookId || entry?.bookAgentSessionId === session.id);
+    if (!book) return null;
+
+    const pendingChanges = (project.worldChanges || []).filter((change) =>
+        change?.bookId === book.id && String(change.status || 'pending') === 'pending'
+    ).length;
+    const lastViewedAtRaw = Number(project?.worldUiState?.bookChanges?.lastViewedAtByBookId?.[book.id]);
+    const lastViewedAt = Number.isFinite(lastViewedAtRaw) && lastViewedAtRaw > 0 ? Math.round(lastViewedAtRaw) : 0;
+    const newPendingChanges = (project.worldChanges || []).filter((change) =>
+        change?.bookId === book.id
+        && String(change.status || 'pending') === 'pending'
+        && Number(change?.createdAt) > lastViewedAt
+    ).length;
+    const autoEnabled = book?.agentAutomation?.worldProposals?.autoProposeEnabled === true;
+    const cursor = Number.isFinite(Number(book?.agentAutomation?.worldProposals?.lastScannedMessageCount))
+        ? Math.max(0, Math.round(Number(book.agentAutomation.worldProposals.lastScannedMessageCount)))
+        : 0;
+
+    return {
+        bookId: book.id,
+        bookName: book.name || 'Book',
+        pendingChanges,
+        newPendingChanges,
+        autoEnabled,
+        cursor
+    };
+}
+
+function renderBookAgentHeaderBadge() {
+    const badge = ensureBookAgentHeaderBadge();
+    if (!badge) return;
+
+    const data = getActiveBookAgentBadgeData();
+    if (!data) {
+        badge.classList.add('hidden');
+        badge.textContent = '';
+        badge.dataset.bookId = '';
+        badge.classList.remove('has-pending', 'is-auto-on', 'is-flash');
+        return;
+    }
+
+    badge.dataset.bookId = data.bookId;
+    badge.classList.remove('hidden');
+    badge.classList.toggle('has-pending', data.pendingChanges > 0);
+    badge.classList.toggle('has-new', data.newPendingChanges > 0);
+    badge.classList.toggle('is-auto-on', data.autoEnabled);
+
+    const newPart = data.newPendingChanges > 0 ? ` • ${data.newPendingChanges} new` : '';
+    badge.textContent = `Book Agent • ${data.autoEnabled ? 'Auto On' : 'Auto Off'} • ${data.pendingChanges} pending${newPart}`;
+    badge.title = `${data.bookName} • Open Book > Changes • ${data.newPendingChanges} new pending • Scan cursor ${data.cursor}`;
+
+    if (Date.now() - lastBookAgentBadgeFlashAt < 3000) {
+        badge.classList.add('is-flash');
+    } else {
+        badge.classList.remove('is-flash');
+    }
+}
 
 // --- Private Helper Functions (createMessageElement, enhanceCodeBlocks, etc. remain the same) ---
 function enhanceCodeBlocks(messageElement) {
@@ -1094,6 +1183,7 @@ export function renderMessages() {
 
     scrollToBottom();
     refreshContextDebugger();
+    renderBookAgentHeaderBadge();
 }
 
 export function showStreamingTarget(index) {
@@ -1124,10 +1214,12 @@ export function scrollToBottom() {
 export function clearChat() {
     document.getElementById('chatMessages').innerHTML = '';
     updateChatTitle('AI Assistant');
+    renderBookAgentHeaderBadge();
 }
 
 export function updateChatTitle(title) {
     document.getElementById('chat-title').textContent = title || 'AI Assistant';
+    renderBookAgentHeaderBadge();
 }
 
 /**
@@ -1506,12 +1598,24 @@ export function initChatUI() {
 
     // // [REVISED] Subscribe events to the new, comprehensive update function
     stateManager.bus.subscribe('session:loaded', updateStatusMetrics);
+    stateManager.bus.subscribe('session:loaded', renderBookAgentHeaderBadge);
     stateManager.bus.subscribe('entity:selected', updateStatusMetrics);
     stateManager.bus.subscribe('user:settingsUpdated', updateStatusMetrics);
     stateManager.bus.subscribe('user:modelsLoaded', updateStatusMetrics);
+    stateManager.bus.subscribe('world:dataChanged', () => renderBookAgentHeaderBadge());
+    stateManager.bus.subscribe('project:stateChanged', () => renderBookAgentHeaderBadge());
+    stateManager.bus.subscribe('world:bookAgentAutoProposeResult', ({ bookId, createdCount = 0 } = {}) => {
+        const project = stateManager.getProject();
+        const session = project?.chatSessions?.find?.(s => s?.id === project?.activeSessionId);
+        const activeBookId = session?.bookAgentBookId || null;
+        if (!bookId || !activeBookId || activeBookId !== bookId || createdCount <= 0) return;
+        lastBookAgentBadgeFlashAt = Date.now();
+        renderBookAgentHeaderBadge();
+    });
 
     // Initial call to set the metrics correctly on page load.
     updateStatusMetrics();
+    renderBookAgentHeaderBadge();
 
     stateManager.bus.subscribe('ui:renderMessages', renderMessages);
     stateManager.bus.subscribe('ui:renderFilePreviews', ({ files }) => renderFilePreviews(files));

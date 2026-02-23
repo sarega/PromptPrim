@@ -986,6 +986,12 @@ export function buildPayloadMessages(history, targetAgentName, payloadOptions = 
     if (finalSystemPrompt) {
         messages.push({ role: 'system', content: finalSystemPrompt });
     }
+    const surfaceSystemPromptOverride = typeof payloadOptions?.surfaceSystemPromptOverride === 'string'
+        ? payloadOptions.surfaceSystemPromptOverride.trim()
+        : '';
+    if (surfaceSystemPromptOverride) {
+        messages.push({ role: 'system', content: surfaceSystemPromptOverride });
+    }
 
     // --- ส่วนที่ 2: จัดการ Summary Context (ไม่มีการแก้ไข) ---
     const session = project.chatSessions.find(s => s.id === project.activeSessionId);
@@ -1339,9 +1345,10 @@ export async function streamLLMResponse(agent, messages, onChunk) {
     }
 }
 
-export async function callLLM(agent, messages) {
+export async function callLLM(agent, messages, options = {}) {
     console.log("📡 [callLLM] received:", { agent, messages });
-    const { url, headers, body, provider } = constructApiCall(agent, messages, false, false);
+    const forceSystemAgentCall = options?.forceSystemAgentCall === true;
+    const { url, headers, body, provider } = constructApiCall(agent, messages, false, forceSystemAgentCall);
 
     try {
         const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });

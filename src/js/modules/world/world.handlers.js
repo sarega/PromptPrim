@@ -12,13 +12,21 @@ import {
     createWorldChangeId,
     createWorldId,
     ensureProjectBooks,
+    ensureProjectWorldBookOwnership,
     ensureProjectWorldChanges,
     ensureProjectWorlds,
     normalizeBook,
     normalizeChapterSessionMetadata,
+    getBookLinkedSessionDisplayTitle,
+    SESSION_KIND_CHAT,
+    SESSION_KIND_CHAPTER,
+    SESSION_KIND_BOOK_AGENT,
     normalizeWorld,
     normalizeWorldChange,
-    normalizeWorldItem
+    normalizeWorldItem,
+    WORLD_SCOPE_BOOK,
+    WORLD_SCOPE_SHARED,
+    WORLD_SCOPE_UNASSIGNED
 } from './world.schema-utils.js';
 
 const WORLD_PROPOSAL_EXTRACTION_SCHEMA_VERSION = 1;
@@ -32,6 +40,7 @@ function ensureWorldProjectState(project) {
     ensureProjectWorlds(project);
     ensureProjectWorldChanges(project);
     ensureProjectBooks(project);
+    ensureProjectWorldBookOwnership(project);
 }
 
 function publishWorldChanged({ worldId = null, bookId = null, reason = 'update' } = {}) {
@@ -50,6 +59,14 @@ function persistWorldProjectState({ worldId = null, bookId = null, reason = 'upd
     publishWorldChanged({ worldId, bookId, reason });
 }
 
+function refreshActiveChatTitleIfNeeded(project, session) {
+    if (!project || !session) return;
+    if (project.activeSessionId !== session.id) return;
+    stateManager.bus.publish('ui:updateChatTitle', {
+        title: getBookLinkedSessionDisplayTitle(session, { includeAct: true, fallback: session.name || 'AI Assistant' })
+    });
+}
+
 function findWorld(project, worldId) {
     if (!project || !worldId) return null;
     return (project.worlds || []).find(world => world.id === worldId) || null;
@@ -63,6 +80,18 @@ function findBook(project, bookId) {
 function findSession(project, sessionId) {
     if (!project || !sessionId) return null;
     return (project.chatSessions || []).find(session => session.id === sessionId) || null;
+}
+
+function getPreferredAgentPresetNameForBook(project) {
+    if (!project || typeof project !== 'object') return null;
+    const presets = project.agentPresets || {};
+    const presetNames = Object.keys(presets);
+    if (presetNames.length === 0) return null;
+    const activeEntity = project.activeEntity;
+    if (activeEntity?.type === 'agent' && activeEntity?.name && presets[activeEntity.name]) {
+        return activeEntity.name;
+    }
+    return presetNames[0] || null;
 }
 
 function ensureArray(value) {
@@ -89,6 +118,41 @@ function sanitizeBookChapterReferences(project, book) {
         .filter(sessionId => validSessionIds.has(sessionId));
 }
 
+function buildDefaultBookWorldName(project, book) {
+    const baseName = `${String(book?.name || 'Book').trim() || 'Book'} World`;
+    const existingNames = new Set((project?.worlds || []).map(world => String(world?.name || '').trim().toLowerCase()).filter(Boolean));
+    if (!existingNames.has(baseName.toLowerCase())) return baseName;
+    let suffix = 2;
+    let candidate = `${baseName} ${suffix}`;
+    while (existingNames.has(candidate.toLowerCase())) {
+        suffix += 1;
+        candidate = `${baseName} ${suffix}`;
+    }
+    return candidate;
+}
+
+function createBookOwnedWorldInProject(project, book, payload = {}) {
+    if (!project || !book) return null;
+    const now = Date.now();
+    const world = normalizeWorld({
+        id: createWorldId(),
+        name: (payload.name || '').trim() || buildDefaultBookWorldName(project, book),
+        description: payload.description || '',
+        scope: WORLD_SCOPE_BOOK,
+        ownerBookId: book.id,
+        sharedBookIds: [book.id],
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        items: []
+    });
+    project.worlds.unshift(world);
+    book.linkedWorldId = world.id;
+    book.updatedAt = now;
+    project.activeWorldId = world.id;
+    return world;
+}
+
 function nextChapterNumberForBook(project, bookId) {
     const sessions = (project?.chatSessions || []).filter(session => session?.bookId === bookId);
     if (sessions.length === 0) return 1;
@@ -109,6 +173,89 @@ function nextActNumberForBook(project, bookId) {
     return Math.max(1, maxAct || 1);
 }
 
+function ensureBookStructure(book) {
+    if (!book || typeof book !== 'object') return null;
+    if (!book.structure || typeof book.structure !== 'object') {
+        book.structure = { acts: [], chapterSessionIds: [] };
+    }
+    book.structure.acts = ensureArray(book.structure.acts);
+    book.structure.chapterSessionIds = ensureArray(book.structure.chapterSessionIds);
+    return book.structure;
+}
+
+function getOrderedBookChapterSessions(project, book) {
+    if (!project || !book) return [];
+    const sessions = (project.chatSessions || []).filter(session => session && session.bookId === book.id && session.archived !== true);
+    const byId = new Map(sessions.map(session => [session.id, session]));
+    const orderRefs = ensureArray(book?.structure?.chapterSessionIds);
+
+    const ordered = [];
+    const seen = new Set();
+    orderRefs.forEach((sessionId) => {
+        const session = byId.get(sessionId);
+        if (!session || seen.has(sessionId)) return;
+        ordered.push(session);
+        seen.add(sessionId);
+    });
+
+    sessions.forEach((session) => {
+        if (seen.has(session.id)) return;
+        ordered.push(session);
+        seen.add(session.id);
+        if (book?.structure) {
+            uniquePush(book.structure.chapterSessionIds, session.id);
+        }
+    });
+
+    return ordered;
+}
+
+function sortBookSessionsForRenumber(sessions = []) {
+    return [...sessions].sort((a, b) => {
+        const aAct = Number.isFinite(Number(a?.actNumber)) ? Math.round(Number(a.actNumber)) : Number.MAX_SAFE_INTEGER;
+        const bAct = Number.isFinite(Number(b?.actNumber)) ? Math.round(Number(b.actNumber)) : Number.MAX_SAFE_INTEGER;
+        if (aAct !== bAct) return aAct - bAct;
+        return 0;
+    });
+}
+
+function renumberBookChapterSessions(project, book) {
+    if (!project || !book) return [];
+    ensureBookStructure(book);
+    sanitizeBookChapterReferences(project, book);
+    const ordered = sortBookSessionsForRenumber(getOrderedBookChapterSessions(project, book));
+    let chapterCounter = 1;
+    ordered.forEach((session) => {
+        const previousChapterNumber = Number.isFinite(Number(session?.chapterNumber))
+            ? Math.round(Number(session.chapterNumber))
+            : null;
+        const previousAsOfChapter = Number.isFinite(Number(session?.revealScope?.asOfChapter))
+            ? Math.round(Number(session.revealScope.asOfChapter))
+            : null;
+        const shouldFollowChapter = previousAsOfChapter === null || previousAsOfChapter === previousChapterNumber;
+
+        session.chapterNumber = chapterCounter;
+        if (!session.revealScope || typeof session.revealScope !== 'object') {
+            session.revealScope = { asOfChapter: chapterCounter };
+        } else if (shouldFollowChapter) {
+            session.revealScope.asOfChapter = chapterCounter;
+        }
+        session.updatedAt = Date.now();
+        chapterCounter += 1;
+    });
+    return ordered;
+}
+
+function moveSessionIdInArray(list, fromIndex, toIndex) {
+    if (!Array.isArray(list)) return false;
+    if (fromIndex < 0 || fromIndex >= list.length) return false;
+    const boundedTarget = Math.max(0, Math.min(list.length - 1, toIndex));
+    if (boundedTarget === fromIndex) return false;
+    const [item] = list.splice(fromIndex, 1);
+    list.splice(boundedTarget, 0, item);
+    return true;
+}
+
 function resolveTargetSessionId(payload = {}) {
     if (payload.sessionId) return payload.sessionId;
     return getProject()?.activeSessionId || null;
@@ -122,6 +269,102 @@ function cloneJsonish(value) {
     } catch (_error) {
         return Array.isArray(value) ? [...value] : { ...value };
     }
+}
+
+function stableStringify(value) {
+    const seen = new WeakSet();
+    const normalize = (input) => {
+        if (input === null || input === undefined) return input;
+        if (typeof input !== 'object') return input;
+        if (seen.has(input)) return null;
+        seen.add(input);
+        if (Array.isArray(input)) {
+            return input.map(normalize);
+        }
+        return Object.keys(input)
+            .sort()
+            .reduce((acc, key) => {
+                acc[key] = normalize(input[key]);
+                return acc;
+            }, {});
+    };
+    try {
+        return JSON.stringify(normalize(value));
+    } catch (_error) {
+        try {
+            return JSON.stringify(value);
+        } catch (_error2) {
+            return String(value);
+        }
+    }
+}
+
+function normalizeFingerprintText(value, { lowercase = true } = {}) {
+    const text = String(value ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return lowercase ? text.toLowerCase() : text;
+}
+
+function normalizeFingerprintTags(value) {
+    if (!Array.isArray(value)) return [];
+    return [...new Set(
+        value
+            .map(tag => normalizeFingerprintText(tag))
+            .filter(Boolean)
+    )].sort();
+}
+
+function normalizeFingerprintRevealGate(gate) {
+    if (!gate || typeof gate !== 'object') return null;
+    const kind = String(gate.kind || '').trim();
+    if (kind === 'chapter_threshold') {
+        const value = Number(gate.value);
+        return Number.isFinite(value) && Math.round(value) > 0
+            ? { kind, value: Math.round(value) }
+            : null;
+    }
+    if (kind === 'manual_unlock') {
+        return { kind, unlocked: gate.unlocked === true || gate.value === true };
+    }
+    return null;
+}
+
+function normalizeProposalAfterPayloadForFingerprint(afterPayload) {
+    if (!afterPayload || typeof afterPayload !== 'object') return null;
+    return {
+        type: normalizeFingerprintText(afterPayload.type || 'note'),
+        title: normalizeFingerprintText(afterPayload.title || ''),
+        summary: normalizeFingerprintText(afterPayload.summary || ''),
+        tags: normalizeFingerprintTags(afterPayload.tags),
+        visibility: normalizeFingerprintText(afterPayload.visibility || 'revealed'),
+        revealGate: normalizeFingerprintRevealGate(afterPayload.revealGate)
+    };
+}
+
+function buildWorldProposalDedupKey(change = {}) {
+    return stableStringify({
+        worldId: change?.worldId || null,
+        bookId: change?.bookId || null,
+        proposalType: String(change?.proposalType || ''),
+        targetItemId: change?.targetItemId || null,
+        afterPayload: normalizeProposalAfterPayloadForFingerprint(change?.afterPayload ?? null)
+    });
+}
+
+function buildWorldProposalSoftDedupKey(change = {}) {
+    const proposalType = String(change?.proposalType || '').trim();
+    if (proposalType !== 'create_item' && proposalType !== 'edit_item') return null;
+    const afterPayload = normalizeProposalAfterPayloadForFingerprint(change?.afterPayload ?? null);
+    if (!afterPayload?.title) return null;
+    return stableStringify({
+        worldId: change?.worldId || null,
+        bookId: change?.bookId || null,
+        proposalType,
+        targetItemId: change?.targetItemId || null,
+        type: afterPayload.type || 'note',
+        title: afterPayload.title
+    });
 }
 
 function extractTextFromMessageContent(content) {
@@ -186,16 +429,111 @@ function getWorldProposalUtilityAgent(project) {
     return null;
 }
 
+function getBookAgentPresetName(project, book) {
+    if (!project || !book) return null;
+    const configured = String(book?.bookAgentConfig?.agentPresetName || '').trim();
+    if (configured && project.agentPresets?.[configured]) return configured;
+    return null;
+}
+
+function getBookCodexAgentPresetName(project, book) {
+    if (!project || !book) return null;
+    const codexConfig = (book?.codexAgentConfig && typeof book.codexAgentConfig === 'object')
+        ? book.codexAgentConfig
+        : {};
+    if (codexConfig.useBookAgent !== false) {
+        return getBookAgentPresetName(project, book);
+    }
+    const configured = String(codexConfig.agentPresetName || '').trim();
+    if (configured && project.agentPresets?.[configured]) return configured;
+    return null;
+}
+
+function buildBookCodexTaskAgent(project, book, {
+    taskSystemPrompt = '',
+    defaultTemperature = 0.1
+} = {}) {
+    if (!project || !book) return { agent: null, presetName: null, error: 'Book not found.' };
+    const presetName = getBookCodexAgentPresetName(project, book);
+    if (!presetName) {
+        return {
+            agent: null,
+            presetName: null,
+            error: 'Codex Agent is not configured for this Book. Set it in Book > Codex first.'
+        };
+    }
+    const preset = project.agentPresets?.[presetName];
+    if (!preset || !preset.model) {
+        return {
+            agent: null,
+            presetName: null,
+            error: `Selected Codex Agent preset "${presetName}" is missing or has no model.`
+        };
+    }
+
+    const codexOverride = String(book?.codexAgentConfig?.systemPromptOverride || '').trim();
+    const baseSystemPrompt = String(preset.systemPrompt || '').trim();
+    const mergedSystemPrompt = [baseSystemPrompt, codexOverride, String(taskSystemPrompt || '').trim()]
+        .filter(Boolean)
+        .join('\n\n');
+
+    const agent = {
+        ...cloneJsonish(preset),
+        systemPrompt: mergedSystemPrompt || baseSystemPrompt || '',
+        temperature: Number.isFinite(Number(preset.temperature))
+            ? preset.temperature
+            : defaultTemperature
+    };
+
+    return { agent, presetName, error: null };
+}
+
 function getRecentSessionMessagesForWorldProposal(session, maxMessages = 8) {
     const usableMessages = ensureArray(session?.history)
         .filter(message => message && (message.role === 'user' || message.role === 'assistant'))
         .slice(-Math.max(2, maxMessages));
 
+    return formatSessionMessagesForWorldProposal(usableMessages);
+}
+
+function formatSessionMessagesForWorldProposal(messages = [], { startIndex = 0 } = {}) {
+    const usableMessages = ensureArray(messages)
+        .filter(message => message && (message.role === 'user' || message.role === 'assistant'));
+
     return usableMessages.map((message, index) => {
         const speaker = message.speaker || message.role || 'unknown';
         const text = trimTextForPrompt(extractTextFromMessageContent(message.content), 1800) || '(no text)';
-        return `[${index + 1}] ${speaker}\n${text}`;
+        return `[${startIndex + index + 1}] ${speaker}\n${text}`;
     }).join('\n\n');
+}
+
+function getSessionWorldProposalDelta(session, { lastScannedMessageCount = 0, maxMessages = 12 } = {}) {
+    const usableMessages = ensureArray(session?.history)
+        .filter(message => message && (message.role === 'user' || message.role === 'assistant'));
+    const totalUsable = usableMessages.length;
+    const safeLastCount = Number.isFinite(Number(lastScannedMessageCount))
+        ? Math.max(0, Math.round(Number(lastScannedMessageCount)))
+        : 0;
+    const startIndex = Math.min(safeLastCount, totalUsable);
+    const deltaMessages = usableMessages.slice(startIndex);
+
+    if (deltaMessages.length === 0) {
+        return {
+            totalUsable,
+            startIndex,
+            deltaMessages,
+            transcriptText: ''
+        };
+    }
+
+    const cappedDelta = deltaMessages.slice(-Math.max(1, maxMessages));
+    const transcriptStartIndex = totalUsable - cappedDelta.length;
+    return {
+        totalUsable,
+        startIndex,
+        deltaMessages: cappedDelta,
+        transcriptText: formatSessionMessagesForWorldProposal(cappedDelta, { startIndex: transcriptStartIndex })
+    };
 }
 
 function buildWorldProposalExtractionPrompt({ session, world, worldContextPack, latestMessagesText }) {
@@ -406,6 +744,9 @@ export function createWorld(payload = {}) {
         id: createWorldId(),
         name: (payload.name || '').trim() || `World ${project.worlds.length + 1}`,
         description: payload.description || '',
+        scope: payload.scope || (payload.ownerBookId ? WORLD_SCOPE_BOOK : WORLD_SCOPE_UNASSIGNED),
+        ownerBookId: payload.ownerBookId || null,
+        sharedBookIds: Array.isArray(payload.sharedBookIds) ? payload.sharedBookIds : (payload.ownerBookId ? [payload.ownerBookId] : []),
         createdAt: now,
         updatedAt: now,
         version: 1,
@@ -437,6 +778,20 @@ export function updateWorld(payload = {}) {
     }
     if (typeof payload.description === 'string') {
         world.description = payload.description;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'ownerBookId')) {
+        world.ownerBookId = typeof payload.ownerBookId === 'string' && payload.ownerBookId.trim()
+            ? payload.ownerBookId.trim()
+            : null;
+    }
+    if (Array.isArray(payload.sharedBookIds)) {
+        world.sharedBookIds = [...new Set(payload.sharedBookIds.map(id => String(id || '').trim()).filter(Boolean))];
+    }
+    if (typeof payload.scope === 'string') {
+        const nextScope = String(payload.scope).trim().toLowerCase();
+        world.scope = nextScope === WORLD_SCOPE_SHARED
+            ? WORLD_SCOPE_SHARED
+            : (nextScope === WORLD_SCOPE_BOOK ? WORLD_SCOPE_BOOK : WORLD_SCOPE_UNASSIGNED);
     }
     world.updatedAt = Date.now();
 
@@ -515,8 +870,11 @@ export function createBook(payload = {}) {
     const project = getProject();
     if (!project) return null;
     ensureWorldProjectState(project);
+    const preferredAgentPresetName = getPreferredAgentPresetNameForBook(project);
 
-    const requestedWorldId = payload.linkedWorldId || project.activeWorldId || null;
+    const requestedWorldId = Object.prototype.hasOwnProperty.call(payload, 'linkedWorldId')
+        ? (payload.linkedWorldId || null)
+        : (project.activeWorldId || null);
     const validWorldId = requestedWorldId && findWorld(project, requestedWorldId)
         ? requestedWorldId
         : null;
@@ -527,10 +885,52 @@ export function createBook(payload = {}) {
         name: (payload.name || '').trim() || `Book ${project.books.length + 1}`,
         description: payload.description || '',
         linkedWorldId: validWorldId,
+        bookAgentSessionId: payload.bookAgentSessionId || null,
         autoNumberChapters: payload.autoNumberChapters !== false,
         constraints: typeof payload.constraints === 'object' && payload.constraints
             ? cloneJsonish(payload.constraints)
             : {},
+        composerDocs: typeof payload.composerDocs === 'object' && payload.composerDocs
+            ? cloneJsonish(payload.composerDocs)
+            : {
+                treatment: '',
+                synopsis: '',
+                outline: '',
+                sceneBeats: ''
+            },
+        exportProfile: typeof payload.exportProfile === 'object' && payload.exportProfile
+            ? cloneJsonish(payload.exportProfile)
+            : {
+                title: (payload.name || '').trim() || `Book ${project.books.length + 1}`,
+                subtitle: '',
+                author: '',
+                chapterTitleMode: 'number_and_title',
+                includeChapterSummaries: false,
+                sceneBreakMarker: '***',
+                frontMatterNotes: ''
+            },
+        bookAgentConfig: typeof payload.bookAgentConfig === 'object' && payload.bookAgentConfig
+            ? cloneJsonish(payload.bookAgentConfig)
+            : {
+                agentPresetName: preferredAgentPresetName,
+                systemPromptOverride: ''
+            },
+        codexAgentConfig: typeof payload.codexAgentConfig === 'object' && payload.codexAgentConfig
+            ? cloneJsonish(payload.codexAgentConfig)
+            : {
+                useBookAgent: true,
+                agentPresetName: null,
+                systemPromptOverride: ''
+            },
+        agentAutomation: typeof payload.agentAutomation === 'object' && payload.agentAutomation
+            ? cloneJsonish(payload.agentAutomation)
+            : {
+                worldProposals: {
+                    autoProposeEnabled: false,
+                    lastScannedMessageCount: 0,
+                    lastScannedAt: null
+                }
+            },
         structure: {
             acts: [],
             chapterSessionIds: []
@@ -542,6 +942,12 @@ export function createBook(payload = {}) {
     project.books.unshift(book);
     if (payload.setActive !== false || !project.activeBookId) {
         project.activeBookId = book.id;
+    }
+    if (!book.linkedWorldId && payload.createBookWorld !== false) {
+        createBookOwnedWorldInProject(project, book, {
+            name: payload.bookWorldName || '',
+            description: payload.bookWorldDescription || ''
+        });
     }
 
     persistWorldProjectState({ bookId: book.id, reason: 'book:create' });
@@ -571,6 +977,48 @@ export function updateBook(payload = {}) {
             ...cloneJsonish(payload.constraints)
         };
     }
+    if (payload.composerDocs && typeof payload.composerDocs === 'object') {
+        book.composerDocs = {
+            ...(book.composerDocs || {}),
+            ...cloneJsonish(payload.composerDocs)
+        };
+    }
+    if (payload.exportProfile && typeof payload.exportProfile === 'object') {
+        book.exportProfile = {
+            ...(book.exportProfile || {}),
+            ...cloneJsonish(payload.exportProfile)
+        };
+    }
+    if (payload.bookAgentConfig && typeof payload.bookAgentConfig === 'object') {
+        book.bookAgentConfig = {
+            ...(book.bookAgentConfig || {}),
+            ...cloneJsonish(payload.bookAgentConfig)
+        };
+    }
+    if (payload.codexAgentConfig && typeof payload.codexAgentConfig === 'object') {
+        book.codexAgentConfig = {
+            ...(book.codexAgentConfig || {}),
+            ...cloneJsonish(payload.codexAgentConfig)
+        };
+    }
+    if (payload.agentAutomation && typeof payload.agentAutomation === 'object') {
+        book.agentAutomation = {
+            ...(book.agentAutomation || {}),
+            ...cloneJsonish(payload.agentAutomation)
+        };
+        if (payload.agentAutomation.worldProposals && typeof payload.agentAutomation.worldProposals === 'object') {
+            book.agentAutomation.worldProposals = {
+                ...((book.agentAutomation && book.agentAutomation.worldProposals) || {}),
+                ...cloneJsonish(payload.agentAutomation.worldProposals)
+            };
+        }
+        // Re-normalize via normalizeBook-like shape on next ensure cycle, but keep fields sane now.
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'bookAgentSessionId')) {
+        book.bookAgentSessionId = typeof payload.bookAgentSessionId === 'string' && payload.bookAgentSessionId.trim()
+            ? payload.bookAgentSessionId.trim()
+            : null;
+    }
     if (payload.autoNumberChapters !== undefined) {
         book.autoNumberChapters = payload.autoNumberChapters !== false;
     }
@@ -578,6 +1026,65 @@ export function updateBook(payload = {}) {
 
     persistWorldProjectState({ bookId: book.id, reason: 'book:update' });
     return book;
+}
+
+export function upsertBookAct(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+
+    const book = findBook(project, payload.bookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Error');
+        return null;
+    }
+
+    const actNumberRaw = Number(payload.actNumber);
+    const actNumber = Number.isFinite(actNumberRaw) && Math.round(actNumberRaw) > 0
+        ? Math.round(actNumberRaw)
+        : null;
+    if (!actNumber) {
+        showCustomAlert('Valid act number is required.', 'Error');
+        return null;
+    }
+
+    if (!book.structure || typeof book.structure !== 'object') {
+        book.structure = { acts: [], chapterSessionIds: [] };
+    }
+    book.structure.acts = ensureArray(book.structure.acts);
+
+    let act = book.structure.acts.find(entry => Number(entry?.order) === actNumber) || null;
+    if (!act) {
+        act = {
+            id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            order: actNumber,
+            title: `Act ${actNumber}`,
+            summary: ''
+        };
+        book.structure.acts.push(act);
+    }
+
+    if (typeof payload.title === 'string') {
+        const trimmed = payload.title.trim();
+        act.title = trimmed || `Act ${actNumber}`;
+    }
+    if (typeof payload.summary === 'string') {
+        act.summary = payload.summary;
+    }
+    act.order = actNumber;
+
+    book.structure.acts = book.structure.acts
+        .filter(Boolean)
+        .sort((a, b) => {
+            const aOrder = Number.isFinite(Number(a?.order)) ? Math.round(Number(a.order)) : Number.MAX_SAFE_INTEGER;
+            const bOrder = Number.isFinite(Number(b?.order)) ? Math.round(Number(b.order)) : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a?.title || '').localeCompare(String(b?.title || ''));
+        });
+
+    book.updatedAt = Date.now();
+    persistWorldProjectState({ bookId: book.id, reason: 'book:actUpsert' });
+    return act;
 }
 
 export function setActiveBook(payload = {}) {
@@ -630,8 +1137,45 @@ export function linkBookToWorld(payload = {}) {
 
     book.linkedWorldId = nextWorldId;
     book.updatedAt = Date.now();
+    ensureProjectWorldBookOwnership(project);
     persistWorldProjectState({ worldId: nextWorldId, bookId: book.id, reason: 'book:linkWorld' });
     return true;
+}
+
+export function ensureBookWorld(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+
+    const book = findBook(project, payload.bookId || project.activeBookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Book');
+        return null;
+    }
+
+    let world = book.linkedWorldId ? findWorld(project, book.linkedWorldId) : null;
+    if (!world) {
+        world = createBookOwnedWorldInProject(project, book, {
+            name: payload.name || '',
+            description: payload.description || ''
+        });
+        if (!world) {
+            showCustomAlert('Could not create Book World.', 'Book');
+            return null;
+        }
+        ensureProjectWorldBookOwnership(project);
+        persistWorldProjectState({ worldId: world.id, bookId: book.id, reason: 'book:ensureWorld:create' });
+        return world;
+    }
+
+    if (payload.setActive !== false && project.activeWorldId !== world.id) {
+        project.activeWorldId = world.id;
+        ensureProjectWorldBookOwnership(project);
+        persistWorldProjectState({ worldId: world.id, bookId: book.id, reason: 'book:ensureWorld:setActive' });
+        return world;
+    }
+
+    return world;
 }
 
 export function deleteBook(payload = {}) {
@@ -665,6 +1209,13 @@ export function deleteBook(payload = {}) {
                 { validBookIds: new Set() }
             )
         );
+        session.kind = SESSION_KIND_CHAT;
+    });
+    (project.chatSessions || []).forEach(session => {
+        if (session?.bookAgentBookId !== bookId) return;
+        session.bookAgentBookId = null;
+        session.kind = SESSION_KIND_CHAT;
+        session.updatedAt = Date.now();
     });
     project.worldChanges = (project.worldChanges || []).filter(change => change.bookId !== bookId);
     ensureProjectBooks(project);
@@ -770,6 +1321,7 @@ export function assignSessionToBook(payload = {}) {
         actNumber: nextActNumber,
         chapterNumber: nextChapterNumber,
         chapterTitle: payload.chapterTitle ?? session.chapterTitle,
+        chapterSummary: payload.chapterSummary ?? session.chapterSummary,
         chapterStatus: payload.chapterStatus ?? session.chapterStatus,
         revealScope: payload.revealScope ?? session.revealScope,
         writingMode: payload.writingMode ?? session.writingMode
@@ -783,6 +1335,7 @@ export function assignSessionToBook(payload = {}) {
             ...cloneJsonish(payload.revealScope)
         };
     }
+    session.kind = SESSION_KIND_CHAPTER;
     session.updatedAt = Date.now();
 
     (project.books || []).forEach(otherBook => {
@@ -800,6 +1353,8 @@ export function assignSessionToBook(payload = {}) {
     if (book.linkedWorldId) {
         project.activeWorldId = book.linkedWorldId;
     }
+
+    refreshActiveChatTitleIfNeeded(project, session);
 
     persistWorldProjectState({
         worldId: book.linkedWorldId || null,
@@ -837,12 +1392,15 @@ export function detachSessionFromBook(payload = {}) {
             { validBookIds: new Set((project.books || []).map(book => book.id)) }
         )
     );
+    session.kind = SESSION_KIND_CHAT;
     session.updatedAt = Date.now();
 
     if (previousBook?.structure) {
         previousBook.structure.chapterSessionIds = removeValue(ensureArray(previousBook.structure.chapterSessionIds), session.id);
         previousBook.updatedAt = Date.now();
     }
+
+    refreshActiveChatTitleIfNeeded(project, session);
 
     persistWorldProjectState({
         bookId: previousBookId,
@@ -876,6 +1434,7 @@ export function updateChapterMetadata(payload = {}) {
     delete merged.sessionId;
 
     Object.assign(session, normalizeChapterSessionMetadata(merged, { validBookIds }));
+    session.kind = session.bookId ? SESSION_KIND_CHAPTER : SESSION_KIND_CHAT;
     session.updatedAt = Date.now();
 
     if (session.bookId) {
@@ -891,12 +1450,254 @@ export function updateChapterMetadata(payload = {}) {
         }
     }
 
+    refreshActiveChatTitleIfNeeded(project, session);
+
     persistWorldProjectState({
         bookId: session.bookId,
         reason: 'chapter:updateMeta',
         includeSessionListRefresh: true
     });
     return session;
+}
+
+export function moveChapterInBookOrder(payload = {}) {
+    const project = getProject();
+    if (!project) return false;
+    ensureWorldProjectState(project);
+
+    const sessionId = resolveTargetSessionId(payload);
+    const session = findSession(project, sessionId);
+    if (!session?.bookId) {
+        showCustomAlert('This chat is not linked to a Book chapter.', 'Book');
+        return false;
+    }
+    const book = findBook(project, session.bookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Book');
+        return false;
+    }
+    ensureBookStructure(book);
+    sanitizeBookChapterReferences(project, book);
+    uniquePush(book.structure.chapterSessionIds, session.id);
+
+    const direction = String(payload.direction || '').trim().toLowerCase();
+    if (direction !== 'up' && direction !== 'down') return false;
+
+    const ordered = getOrderedBookChapterSessions(project, book);
+    const peers = ordered.filter(item => (item.actNumber || null) === (session.actNumber || null));
+    const peerIndex = peers.findIndex(item => item.id === session.id);
+    if (peerIndex < 0) return false;
+    const targetPeer = direction === 'up' ? peers[peerIndex - 1] : peers[peerIndex + 1];
+    if (!targetPeer) return false;
+
+    const list = book.structure.chapterSessionIds;
+    const fromIndex = list.indexOf(session.id);
+    const targetIndex = list.indexOf(targetPeer.id);
+    if (fromIndex < 0 || targetIndex < 0) return false;
+    moveSessionIdInArray(list, fromIndex, targetIndex);
+
+    if (book.autoNumberChapters !== false && payload.renumber !== false) {
+        renumberBookChapterSessions(project, book);
+    }
+    book.updatedAt = Date.now();
+    refreshActiveChatTitleIfNeeded(project, session);
+    refreshActiveChatTitleIfNeeded(project, targetPeer);
+
+    persistWorldProjectState({
+        bookId: book.id,
+        reason: 'chapter:moveOrder',
+        includeSessionListRefresh: true
+    });
+    return true;
+}
+
+export function reorderChapterInBook(payload = {}) {
+    const project = getProject();
+    if (!project) return false;
+    ensureWorldProjectState(project);
+
+    const sessionId = resolveTargetSessionId(payload);
+    const targetSessionId = String(payload.targetSessionId || '').trim();
+    const position = String(payload.position || 'before').trim().toLowerCase() === 'after' ? 'after' : 'before';
+    if (!sessionId || !targetSessionId || sessionId === targetSessionId) return false;
+
+    const session = findSession(project, sessionId);
+    const targetSession = findSession(project, targetSessionId);
+    if (!session?.bookId || !targetSession?.bookId || session.bookId !== targetSession.bookId) {
+        showCustomAlert('Chapters must be in the same Book to reorder.', 'Book');
+        return false;
+    }
+
+    const book = findBook(project, session.bookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Book');
+        return false;
+    }
+
+    ensureBookStructure(book);
+    sanitizeBookChapterReferences(project, book);
+    uniquePush(book.structure.chapterSessionIds, session.id);
+    uniquePush(book.structure.chapterSessionIds, targetSession.id);
+
+    const list = book.structure.chapterSessionIds;
+    const fromIndex = list.indexOf(session.id);
+    let targetIndex = list.indexOf(targetSession.id);
+    if (fromIndex < 0 || targetIndex < 0) return false;
+
+    const [movedId] = list.splice(fromIndex, 1);
+    if (fromIndex < targetIndex) {
+        targetIndex -= 1;
+    }
+    const insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+    list.splice(Math.max(0, Math.min(list.length, insertIndex)), 0, movedId);
+
+    const adoptTargetAct = payload.adoptTargetAct !== false;
+    if (adoptTargetAct) {
+        session.actNumber = Number.isFinite(Number(targetSession.actNumber))
+            ? Math.round(Number(targetSession.actNumber))
+            : null;
+    }
+
+    session.updatedAt = Date.now();
+    if (book.autoNumberChapters !== false && payload.renumber !== false) {
+        renumberBookChapterSessions(project, book);
+    }
+    book.updatedAt = Date.now();
+
+    refreshActiveChatTitleIfNeeded(project, session);
+    refreshActiveChatTitleIfNeeded(project, targetSession);
+
+    persistWorldProjectState({
+        bookId: book.id,
+        reason: 'chapter:reorderInBook',
+        includeSessionListRefresh: true
+    });
+    return true;
+}
+
+export function moveChapterToAct(payload = {}) {
+    const project = getProject();
+    if (!project) return false;
+    ensureWorldProjectState(project);
+
+    const sessionId = resolveTargetSessionId(payload);
+    const session = findSession(project, sessionId);
+    if (!session?.bookId) {
+        showCustomAlert('This chat is not linked to a Book chapter.', 'Book');
+        return false;
+    }
+    const book = findBook(project, session.bookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Book');
+        return false;
+    }
+    ensureBookStructure(book);
+    sanitizeBookChapterReferences(project, book);
+    uniquePush(book.structure.chapterSessionIds, session.id);
+
+    const actNumber = payload.actNumber === null || payload.actNumber === undefined || String(payload.actNumber).trim?.() === ''
+        ? null
+        : Math.max(1, Math.round(Number(payload.actNumber)));
+    if (payload.actNumber !== null && payload.actNumber !== undefined && !Number.isFinite(Number(payload.actNumber))) {
+        showCustomAlert('Invalid act number.', 'Book');
+        return false;
+    }
+
+    // Ensure act definition exists when moving into a numbered act.
+    if (actNumber) {
+        const existingAct = ensureArray(book.structure.acts).find(act => Number(act?.order) === actNumber);
+        if (!existingAct) {
+            book.structure.acts.push({
+                id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                order: actNumber,
+                title: `Act ${actNumber}`,
+                summary: ''
+            });
+            book.structure.acts.sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0));
+        }
+    }
+
+    session.actNumber = actNumber;
+    session.updatedAt = Date.now();
+
+    const list = book.structure.chapterSessionIds;
+    const currentIndex = list.indexOf(session.id);
+    if (currentIndex >= 0) list.splice(currentIndex, 1);
+
+    const orderedWithoutCurrent = ensureArray(book.structure.chapterSessionIds)
+        .map((id) => findSession(project, id))
+        .filter((item) => item && item.id !== session.id && item.bookId === book.id && item.archived !== true);
+    let insertBeforeSessionId = null;
+    let lastSameActSessionId = null;
+    if (actNumber === null) {
+        // Unassigned acts appear last.
+        insertBeforeSessionId = null;
+    } else {
+        for (const candidate of orderedWithoutCurrent) {
+            const candidateAct = Number.isFinite(Number(candidate?.actNumber)) ? Math.round(Number(candidate.actNumber)) : null;
+            if (candidateAct === actNumber) {
+                lastSameActSessionId = candidate.id;
+                continue;
+            }
+            if (candidateAct !== null && candidateAct > actNumber) {
+                insertBeforeSessionId = candidate.id;
+                break;
+            }
+            if (candidateAct === null) {
+                insertBeforeSessionId = candidate.id;
+                break;
+            }
+        }
+    }
+
+    if (lastSameActSessionId) {
+        const idx = list.indexOf(lastSameActSessionId);
+        list.splice(idx + 1, 0, session.id);
+    } else if (insertBeforeSessionId) {
+        const idx = list.indexOf(insertBeforeSessionId);
+        list.splice(Math.max(0, idx), 0, session.id);
+    } else {
+        list.push(session.id);
+    }
+
+    if (book.autoNumberChapters !== false && payload.renumber !== false) {
+        renumberBookChapterSessions(project, book);
+    }
+    book.updatedAt = Date.now();
+    refreshActiveChatTitleIfNeeded(project, session);
+
+    persistWorldProjectState({
+        bookId: book.id,
+        reason: 'chapter:moveToAct',
+        includeSessionListRefresh: true
+    });
+    return true;
+}
+
+export function renumberBookChapters(payload = {}) {
+    const project = getProject();
+    if (!project) return false;
+    ensureWorldProjectState(project);
+
+    const book = findBook(project, payload.bookId || project.activeBookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Book');
+        return false;
+    }
+
+    renumberBookChapterSessions(project, book);
+    book.updatedAt = Date.now();
+
+    const activeSession = findSession(project, project.activeSessionId);
+    refreshActiveChatTitleIfNeeded(project, activeSession);
+
+    persistWorldProjectState({
+        bookId: book.id,
+        reason: 'book:renumberChapters',
+        includeSessionListRefresh: true
+    });
+    showCustomAlert(`Re-numbered chapters in "${book.name}".`, 'Book');
+    return true;
 }
 
 export function createWorldItemPrompt(payload = {}) {
@@ -1105,6 +1906,21 @@ export function createWorldChangeProposal(payload = {}) {
         updatedAt: now
     });
 
+    const dedupKey = buildWorldProposalDedupKey(proposal);
+    const softDedupKey = buildWorldProposalSoftDedupKey(proposal);
+    const duplicatePending = ensureArray(project.worldChanges).find((existing) => {
+        if (!existing) return false;
+        if (String(existing.status || 'pending') !== 'pending') return false;
+        const existingStrictKey = buildWorldProposalDedupKey(existing);
+        if (existingStrictKey === dedupKey) return true;
+        if (!softDedupKey) return false;
+        const existingSoftKey = buildWorldProposalSoftDedupKey(existing);
+        return Boolean(existingSoftKey) && existingSoftKey === softDedupKey;
+    });
+    if (duplicatePending) {
+        return null;
+    }
+
     project.worldChanges.unshift(proposal);
     persistWorldProjectState({ worldId: proposal.worldId, bookId: proposal.bookId, reason: 'worldChange:create' });
     return proposal;
@@ -1212,30 +2028,36 @@ export async function proposeWorldUpdatesFromCurrentChat(payload = {}) {
     const project = getProject();
     if (!project) return [];
     ensureWorldProjectState(project);
+    const silent = payload.silent === true;
 
     const sessionId = resolveTargetSessionId(payload);
     const session = findSession(project, sessionId);
     if (!session) {
-        showCustomAlert('No active chat session found.', 'World Proposals');
-        return [];
+        if (!silent) showCustomAlert('No active chat session found.', 'World Proposals');
+        return null;
     }
 
     const book = findBook(project, payload.bookId || session.bookId || project.activeBookId);
+    if (!book) {
+        if (!silent) showCustomAlert('World proposals require a Book context. Open this chat from a Book and configure Codex Agent.', 'World Proposals');
+        return null;
+    }
     const world = findWorld(project, payload.worldId || book?.linkedWorldId || project.activeWorldId);
     if (!world) {
-        showCustomAlert('No World is linked to this chat/book yet.', 'World Proposals');
-        return [];
+        if (!silent) showCustomAlert('No World is linked to this chat/book yet.', 'World Proposals');
+        return null;
+    }
+    const { agent: codexAgent, presetName: codexPresetName, error: codexAgentError } = buildBookCodexTaskAgent(project, book);
+    if (!codexAgent?.model) {
+        if (!silent) showCustomAlert(codexAgentError || 'Codex Agent is not configured for this Book.', 'World Proposals');
+        return null;
     }
 
-    const utilityAgent = getWorldProposalUtilityAgent(project);
-    if (!utilityAgent?.model) {
-        showCustomAlert('System Utility Agent model is not configured.', 'World Proposals');
-        return [];
-    }
-
-    const latestMessagesText = getRecentSessionMessagesForWorldProposal(session, Number(payload.maxMessages) || 8);
+    const latestMessagesText = typeof payload.recentMessagesText === 'string'
+        ? payload.recentMessagesText.trim()
+        : getRecentSessionMessagesForWorldProposal(session, Number(payload.maxMessages) || 8);
     if (!latestMessagesText.trim()) {
-        showCustomAlert('Not enough chat content to extract proposals.', 'World Proposals');
+        if (!silent) showCustomAlert('Not enough chat content to extract proposals.', 'World Proposals');
         return [];
     }
 
@@ -1251,10 +2073,12 @@ export async function proposeWorldUpdatesFromCurrentChat(payload = {}) {
         latestMessagesText
     });
 
-    stateManager.bus.publish('status:update', { message: 'Extracting World proposals...', state: 'loading' });
+    if (!silent) {
+        stateManager.bus.publish('status:update', { message: 'Extracting World proposals...', state: 'loading' });
+    }
 
     try {
-        const response = await callLLM(utilityAgent, [{ role: 'user', content: extractionPrompt }]);
+        const response = await callLLM(codexAgent, [{ role: 'user', content: extractionPrompt }]);
         const parsed = safeParseJsonBlock(response?.content || '');
         const proposals = Array.isArray(parsed?.proposals) ? parsed.proposals : [];
         const created = [];
@@ -1303,28 +2127,183 @@ export async function proposeWorldUpdatesFromCurrentChat(payload = {}) {
                         sessionName: session.name || 'Untitled'
                     }
                 ],
-                createdByAgentId: utilityAgent.model
+                createdByAgentId: codexPresetName || codexAgent.model
             });
 
             if (proposal) {
                 created.push(proposal);
+            } else {
+                skipped.push(`#${index + 1}: duplicate pending proposal`);
             }
         });
 
         if (created.length === 0) {
             const skippedHint = skipped.length > 0 ? `\n\nSkipped:\n${skipped.slice(0, 5).join('\n')}` : '';
-            showCustomAlert(`No world proposals were created.${skippedHint}`, 'World Proposals');
+            if (!silent) showCustomAlert(`No world proposals were created.${skippedHint}`, 'World Proposals');
             return [];
         }
 
         const skippedLabel = skipped.length > 0 ? ` (${skipped.length} skipped)` : '';
-        showCustomAlert(`Created ${created.length} world proposal(s)${skippedLabel}. Review them in World > Changes.`, 'World Proposals');
+        if (!silent) showCustomAlert(`Created ${created.length} world proposal(s)${skippedLabel}. Review them in World > Changes.`, 'World Proposals');
         return created;
     } catch (error) {
         console.error('[World] Proposal extraction failed:', error);
-        showCustomAlert(`Failed to extract World proposals: ${error.message || 'Unknown error'}`, 'World Proposals');
-        return [];
+        if (!silent) showCustomAlert(`Failed to extract World proposals: ${error.message || 'Unknown error'}`, 'World Proposals');
+        return null;
     } finally {
-        stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
+        if (!silent) {
+            stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
+        }
     }
+}
+
+function ensureBookAgentWorldProposalAutomation(book) {
+    if (!book || typeof book !== 'object') return null;
+    if (!book.agentAutomation || typeof book.agentAutomation !== 'object') {
+        book.agentAutomation = {};
+    }
+    if (!book.agentAutomation.worldProposals || typeof book.agentAutomation.worldProposals !== 'object') {
+        book.agentAutomation.worldProposals = {};
+    }
+    const wp = book.agentAutomation.worldProposals;
+    wp.autoProposeEnabled = wp.autoProposeEnabled === true;
+    const rawCount = Number(wp.lastScannedMessageCount);
+    wp.lastScannedMessageCount = Number.isFinite(rawCount) ? Math.max(0, Math.round(rawCount)) : 0;
+    wp.lastScannedAt = Number.isFinite(wp.lastScannedAt) ? wp.lastScannedAt : null;
+    return wp;
+}
+
+function resolveBookAgentContextForWorldScan(project, payload = {}) {
+    const book = findBook(project, payload.bookId || project?.activeBookId);
+    if (!book) return { error: 'Book not found.' };
+    const session = findSession(project, payload.sessionId || book.bookAgentSessionId || project?.activeSessionId);
+    if (!session) return { error: 'Book Agent chat not found.' };
+    if (session.kind !== SESSION_KIND_BOOK_AGENT && session.bookAgentBookId !== book.id) {
+        return { error: 'Target chat is not this Book Agent session.' };
+    }
+    const world = findWorld(project, payload.worldId || book.linkedWorldId || project?.activeWorldId);
+    if (!world) return { error: 'No Book World linked yet.' };
+    const automation = ensureBookAgentWorldProposalAutomation(book);
+    return { book, session, world, automation };
+}
+
+export function resetBookAgentProposalScanCursor(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+
+    const { book, automation, error } = resolveBookAgentContextForWorldScan(project, payload);
+    if (error || !book || !automation) {
+        showCustomAlert(error || 'Book Agent context not found.', 'Book Agent');
+        return null;
+    }
+
+    automation.lastScannedMessageCount = 0;
+    automation.lastScannedAt = Date.now();
+    book.updatedAt = Date.now();
+    persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:autoProposeCursorReset' });
+    showCustomAlert('Book Agent scan cursor reset. Next scan will re-read the full conversation window.', 'Book Agent');
+    return { bookId: book.id, lastScannedMessageCount: 0 };
+}
+
+export async function scanBookAgentForWorldProposals(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+    const silent = payload.silent === true;
+
+    const { book, session, world, automation, error } = resolveBookAgentContextForWorldScan(project, payload);
+    if (error || !book || !session || !world || !automation) {
+        if (!silent) showCustomAlert(error || 'Book Agent context not found.', 'World Proposals');
+        return null;
+    }
+
+    if (payload.requireAutoEnabled === true && automation.autoProposeEnabled !== true) {
+        return { proposals: [], skipped: 'auto_disabled' };
+    }
+
+    const useDelta = payload.delta !== false;
+    let transcriptText = '';
+    let cursorAdvanceCount = automation.lastScannedMessageCount;
+
+    if (useDelta) {
+        const delta = getSessionWorldProposalDelta(session, {
+            lastScannedMessageCount: automation.lastScannedMessageCount,
+            maxMessages: Number(payload.maxMessages) || 12
+        });
+        transcriptText = delta.transcriptText || '';
+        cursorAdvanceCount = delta.totalUsable;
+        if (!transcriptText.trim()) {
+            if (payload.advanceCursorOnEmpty === true) {
+                automation.lastScannedMessageCount = cursorAdvanceCount;
+                automation.lastScannedAt = Date.now();
+                book.updatedAt = Date.now();
+                persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:autoProposeNoDelta' });
+            }
+            if (!silent) {
+                showCustomAlert(
+                    'No new Book Agent messages since the last scan. Continue chatting or use Reset Cursor to scan older messages again.',
+                    'World Proposals'
+                );
+            }
+            return { proposals: [], skipped: 'no_delta' };
+        }
+    }
+
+    const created = await proposeWorldUpdatesFromCurrentChat({
+        sessionId: session.id,
+        bookId: book.id,
+        worldId: world.id,
+        recentMessagesText: transcriptText || undefined,
+        maxMessages: Number(payload.maxMessages) || 8,
+        maxWorldItems: Number(payload.maxWorldItems) || 14,
+        silent
+    });
+
+    if (created === null) {
+        return null;
+    }
+
+    if (useDelta && payload.advanceCursor !== false) {
+        automation.lastScannedMessageCount = cursorAdvanceCount;
+        automation.lastScannedAt = Date.now();
+        book.updatedAt = Date.now();
+        persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:autoProposeScan' });
+    }
+
+    const createdCount = Array.isArray(created) ? created.length : 0;
+    stateManager.bus.publish('world:bookAgentAutoProposeResult', {
+        bookId: book.id,
+        sessionId: session.id,
+        createdCount,
+        usedDelta: useDelta,
+        autoTriggered: payload.requireAutoEnabled === true
+    });
+
+    return {
+        proposals: Array.isArray(created) ? created : [],
+        scannedMessageCount: cursorAdvanceCount,
+        usedDelta: useDelta
+    };
+}
+
+export async function handleBookAgentAssistantTurnCompleted(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+    const session = findSession(project, payload.sessionId || project.activeSessionId);
+    if (!session) return null;
+    if (session.kind !== SESSION_KIND_BOOK_AGENT && !session.bookAgentBookId) return null;
+    const bookId = session.bookAgentBookId || payload.bookId || null;
+    if (!bookId) return null;
+
+    return scanBookAgentForWorldProposals({
+        bookId,
+        sessionId: session.id,
+        delta: true,
+        requireAutoEnabled: true,
+        silent: true,
+        maxMessages: 12,
+        maxWorldItems: 16
+    });
 }

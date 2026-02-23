@@ -12,6 +12,7 @@ import * as GroupChat from './chat.group.js';
 import * as UserService from '../user/user.service.js'; 
 import { calculateCost } from '../../core/core.api.js';
 import { LiveMarkdownRenderer, generateUniqueMessageId } from '../../core/core.utils.js';
+import { getBookLinkedSessionDisplayTitle, isBookAgentSession, isChapterSession, isRegularChatSession } from '../world/world.schema-utils.js';
 
 export let attachedFiles = [];
 let turndownService = null; // [FIX 1] Declare here, but don't assign yet.
@@ -320,7 +321,7 @@ export async function sendMessage() {
             throw new Error('Cannot add malformed message to chat history');
         }
 
-        if (session.name === 'New Chat' && session.history.length === 1) {
+        if (session.name === 'New Chat' && session.history.length === 1 && isRegularChatSession(session)) {
             triggerAutoNameGeneration(session);
         }
 
@@ -406,6 +407,7 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
     
     const placeholderElement = document.querySelector(`.message-turn-wrapper[data-message-id='${placeholderMessage.id}']`);
     let renderer;
+    let completedAssistantTurnPayload = null;
 
     if (!placeholderElement) {
         console.error("Could not find placeholderElement in the DOM immediately after render.");
@@ -424,6 +426,18 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
 
     try {
         const payloadMeta = { __collect: true };
+        if (isBookAgentSession(session)) {
+            const book = (project.books || []).find(item => item?.id === (session.bookAgentBookId || session.bookId)) || null;
+            const bookAgentPromptOverride = typeof book?.bookAgentConfig?.systemPromptOverride === 'string'
+                ? book.bookAgentConfig.systemPromptOverride.trim()
+                : '';
+            if (bookAgentPromptOverride) {
+                payloadMeta.surfaceSystemPromptOverride = [
+                    'Book Agent Override (Book-specific instruction):',
+                    bookAgentPromptOverride
+                ].join('\n');
+            }
+        }
         const messagesForLLM = buildPayloadMessages(session.history.slice(0, -1), agentName, payloadMeta);
         const response = await streamLLMResponse(agent, messagesForLLM, renderer.streamChunk);
         const calculatedCost = calculateCost(agent.model, response.usage);
@@ -470,6 +484,12 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
         // [CRITICAL FIX] ไม่เรียก renderMessages() อีกต่อไป
         // แต่จะเรียกฟังก์ชันใหม่ที่ทำงานกับ Bubble สุดท้ายเท่านั้น
         ChatUI.finalizeMessageBubble(finalMessage);
+        completedAssistantTurnPayload = {
+            sessionId: session.id,
+            messageId: finalMessage.id || null,
+            speaker: agentName,
+            timestamp: finalMessage.timestamp || Date.now()
+        };
 
     } catch (error) {
         // [DEFINITIVE FIX] This block now properly handles any error.
@@ -510,6 +530,9 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
         stateManager.bus.publish('ui:toggleLoading', { isLoading: false });
         await dbRequest(SESSIONS_STORE_NAME, 'readwrite', 'put', session);
         stateManager.bus.publish('status:update', { message: 'Ready', state: 'connected' });
+        if (completedAssistantTurnPayload) {
+            stateManager.bus.publish('chat:assistantTurnCompleted', completedAssistantTurnPayload);
+        }
     }
 }
 
@@ -1030,6 +1053,9 @@ export function deleteMessage({ index }) {
  * @param {object} session - The session object to be renamed.
  */
 async function triggerAutoNameGeneration(session) {
+    if (!isRegularChatSession(session)) {
+        return;
+    }
     // A slight delay to ensure the main chat UI updates first
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -1067,6 +1093,11 @@ async function triggerAutoNameGeneration(session) {
         }
         
         const newName = `${newTitleData.emoji || '💬'} ${newTitleData.title || 'New Chat'}`;
+        if (!isRegularChatSession(session)) {
+            // Safety guard in case chapter linkage happens during async title generation.
+            stateManager.bus.publish('ui:updateChatTitle', { title: getBookLinkedSessionDisplayTitle(session, { includeAct: true }) });
+            return;
+        }
         stateManager.bus.publish('session:autoRename', { sessionId: session.id, newName: newName });
 
     } catch (e) {

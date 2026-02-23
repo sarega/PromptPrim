@@ -1769,3 +1769,113 @@ body.dark-mode .ProseMirror [data-type="suggestion-chunk"][data-status="pending"
   background-color: rgba(180, 145, 0, 0.4);
   border-color: #a16207;
 }
+
+/* Inline Agent Inspector (Composer) */
+.inline-agent-inspector {
+  border: 1px solid var(--border-color);
+  background: var(--bg-workspace-chat);
+  color: var(--text-dark);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.inline-agent-inspector__header {
+  background: #edf2f7;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-dark);
+}
+
+.inline-agent-inspector__title {
+  margin: 0;
+}
+
+.inline-agent-inspector__title-icon {
+  color: #0891b2;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.inline-agent-inspector__close-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #64748b;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.inline-agent-inspector__close-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.inline-agent-inspector__section:last-child {
+  margin-bottom: 0 !important;
+}
+
+.inline-agent-inspector__label {
+  color: #a16207;
+}
+
+.inline-agent-inspector__prompt {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.10);
+  color: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 12px;
+  font-family: var(--main-font-family), system-ui, sans-serif;
+  letter-spacing: normal;
+  tab-size: 2;
+  max-height: 9.25rem;
+  overflow-y: auto;
+}
+
+body.dark-mode .inline-agent-inspector {
+  border-color: #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.55);
+}
+
+body.dark-mode .inline-agent-inspector__header {
+  background: #334155;
+  border-bottom-color: #475569;
+  color: #f1f5f9;
+}
+
+body.dark-mode .inline-agent-inspector__title-icon {
+  color: #22d3ee;
+}
+
+body.dark-mode .inline-agent-inspector__close-btn {
+  color: #cbd5e1;
+}
+
+body.dark-mode .inline-agent-inspector__close-btn:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+body.dark-mode .inline-agent-inspector__label {
+  color: #facc15;
+}
+
+body.dark-mode .inline-agent-inspector__prompt {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+}

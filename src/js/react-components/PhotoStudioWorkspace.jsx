@@ -952,7 +952,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
     
     // --- Final JSX Return ---
     return (
-        <form onSubmit={handleSubmit} className="tw-bg-slate-700 tw-p-4 tw-rounded-lg tw-shadow-lg tw-flex tw-flex-col tw-gap-4">
+        <form onSubmit={handleSubmit} className="photo-studio-form-panel tw-bg-slate-700 tw-p-4 tw-rounded-lg tw-shadow-lg tw-flex tw-flex-col tw-gap-4">
             <h4 className="tw-text-white tw-font-bold tw-text-lg">Generation Settings</h4>
             
             {/* 1. Model Selector หลัก */}
@@ -993,7 +993,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             {renderSpecificInputs}
 
             {/* 4. Aspect Ratio & Resolution */}
-            <div className="tw-grid tw-grid-cols-2 tw-gap-4">
+            <div className="photo-studio-two-col-grid tw-grid tw-grid-cols-2 tw-gap-4">
                 {/* For I2V and V2V models, skip aspect ratio selection */}
                 {!isI2V && !isV2V && renderAspectRatioOptions}
                 {renderResolutionOptions}
@@ -1002,7 +1002,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             {/* 5. Duration & Seed */}
             {/* Hide duration and seed for audio and image models */}
             {!isAudio && !isImage && (
-                <div className="tw-grid tw-grid-cols-2 tw-gap-4">
+                <div className="photo-studio-two-col-grid tw-grid tw-grid-cols-2 tw-gap-4">
                     {renderDurationOptions}
                     {/* Wan 2.6 models don't support seed parameter */}
                     {!isWan26 && (
@@ -1054,7 +1054,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
 
 const ResultGallery = ({ results, onDelete, onConvertWav, onGenerateMidi }) => {
     return (
-        <div className="tw-mt-6">
+        <div className="photo-studio-results tw-mt-6">
             <h4 className="tw-text-white tw-font-bold tw-text-lg tw-mb-3">Results ({results.length})</h4>
             <div className="tw-flex tw-flex-col tw-gap-4 tw-p-2">
                 {results.map((result) => (
@@ -1184,7 +1184,7 @@ const ResultGallery = ({ results, onDelete, onConvertWav, onGenerateMidi }) => {
                     </div>
                 ))}
                 {results.length === 0 && (
-                    <p className="tw-text-gray-400 tw-text-center">Start generating images or videos!</p>
+                    <p className="tw-text-gray-400 tw-text-center">Start generating images, videos, or audio!</p>
                 )}
             </div>
         </div>
@@ -1196,9 +1196,37 @@ export default function PhotoStudioWorkspace({ agentName, models, onGenerate }) 
     const [results, setResults] = useState([]);
     const [status, setStatus] = useState({ status: 'ready', message: 'Ready' });
     const [progress, setProgress] = useState({ taskId: null, percent: 0, label: 'Idle', attempt: 0, max: 0 });
+    const [isMobileViewport, setIsMobileViewport] = useState(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+        return window.matchMedia('(max-width: 768px)').matches;
+    });
+    const [mobilePanels, setMobilePanels] = useState({ settings: true, results: true });
     // Refs to persist form and pending tasks for session storage
     const lastFormRef = React.useRef(null);
     const pendingRef = React.useRef([]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+        const media = window.matchMedia('(max-width: 768px)');
+        const applyMatch = (e) => {
+            setIsMobileViewport(!!e.matches);
+        };
+        applyMatch(media);
+        if (typeof media.addEventListener === 'function') {
+            media.addEventListener('change', applyMatch);
+            return () => media.removeEventListener('change', applyMatch);
+        }
+        media.addListener(applyMatch);
+        return () => media.removeListener(applyMatch);
+    }, []);
+
+    const toggleMobilePanel = useCallback((panelKey) => {
+        setMobilePanels((prev) => ({ ...prev, [panelKey]: !prev[panelKey] }));
+    }, []);
+
+    const openMobilePanel = useCallback((panelKey) => {
+        setMobilePanels((prev) => (prev[panelKey] ? prev : { ...prev, [panelKey]: true }));
+    }, []);
 
     // Wrap onGenerate to capture last form information
     const handleGenerate = useCallback((params) => {
@@ -1523,63 +1551,85 @@ export default function PhotoStudioWorkspace({ agentName, models, onGenerate }) 
         return () => { isMounted = false; };
     }, []);
 
-    // Navigate back to chat/composer using the header buttons.  These handlers
-    // trigger the existing navigation logic by programmatically clicking the
-    // corresponding header button.  Without these, the full‑screen studio
-    // overlay would make it impossible to switch back.
-    const handleBackToChat = useCallback(() => {
-        const btn = document.getElementById('switch-to-chat-btn');
-        if (btn) btn.click();
-    }, []);
-    const handleBackToComposer = useCallback(() => {
-        const btn = document.getElementById('switch-to-composer-btn');
-        if (btn) btn.click();
-    }, []);
+    useEffect(() => {
+        if (!isMobileViewport) return;
+        if (status.status === 'loading' || results.length > 0) {
+            openMobilePanel('results');
+        }
+    }, [isMobileViewport, status.status, results.length, openMobilePanel]);
 
     // Render UI
     return (
-        <div className="studio-content photo-studio-workspace tw-flex tw-flex-col tw-h-full tw-p-6 tw-bg-slate-800 tw-text-white tw-overflow-y-auto">
-            {/* Header with back buttons and agent name */}
-            <div className="tw-flex tw-justify-between tw-items-center tw-mb-4">
-                <h2 className="tw-text-2xl tw-font-extrabold tw-text-cyan-400">{agentName}</h2>
-                <div className="tw-flex tw-gap-2">
-                    <button
-                        type="button"
-                        onClick={handleBackToChat}
-                        className="tw-bg-slate-700 tw-text-gray-200 tw-rounded-md tw-px-3 tw-py-1 hover:tw-bg-slate-600"
-                    >
-                        ← Back to Chat
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleBackToComposer}
-                        className="tw-bg-slate-700 tw-text-gray-200 tw-rounded-md tw-px-3 tw-py-1 hover:tw-bg-slate-600"
-                    >
-                        ← Back to Composer
-                    </button>
-                </div>
+        <div className="studio-content photo-studio-workspace photo-studio-shell tw-flex tw-flex-col tw-h-full tw-p-4 tw-bg-slate-800 tw-text-white tw-overflow-y-auto">
+            {/* Workspace title (app-level header handles navigation) */}
+            <div className="photo-studio-topbar tw-flex tw-items-center tw-mb-2">
+                <h2 className="photo-studio-title tw-text-xl tw-font-extrabold tw-text-cyan-400">{agentName}</h2>
             </div>
-            <div className="tw-flex tw-gap-6 tw-flex-grow tw-overflow-hidden">
-                <div className="tw-w-full lg:tw-w-1/3 tw-flex-shrink-0">
-                    <StudioForm models={models} onSubmit={handleGenerate} status={status} />
-                    {/* Progress Meter */}
-                    {status.status !== 'ready' && (
-                        <div className="tw-mt-4 tw-bg-slate-700 tw-rounded-lg tw-p-3">
-                            <div className="tw-flex tw-justify-between tw-text-xs tw-text-gray-300">
-                                <span>{progress.label}</span>
-                                <span>{progress.attempt}/{progress.max || '∞'}</span>
+            <div className="photo-studio-layout tw-flex tw-gap-6 tw-flex-grow tw-overflow-hidden">
+                <div className="photo-studio-form-column tw-w-full lg:tw-w-1/3 tw-flex-shrink-0">
+                    <section className={`photo-studio-mobile-panel ${isMobileViewport && !mobilePanels.settings ? 'is-collapsed' : 'is-open'}`}>
+                        <button
+                            type="button"
+                            className="photo-studio-mobile-panel-toggle"
+                            aria-expanded={!isMobileViewport || mobilePanels.settings}
+                            onClick={() => toggleMobilePanel('settings')}
+                        >
+                            <span className="photo-studio-mobile-panel-title">
+                                <span className="material-symbols-outlined">tune</span>
+                                Settings
+                            </span>
+                            <span className="photo-studio-mobile-panel-toggle-icon material-symbols-outlined">
+                                {mobilePanels.settings ? 'expand_less' : 'expand_more'}
+                            </span>
+                        </button>
+                        <div className="photo-studio-mobile-panel-body">
+                            <div className="photo-studio-mobile-panel-body-inner">
+                                <StudioForm models={models} onSubmit={handleGenerate} status={status} />
+                                {/* Progress Meter */}
+                                {status.status !== 'ready' && (
+                                    <div className="photo-studio-progress-card tw-mt-4 tw-bg-slate-700 tw-rounded-lg tw-p-3">
+                                        <div className="tw-flex tw-justify-between tw-text-xs tw-text-gray-300">
+                                            <span>{progress.label}</span>
+                                            <span>{progress.attempt}/{progress.max || '∞'}</span>
+                                        </div>
+                                        <progress className="tw-w-full tw-mt-2" max="100" value={progress.percent || 5}></progress>
+                                    </div>
+                                )}
                             </div>
-                            <progress className="tw-w-full tw-mt-2" max="100" value={progress.percent || 5}></progress>
                         </div>
-                    )}
+                    </section>
                 </div>
-                <div className="tw-w-full lg:tw-w-2/3">
-                    <ResultGallery
-                        results={results}
-                        onDelete={handleDelete}
-                        onConvertWav={handleConvertToWav}
-                        onGenerateMidi={handleGenerateMidi}
-                    />
+                <div className="photo-studio-results-column tw-w-full lg:tw-w-2/3">
+                    <section className={`photo-studio-mobile-panel ${isMobileViewport && !mobilePanels.results ? 'is-collapsed' : 'is-open'}`}>
+                        <button
+                            type="button"
+                            className="photo-studio-mobile-panel-toggle"
+                            aria-expanded={!isMobileViewport || mobilePanels.results}
+                            onClick={() => toggleMobilePanel('results')}
+                        >
+                            <span className="photo-studio-mobile-panel-title">
+                                <span className="material-symbols-outlined">view_comfy</span>
+                                Results
+                                <span className="photo-studio-mobile-panel-count">{results.length}</span>
+                            </span>
+                            <span className="photo-studio-mobile-panel-meta">
+                                {status.status === 'loading' ? 'Generating' : (status.status === 'error' ? 'Error' : '')}
+                            </span>
+                            <span className="photo-studio-mobile-panel-toggle-icon material-symbols-outlined">
+                                {mobilePanels.results ? 'expand_less' : 'expand_more'}
+                            </span>
+                        </button>
+                        <div className="photo-studio-mobile-panel-body">
+                            <div className="photo-studio-mobile-panel-body-inner">
+                                <ResultGallery
+                                    results={results}
+                                    onDelete={handleDelete}
+                                    onConvertWav={handleConvertToWav}
+                                    onGenerateMidi={handleGenerateMidi}
+                                />
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>

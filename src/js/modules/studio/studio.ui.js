@@ -170,7 +170,7 @@ function updateStudioVisibilityMenuState(sectionVisibility) {
     const menu = document.getElementById('studio-visibility-menu');
     if (!menu) return;
 
-    const allSectionKeys = ['search', 'worldPeek', 'agentPresets', 'agentGroups', 'commandMemories', 'knowledgeFiles'];
+    const allSectionKeys = ['search', 'agentPresets', 'worldPeek', 'agentGroups', 'commandMemories', 'knowledgeFiles'];
     const areAllVisible = allSectionKeys.every(key => sectionVisibility?.[key] !== false);
     menu.querySelectorAll('.studio-visibility-option[data-visibility-mode]').forEach(option => {
         const mode = option.dataset.visibilityMode || '';
@@ -424,11 +424,11 @@ function renderStudioContent() {
     );
 
     if (shouldRenderAnyAssetSection) {
-        if (sectionVisibility.worldPeek) {
-            renderWorldPeekSection(assetsContainer, project);
-        }
         if (sectionVisibility.agentPresets) {
             renderAgentPresets(assetsContainer, filteredAgents);
+        }
+        if (sectionVisibility.worldPeek) {
+            renderWorldPeekSection(assetsContainer, project);
         }
         if (sectionVisibility.agentGroups) {
             renderAgentGroups(assetsContainer);

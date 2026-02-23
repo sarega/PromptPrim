@@ -25,7 +25,13 @@ import {
 } from './session.folder-utils.js';
 import {
     ensureProjectBooks,
-    normalizeChapterSessionMetadata
+    normalizeChapterSessionMetadata,
+    getBookLinkedSessionDisplayTitle,
+    isChapterSession,
+    isRegularChatSession,
+    normalizeSessionKind,
+    SESSION_KIND_CHAPTER,
+    SESSION_KIND_BOOK_AGENT
 } from '../world/world.schema-utils.js';
 
 
@@ -239,7 +245,11 @@ export function createNewChatSession(payload = {}) {
         return;
     }
 
-    const resolvedFolderId = resolveDefaultFolderId(project, payload?.folderId || null);
+    const sessionKind = normalizeSessionKind(payload);
+    const isFolderlessSession = sessionKind === SESSION_KIND_CHAPTER || sessionKind === SESSION_KIND_BOOK_AGENT;
+    const resolvedFolderId = isFolderlessSession
+        ? null
+        : resolveDefaultFolderId(project, payload?.folderId || null);
     const contextMode = normalizeSessionContextMode(payload?.contextMode || DEFAULT_SESSION_CONTEXT_MODE);
     const ragSettings = normalizeSessionRagSettings({
         ...DEFAULT_SESSION_RAG_SETTINGS,
@@ -261,6 +271,8 @@ export function createNewChatSession(payload = {}) {
         updatedAt: Date.now(),
         pinned: false,
         archived: false,
+        kind: sessionKind,
+        bookAgentBookId: sessionKind === SESSION_KIND_BOOK_AGENT ? (payload.bookAgentBookId || null) : null,
         folderId: resolvedFolderId,
         sortIndex: getTopSortIndexForGroup(project, resolvedFolderId),
         contextMode,
@@ -283,7 +295,7 @@ export function createNewChatSession(payload = {}) {
 
     project.chatSessions.unshift(newSession);
     project.activeSessionId = newSession.id;
-    project.activeFolderId = resolvedFolderId || null;
+    project.activeFolderId = isFolderlessSession ? null : (resolvedFolderId || null);
 
     // [FIX] เปลี่ยนจากการสั่ง save มาเป็นการ set state ใน memory เท่านั้น
     stateManager.setProject(project);
@@ -337,6 +349,7 @@ export function loadChatSession(sessionId) {
             validBookIds: new Set((project.books || []).map(book => book.id))
         })
     );
+    session.kind = normalizeSessionKind(session);
     if (!session.folderId && session.ragSettings.scopeSource === 'folder') {
         session.ragSettings.scopeSource = 'session';
     }
@@ -753,6 +766,16 @@ export async function deleteChatSession({ sessionId }) {
 
     // 1. ลบออกจาก State ใน Memory
     project.chatSessions.splice(sessionIndex, 1);
+    ensureProjectBooks(project);
+    (project.books || []).forEach((book) => {
+        if (!book?.structure) return;
+        const refs = Array.isArray(book.structure.chapterSessionIds) ? book.structure.chapterSessionIds : [];
+        const nextRefs = refs.filter(id => id !== sessionId);
+        if (nextRefs.length !== refs.length) {
+            book.structure.chapterSessionIds = nextRefs;
+            book.updatedAt = Date.now();
+        }
+    });
     normalizeGroupOrdering(project, deletedSession?.folderId || null);
 
     // 2. [CRITICAL FIX] สั่งลบออกจาก IndexedDB โดยตรง
@@ -1009,8 +1032,21 @@ export function handleAutoRename({ sessionId, newName }) {
     if (!project) return;
 
     const session = project.chatSessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    // Book-linked chats should keep chapter-driven titles in UI.
+    if (!isRegularChatSession(session)) {
+        if (project.activeSessionId === sessionId) {
+            stateManager.bus.publish('ui:updateChatTitle', {
+                title: getBookLinkedSessionDisplayTitle(session, { includeAct: true })
+            });
+        }
+        stateManager.bus.publish('session:listChanged');
+        return;
+    }
+
     // ตรวจสอบเพิ่มเติมว่าชื่อยังเป็น Default อยู่หรือไม่ ก่อนจะเปลี่ยน
-    if (!session || session.name !== 'New Chat') return;
+    if (session.name !== 'New Chat') return;
 
     session.name = newName;
     session.updatedAt = Date.now();
