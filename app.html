@@ -33,11 +33,11 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/app-PImx0_7Y.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-Dyp81Bwh.js">
+  <script type="module" crossorigin src="/PromptPrim/assets/app-DqYIR-X9.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-DOhZkw3F.js">
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/client-CZ2o165L.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-BHzEODEc.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-BPe8W1jW.css">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-DHQuCymH.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-BvrTPUF9.css">
   <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-Bb7ErUO1.css">
 </head>
 <body class="admin-page">
@@ -255,9 +255,6 @@
                                         <p id="world-workspace-meta">Open a project to start building worlds.</p>
                                     </div>
                                     <div class="world-workspace-header-actions">
-                                        <button type="button" class="btn btn-small" data-action="worldui:worldCreateStart">New World</button>
-                                        <button type="button" class="btn btn-small btn-secondary" data-action="worldui:itemCreateStart">New Item</button>
-                                        <button type="button" class="btn btn-small btn-secondary" data-action="worldui:bookCreateStart">New Book</button>
                                         <button type="button" class="btn btn-small btn-secondary" data-action="world:proposeFromCurrentChat">Propose Updates</button>
                                     </div>
                                 </div>
@@ -290,12 +287,12 @@
                                         <span>Search & Sorting</span>
                                         <span class="studio-visibility-check" aria-hidden="true">✓</span>
                                     </a>
-                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="worldPeek">
-                                        <span>World Peek</span>
-                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
-                                    </a>
                                     <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="agentPresets">
                                         <span>Agent Presets</span>
+                                        <span class="studio-visibility-check" aria-hidden="true">✓</span>
+                                    </a>
+                                    <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="worldPeek">
+                                        <span>World Peek</span>
                                         <span class="studio-visibility-check" aria-hidden="true">✓</span>
                                     </a>
                                     <a href="#" class="studio-visibility-option" data-action="studio:toggleSectionVisibility" data-section-key="agentGroups">
@@ -916,19 +913,19 @@
             </div>
         </div>
     </div>    <div id="save-project-modal" class="modal-overlay">
-        <div class="modal-box"><h3>บันทึกโปรเจกต์</h3>
+        <div class="modal-box"><h3>Save Project</h3>
             <div class="modal-body">
-                <div class="form-group"><label for="project-name-input">ชื่อโปรเจกต์</label><input type="text" id="project-name-input" placeholder="My Awesome Project"></div>
+                <div class="form-group"><label for="project-name-input">Project Name</label><input type="text" id="project-name-input" placeholder="My Awesome Project"></div>
             </div>
-            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn">บันทึก</button></div>
+            <div class="modal-actions"><button class="btn btn-secondary">Cancel</button><button class="btn">Save</button></div>
         </div>
     </div>
     <div id="unsaved-changes-modal" class="modal-overlay">
-        <div class="modal-box"><h3>มีข้อมูลที่ยังไม่ได้บันทึก</h3>
+        <div class="modal-box"><h3>Unsaved Changes</h3>
             <div class="modal-body">
-                <p>โปรเจกต์ปัจจุบันของคุณมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก คุณต้องการทำอะไร?</p>
+                <p>Your current project has unsaved changes. What would you like to do?</p>
             </div>
-            <div class="modal-actions"><button class="btn btn-secondary">ยกเลิก</button><button class="btn btn-danger">ไม่บันทึก</button><button class="btn">บันทึกโปรเจกต์</button></div>
+            <div class="modal-actions"><button class="btn btn-secondary">Cancel</button><button class="btn btn-danger">Don't Save</button><button class="btn">Save Project</button></div>
         </div>
     </div>
     <div id="context-inspector-modal" class="modal-overlay">
