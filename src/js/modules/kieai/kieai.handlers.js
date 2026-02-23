@@ -21,6 +21,8 @@ export const KieAI_MODELS = [
     { id: 'video/v1-lite-text-to-video',  name: 'Seedance V1 Lite T2V', type: 'video', modelApiId: 'bytedance/v1-lite-text-to-video' },
     { id: 'video/v1-pro-image-to-video',  name: 'Seedance V1 Pro I2V',  type: 'video', modelApiId: 'bytedance/v1-pro-image-to-video' },
     { id: 'video/v1-lite-image-to-video', name: 'Seedance V1 Lite I2V', type: 'video', modelApiId: 'bytedance/v1-lite-image-to-video' },
+    { id: 'video/seedance-1-5-pro-text-to-video',  name: 'Seedance 1.5 Pro T2V', type: 'video', modelApiId: 'bytedance/seedance-1.5-pro' },
+    { id: 'video/seedance-1-5-pro-image-to-video', name: 'Seedance 1.5 Pro I2V', type: 'video', modelApiId: 'bytedance/seedance-1.5-pro' },
 
     
     // ==== Seedream (Image) Models ====
@@ -92,6 +94,15 @@ export const MODEL_REGISTRY = {
         defaults: { duration: 5, resolution: '720p', camera_fixed: false, enable_safety_checker: true, seed: -1 },
         limits:   { duration: [5, 10], resolution: ['480p', '720p', '1080p'] },
         requires: ['image_url'],
+    },
+    'bytedance/seedance-1.5-pro': {
+        // Seedance 1.5 Pro supports 4/8/12s and 480p/720p/1080p, plus aspect ratio and optional audio/fixed_lens.
+        defaults: { duration: 4, resolution: '720p', aspect_ratio: '16:9', fixed_lens: false, generate_audio: false },
+        limits: {
+            duration: [4, 8, 12],
+            resolution: ['480p', '720p', '1080p'],
+            aspect_ratio: ['16:9', '21:9', '4:3', '3:4', '1:1', '4:5', '5:4', '9:16', '2:3', '3:2']
+        }
     },
 
     // ==== Seedream V4 Text-to-Image ====
@@ -206,6 +217,8 @@ export async function handleGenerationRequest(params) {
         negative_prompt,
         enable_prompt_expansion,
         camera_fixed,
+        fixed_lens,
+        generate_audio,
         enable_safety_checker,
         enableSafetyChecker,
                 // Image-specific parameters
@@ -440,7 +453,8 @@ export async function handleGenerationRequest(params) {
         // detect video-to-video models (Wan 2.6 only)
         const isV2V = !isAudio && modelId.includes('video-to-video');
         // detect any Seedance V1 model (both T2V and I2V)
-        const isSeedance = modelId.includes('v1-pro') || modelId.includes('v1-lite');
+        const isSeedanceV1 = modelId.includes('v1-pro') || modelId.includes('v1-lite');
+        const isSeedance15Pro = modelInfo?.modelApiId === 'bytedance/seedance-1.5-pro' || modelId.includes('seedance-1-5-pro');
 
         // Build base input payload for video
         const videoPayload = {
@@ -450,7 +464,7 @@ export async function handleGenerationRequest(params) {
         };
         
         // Only add seed for models that support it (not Wan 2.6)
-        if (!isWan26) {
+        if (!isWan26 && !isSeedance15Pro) {
             videoPayload.seed = Number(seed) || -1;
         }
         
@@ -466,9 +480,11 @@ export async function handleGenerationRequest(params) {
                 throw new Error('I2V requires a valid public image URL.');
             }
             
-            // Wan 2.6 uses image_urls array, older models use image_url
+            // Wan 2.6 uses image_urls array; Seedance 1.5 Pro uses input_urls (0-2 refs); older models use image_url
             if (isWan26) {
                 videoPayload.image_urls = [urlToUse];
+            } else if (isSeedance15Pro) {
+                videoPayload.input_urls = [urlToUse];
             } else {
                 videoPayload.image_url = urlToUse;
             }
@@ -482,6 +498,26 @@ export async function handleGenerationRequest(params) {
             }
             videoPayload.video_urls = [videoUrlToUse];
         }
+
+        // Seedance 1.5 Pro optionally accepts reference images via input_urls (up to 2).
+        if (isSeedance15Pro) {
+            const referenceUrls = [];
+            const explicitUrls = Array.isArray(params.input_urls)
+                ? params.input_urls
+                : (Array.isArray(params.image_urls) ? params.image_urls : null);
+            if (explicitUrls) {
+                explicitUrls.forEach((u) => {
+                    const value = String(u || '').trim();
+                    if (value && value.startsWith('http')) referenceUrls.push(value);
+                });
+            } else {
+                const singleImageUrl = String(image_url_input || params.image_url || '').trim();
+                if (singleImageUrl && singleImageUrl.startsWith('http')) referenceUrls.push(singleImageUrl);
+            }
+            if (referenceUrls.length > 0) {
+                videoPayload.input_urls = referenceUrls.slice(0, 2);
+            }
+        }
         
         // 3. Add model-specific parameters
         if (isWan25) {
@@ -492,11 +528,15 @@ export async function handleGenerationRequest(params) {
         // They have simpler parameters (just prompt, duration, resolution, and media URLs)
         
         // For Seedance models (Pro and Lite, both T2V and I2V) include camera and safety flags
-        if (isSeedance) {
+        if (isSeedanceV1) {
             videoPayload.camera_fixed = camera_fixed || false;
             // The safety checker is always enabled by default; allow override via UI
             const esc = (enable_safety_checker !== undefined) ? enable_safety_checker : (enableSafetyChecker !== undefined ? enableSafetyChecker : undefined);
             videoPayload.enable_safety_checker = esc !== undefined ? esc : true;
+        }
+        if (isSeedance15Pro) {
+            videoPayload.fixed_lens = fixed_lens === true;
+            videoPayload.generate_audio = generate_audio === true;
         }
 
         // 4. Call Service with context for dynamic polling

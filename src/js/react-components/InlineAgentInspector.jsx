@@ -5,6 +5,13 @@ export default function InlineAgentInspector({
   systemPrompt,
   actionPrompt,
   userText,
+  worldContextInjected,
+  worldContextText,
+  worldContextItemCount,
+  worldContextMode,
+  worldContextAsOfChapter,
+  worldContextWorldName,
+  worldContextBookName,
   isVisible,
   onClose,
 }) {
@@ -31,6 +38,33 @@ export default function InlineAgentInspector({
         <div className="inline-agent-inspector__section">
           <p className="inline-agent-inspector__label tw-font-bold tw-mb-1">3. User Text (Selection/Context):</p>
           <pre className="inline-agent-inspector__prompt" dir="auto">{userText || '(No text selected/available)'}</pre>
+        </div>
+        <div className="inline-agent-inspector__section tw-mt-3">
+          <p className="inline-agent-inspector__label tw-font-bold tw-mb-1">4. World Context (Chapter/Codex):</p>
+          <div className="inline-agent-inspector__prompt" dir="auto">
+            {worldContextInjected ? (
+              <>
+                <div className="tw-mb-2">
+                  Injected: Yes
+                  {Number.isFinite(Number(worldContextItemCount)) ? ` • ${Math.max(0, Math.round(Number(worldContextItemCount)))} item(s)` : ''}
+                  {worldContextMode ? ` • mode: ${worldContextMode}` : ''}
+                  {Number.isFinite(Number(worldContextAsOfChapter)) ? ` • as-of Ch.${Math.round(Number(worldContextAsOfChapter))}` : ''}
+                  {worldContextBookName ? ` • book: ${worldContextBookName}` : ''}
+                  {worldContextWorldName ? ` • world: ${worldContextWorldName}` : ''}
+                </div>
+                <pre className="inline-agent-inspector__prompt tw-m-0" dir="auto">{worldContextText || '(No world context text)'}</pre>
+              </>
+            ) : (
+              <span>
+                Not injected
+                {worldContextBookName ? ` • book: ${worldContextBookName}` : ''}
+                {worldContextWorldName ? ` • world: ${worldContextWorldName}` : ''}
+                {' '}(
+                {worldContextText ? 'context unavailable after filtering' : 'no chapter/book world context for this composer run'}
+                )
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

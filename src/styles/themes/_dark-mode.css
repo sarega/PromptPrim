@@ -875,6 +875,15 @@ body.dark-mode .book-composer-doc-card {
     border-color: #334155;
 }
 
+body.dark-mode .book-overview-toolbar {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+body.dark-mode .book-overview-toolbar-meta {
+    color: #cbd5e1;
+}
+
 body.dark-mode .book-composer-doc-card.is-selectable:hover {
     background: #152034;
     border-color: #3b82f6;

@@ -63,3 +63,101 @@ body.dark-mode .context-menu li:hover {
     white-space: nowrap;
     user-select: none;
 }
+
+/* ===============================================
+   == Chat Selection Action Bar (Prototype)     ==
+   =============================================== */
+.selection-action-bar {
+    position: fixed;
+    z-index: 10950;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.selection-action-bar.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.selection-action-bar__label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 0 4px 0 2px;
+    white-space: nowrap;
+}
+
+.selection-action-btn {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #ffffff;
+    color: var(--text-dark);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.selection-action-select {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #ffffff;
+    color: var(--text-dark);
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.1;
+    min-width: 82px;
+}
+
+.selection-action-btn:hover {
+    background: #eef3ff;
+    border-color: rgba(79, 143, 255, 0.35);
+}
+
+.selection-action-btn:active {
+    transform: translateY(1px);
+}
+
+body.dark-mode .selection-action-bar {
+    background: rgba(18, 25, 40, 0.94);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode .selection-action-bar__label {
+    color: #aeb8cc;
+}
+
+body.dark-mode .selection-action-select {
+    background: rgba(39, 49, 69, 0.95);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e7ecf6;
+}
+
+body.dark-mode .selection-action-btn {
+    background: rgba(39, 49, 69, 0.95);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #e7ecf6;
+}
+
+body.dark-mode .selection-action-btn:hover {
+    background: rgba(50, 64, 92, 0.95);
+    border-color: rgba(110, 167, 255, 0.35);
+}

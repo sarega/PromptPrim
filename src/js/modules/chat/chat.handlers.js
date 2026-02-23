@@ -56,6 +56,163 @@ export function initMessageInteractions() {
         }
     };
 
+    let selectionActionBarEl = null;
+    let selectionActionBarState = null;
+    let selectionActionBarHideTimer = null;
+
+    const hideSelectionActionBar = () => {
+        if (selectionActionBarHideTimer) {
+            clearTimeout(selectionActionBarHideTimer);
+            selectionActionBarHideTimer = null;
+        }
+        if (selectionActionBarEl) {
+            selectionActionBarEl.classList.remove('is-visible');
+            selectionActionBarEl.setAttribute('aria-hidden', 'true');
+        }
+        selectionActionBarState = null;
+    };
+
+    const scheduleHideSelectionActionBar = (delayMs = 80) => {
+        if (selectionActionBarHideTimer) clearTimeout(selectionActionBarHideTimer);
+        selectionActionBarHideTimer = setTimeout(() => {
+            selectionActionBarHideTimer = null;
+            hideSelectionActionBar();
+        }, delayMs);
+    };
+
+    const ensureSelectionActionBar = () => {
+        if (selectionActionBarEl && document.body.contains(selectionActionBarEl)) {
+            return selectionActionBarEl;
+        }
+        const bar = document.createElement('div');
+        bar.className = 'selection-action-bar';
+        bar.setAttribute('aria-hidden', 'true');
+        bar.innerHTML = `
+            <div class="selection-action-bar__label">Selected text</div>
+            <select class="selection-action-select" data-selection-item-type aria-label="Codex item type">
+                <option value="note" selected>Note</option>
+                <option value="entity">Entity</option>
+                <option value="place">Place</option>
+                <option value="rule">Rule</option>
+                <option value="event">Event</option>
+            </select>
+            <button type="button" class="selection-action-btn" data-selection-action="to-composer">Send to Composer</button>
+            <button type="button" class="selection-action-btn" data-selection-action="to-codex-verbatim">Add to Codex</button>
+        `;
+
+        bar.addEventListener('mouseenter', () => {
+            if (selectionActionBarHideTimer) {
+                clearTimeout(selectionActionBarHideTimer);
+                selectionActionBarHideTimer = null;
+            }
+        });
+        bar.addEventListener('mouseleave', () => {
+            scheduleHideSelectionActionBar(140);
+        });
+        bar.addEventListener('mousedown', (event) => {
+            // Preserve text selection only for action buttons.
+            // Allow native interaction for <select> so item type picker can open.
+            if (event.target.closest('.selection-action-btn')) {
+                event.preventDefault();
+            }
+        });
+        bar.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-selection-action]');
+            if (!button || !selectionActionBarState?.text) return;
+            const selectedTextValue = selectionActionBarState.text;
+            const action = button.dataset.selectionAction;
+            if (action === 'to-composer') {
+                stateManager.bus.publish('composer:append', { content: selectedTextValue });
+                hideSelectionActionBar();
+                return;
+            }
+            if (action === 'to-codex-verbatim') {
+                const typeSelect = bar.querySelector('[data-selection-item-type]');
+                const selectedType = String(typeSelect?.value || 'note').trim().toLowerCase() || 'note';
+                stateManager.bus.publish('world:addSelectionVerbatim', {
+                    text: selectedTextValue,
+                    type: selectedType,
+                    sourceKind: 'chat',
+                    sessionId: selectionActionBarState.sessionId || null,
+                    messageId: selectionActionBarState.messageId || null
+                });
+                hideSelectionActionBar();
+            }
+        });
+
+        document.body.appendChild(bar);
+        selectionActionBarEl = bar;
+        return bar;
+    };
+
+    const getChatSelectionPayload = () => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+        const selectedText = String(selection.toString() || '').trim();
+        if (!selectedText) return null;
+
+        const range = selection.getRangeAt(0);
+        const commonNode = range.commonAncestorContainer instanceof Element
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer?.parentElement;
+        if (!commonNode || !messagesContainer.contains(commonNode)) return null;
+
+        const messageBubble = commonNode.closest('.message');
+        if (!messageBubble || !messagesContainer.contains(messageBubble)) return null;
+
+        const rect = range.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) return null;
+
+        return {
+            text: selectedText,
+            rect,
+            sessionId: stateManager.getProject()?.activeSessionId || null,
+            messageId: messageBubble.dataset.messageId || null
+        };
+    };
+
+    const showSelectionActionBar = (payload) => {
+        if (!payload?.text || !payload?.rect) {
+            hideSelectionActionBar();
+            return;
+        }
+        const bar = ensureSelectionActionBar();
+        selectionActionBarState = payload;
+
+        if (selectionActionBarHideTimer) {
+            clearTimeout(selectionActionBarHideTimer);
+            selectionActionBarHideTimer = null;
+        }
+
+        bar.classList.add('is-visible');
+        bar.setAttribute('aria-hidden', 'false');
+
+        const margin = 8;
+        const rect = payload.rect;
+        const barWidth = bar.offsetWidth || 260;
+        const barHeight = bar.offsetHeight || 42;
+        let left = rect.left + (rect.width / 2) - (barWidth / 2);
+        left = Math.max(10, Math.min(left, window.innerWidth - barWidth - 10));
+        let top = rect.top - barHeight - margin;
+        if (top < 10) {
+            top = rect.bottom + margin;
+        }
+        top = Math.max(10, Math.min(top, window.innerHeight - barHeight - 10));
+
+        bar.style.left = `${Math.round(left)}px`;
+        bar.style.top = `${Math.round(top)}px`;
+    };
+
+    const refreshSelectionActionBar = () => {
+        const payload = getChatSelectionPayload();
+        if (!payload) {
+            // Delay hiding slightly so click on the bar itself doesn't instantly collapse it.
+            scheduleHideSelectionActionBar();
+            return;
+        }
+        showSelectionActionBar(payload);
+    };
+
     /**
      * A shared function to build and show the context menu.
      * It checks for selected text and adds the appropriate menu items.
@@ -115,6 +272,34 @@ export function initMessageInteractions() {
             showMessageActions(e, messageBubble);
         }
     });
+
+    messagesContainer.addEventListener('mouseup', () => {
+        setTimeout(refreshSelectionActionBar, 0);
+    });
+    messagesContainer.addEventListener('keyup', () => {
+        setTimeout(refreshSelectionActionBar, 0);
+    });
+    messagesContainer.addEventListener('scroll', () => hideSelectionActionBar(), { passive: true });
+    document.addEventListener('selectionchange', () => {
+        if (selectionActionBarEl && selectionActionBarEl.contains(document.activeElement)) {
+            return;
+        }
+        const activeSelection = window.getSelection();
+        if (!activeSelection || activeSelection.rangeCount === 0) {
+            hideSelectionActionBar();
+            return;
+        }
+        const range = activeSelection.getRangeAt(0);
+        const commonNode = range.commonAncestorContainer instanceof Element
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer?.parentElement;
+        if (!commonNode || !messagesContainer.contains(commonNode)) {
+            hideSelectionActionBar();
+            return;
+        }
+        setTimeout(refreshSelectionActionBar, 0);
+    });
+    window.addEventListener('resize', () => hideSelectionActionBar(), { passive: true });
 }
 
 // --- Helper Functions ---

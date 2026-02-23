@@ -265,8 +265,9 @@ const renderModelSpecificInputs = (selectedModel, params, setParams, imagePrevie
         const isI2V = !isAudio && modelId.includes('image-to-video');
         // Identify video-to-video models (Wan 2.6 only)
         const isV2V = !isAudio && modelId.includes('video-to-video');
-        // Treat all Seedance V1 models (Pro/Lite, T2V or I2V) as Seedance.
-        const isSeedance = modelId.includes('v1-pro') || modelId.includes('v1-lite');
+        // Treat Seedance V1 and Seedance 1.5 Pro separately because they expose different options/params.
+        const isSeedanceV1 = modelId.includes('v1-pro') || modelId.includes('v1-lite');
+        const isSeedance15Pro = modelId.includes('seedance-1-5-pro');
         // Check if this is Seedream 4.5 Edit (max 14 images) or older models (max 10 images)
         const isSeedream45Edit = modelId.includes('seedream4.5-edit') || modelId.includes('4.5-edit');
         const maxImages = isSeedream45Edit ? 14 : 10;
@@ -498,7 +499,7 @@ const renderModelSpecificInputs = (selectedModel, params, setParams, imagePrevie
             )}
 
             {/* Seedance Specific Input: Camera Fixed & Safety Checker (video only) */}
-            {isSeedance && !isAudio && (
+            {isSeedanceV1 && !isAudio && (
                 <>
                     <div className="form-group tw-flex tw-justify-between tw-items-center">
                         <label className="tw-text-sm tw-font-medium tw-text-gray-300">Fixed Camera Position</label>
@@ -516,6 +517,29 @@ const renderModelSpecificInputs = (selectedModel, params, setParams, imagePrevie
                             checked={params.enable_safety_checker ?? true} 
                             onChange={(e) => setParams(p => ({ ...p, enable_safety_checker: e.target.checked }))}
                             className="tw-toggle" 
+                        />
+                    </div>
+                </>
+            )}
+
+            {isSeedance15Pro && !isAudio && (
+                <>
+                    <div className="form-group tw-flex tw-justify-between tw-items-center">
+                        <label className="tw-text-sm tw-font-medium tw-text-gray-300">Fixed Lens</label>
+                        <input
+                            type="checkbox"
+                            checked={!!params.fixed_lens}
+                            onChange={(e) => setParams(p => ({ ...p, fixed_lens: e.target.checked }))}
+                            className="tw-toggle"
+                        />
+                    </div>
+                    <div className="form-group tw-flex tw-justify-between tw-items-center">
+                        <label className="tw-text-sm tw-font-medium tw-text-gray-300">Generate Audio</label>
+                        <input
+                            type="checkbox"
+                            checked={!!params.generate_audio}
+                            onChange={(e) => setParams(p => ({ ...p, generate_audio: e.target.checked }))}
+                            className="tw-toggle"
                         />
                     </div>
                 </>
@@ -540,6 +564,8 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         aspect_ratio: '1:1', // Default for Seedream 4.5 models; video models use '16:9'
         seed: -1,
         enable_safety_checker: true,
+        fixed_lens: false,
+        generate_audio: false,
         image_url_input: '',
         video_url_input: '',
         quality: 'basic', // Default for Seedream 4.5 models
@@ -626,7 +652,8 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         const isV2V = !isAudio && selectedId.includes('video-to-video');
         const isWan25 = selectedId.includes('wan2.5');
         const isWan26 = selectedId.includes('wan-2-6');
-        const isSeedance = selectedId.includes('v1-pro') || selectedId.includes('v1-lite');
+        const isSeedanceV1 = selectedId.includes('v1-pro') || selectedId.includes('v1-lite');
+        const isSeedance15Pro = selectedId.includes('seedance-1-5-pro');
     const isLoading = status.status === 'loading';
     
 
@@ -778,6 +805,8 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             // Reset all model-specific parameters
             camera_fixed: false,
             enable_safety_checker: true,
+            fixed_lens: false,
+            generate_audio: false,
             negative_prompt: '',
             enable_prompt_expansion: false,
             image_url_input: '',
@@ -866,7 +895,9 @@ export const StudioForm = ({ models, onSubmit, status }) => {
         if (isImage) return null;
         // I2V and V2V models don't use aspect ratio
         if (isI2V || isV2V) return null;
-        const options = ['16:9', '21:9', '4:3', '1:1', '3:4', '9:16'];
+        const options = Array.isArray(limits.aspect_ratio) && limits.aspect_ratio.length > 0
+            ? limits.aspect_ratio
+            : ['16:9', '21:9', '4:3', '1:1', '3:4', '9:16'];
         return (
             <div className="form-group">
                 <label className="tw-block tw-text-sm tw-font-medium tw-text-gray-300">Aspect Ratio</label>
@@ -879,7 +910,7 @@ export const StudioForm = ({ models, onSubmit, status }) => {
                 </select>
             </div>
         );
-    }, [params.aspect_ratio, isAudio, isImage, isI2V, isV2V]);
+    }, [params.aspect_ratio, isAudio, isImage, isI2V, isV2V, limits.aspect_ratio]);
 
     // --- JSON Debugging ---
     // Provide a toggle to view the fully constructed payload that will be sent
@@ -942,12 +973,16 @@ export const StudioForm = ({ models, onSubmit, status }) => {
             if (params.negative_prompt) payload.negative_prompt = params.negative_prompt;
             payload.enable_prompt_expansion = !!params.enable_prompt_expansion;
         }
-        if (isSeedance) {
+        if (isSeedanceV1) {
             payload.camera_fixed = !!params.camera_fixed;
             payload.enable_safety_checker = params.enable_safety_checker !== undefined ? !!params.enable_safety_checker : true;
         }
+        if (isSeedance15Pro) {
+            payload.fixed_lens = !!params.fixed_lens;
+            payload.generate_audio = !!params.generate_audio;
+        }
         return { ...base, ...payload };
-    }, [selectedId, prompt, params, isAudio, isI2V, isWan25, isSeedance, limits.resolution, selectedModel?.modelApiId]);
+    }, [selectedId, prompt, params, isAudio, isI2V, isWan25, isSeedanceV1, isSeedance15Pro, limits.resolution, selectedModel?.modelApiId]);
     
     
     // --- Final JSX Return ---

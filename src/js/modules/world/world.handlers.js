@@ -3,7 +3,7 @@
 // DESCRIPTION: Project-level CRUD and workflow handlers for World/Book/Chapter metadata (MVP).
 // ===============================================
 
-import { stateManager, defaultSystemUtilityAgent } from '../../core/core.state.js';
+import { stateManager, defaultSystemUtilityAgent, defaultSummarizationPresets } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 import { callLLM } from '../../core/core.api.js';
 import { buildWorldStructuredContextPack } from './world.retrieval.js';
@@ -92,6 +92,16 @@ function getPreferredAgentPresetNameForBook(project) {
         return activeEntity.name;
     }
     return presetNames[0] || null;
+}
+
+function buildWorldVerbatimItemTitleFromSelection(text = '', fallback = 'Selection') {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return fallback;
+    const firstSentence = normalized.split(/(?<=[.!?])\s+/)[0] || normalized;
+    const maxLen = 72;
+    return firstSentence.length > maxLen
+        ? `${firstSentence.slice(0, maxLen - 1).trimEnd()}…`
+        : firstSentence;
 }
 
 function ensureArray(value) {
@@ -397,6 +407,48 @@ function trimTextForPrompt(text, maxChars = 5000) {
         : `${normalized.slice(0, maxChars)}\n...[trimmed]`;
 }
 
+function trimTextForPromptTail(text, maxChars = 5000) {
+    const normalized = String(text || '').trim();
+    if (!normalized) return '';
+    if (normalized.length <= maxChars) return normalized;
+    return `...[trimmed]\n${normalized.slice(-maxChars)}`;
+}
+
+function extractPlainTextFromHtml(html = '') {
+    const raw = String(html || '').trim();
+    if (!raw) return '';
+
+    // Preserve common block breaks before removing tags.
+    const withBreakHints = raw
+        .replace(/<\s*br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|ul|ol|h[1-6]|blockquote|section|article)>/gi, '$&\n');
+
+    if (typeof document !== 'undefined' && document.createElement) {
+        const temp = document.createElement('div');
+        temp.innerHTML = withBreakHints;
+        const text = temp.textContent || temp.innerText || '';
+        return text
+            .replace(/\r\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
+    return withBreakHints
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/\s+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+}
+
+function getComposerDraftTextForWorldProposal(session, { maxChars = 7000 } = {}) {
+    const composerHtml = typeof session?.composerContent === 'string' ? session.composerContent : '';
+    if (!composerHtml.trim()) return '';
+    const plainText = extractPlainTextFromHtml(composerHtml);
+    return trimTextForPromptTail(plainText, Math.max(1000, Number(maxChars) || 7000));
+}
+
 function safeParseJsonBlock(text = '') {
     const raw = String(text || '').trim();
     if (!raw) return null;
@@ -425,6 +477,39 @@ function getWorldProposalUtilityAgent(project) {
     }
     if (defaultSystemUtilityAgent?.model) {
         return { ...defaultSystemUtilityAgent, temperature: 0.1 };
+    }
+    return null;
+}
+
+function getActiveSummarizationPreset(project) {
+    const selectedName = String(project?.globalSettings?.activeSummarizationPreset || 'Standard').trim() || 'Standard';
+    const customPresets = (project?.globalSettings?.summarizationPromptPresets && typeof project.globalSettings.summarizationPromptPresets === 'object')
+        ? project.globalSettings.summarizationPromptPresets
+        : {};
+    const merged = {
+        ...defaultSummarizationPresets,
+        ...customPresets
+    };
+    const promptTemplate = String(
+        merged[selectedName]
+        || project?.globalSettings?.systemUtilityAgent?.summarizationPrompt
+        || defaultSystemUtilityAgent?.summarizationPrompt
+        || defaultSummarizationPresets.Standard
+        || ''
+    );
+    return {
+        presetName: selectedName,
+        promptTemplate
+    };
+}
+
+function getUtilityAgentForChapterSummary(project) {
+    const utilityAgent = project?.globalSettings?.systemUtilityAgent;
+    if (utilityAgent?.model) {
+        return { ...cloneJsonish(utilityAgent), model: utilityAgent.model };
+    }
+    if (defaultSystemUtilityAgent?.model) {
+        return { ...cloneJsonish(defaultSystemUtilityAgent), model: defaultSystemUtilityAgent.model };
     }
     return null;
 }
@@ -496,6 +581,48 @@ function getRecentSessionMessagesForWorldProposal(session, maxMessages = 8) {
     return formatSessionMessagesForWorldProposal(usableMessages);
 }
 
+function getAllSessionMessagesForSummary(session = {}) {
+    const usableMessages = ensureArray(session?.history)
+        .filter(message => message && (message.role === 'user' || message.role === 'assistant'));
+    return formatSessionMessagesForWorldProposal(usableMessages, { startIndex: 0 });
+}
+
+function getChapterSummarySourceText(session, source = 'chat') {
+    const normalizedSource = String(source || 'chat').trim().toLowerCase();
+    if (normalizedSource === 'composer') {
+        const plain = extractPlainTextFromHtml(typeof session?.composerContent === 'string' ? session.composerContent : '');
+        return trimTextForPrompt(plain, 22000);
+    }
+    return trimTextForPrompt(getAllSessionMessagesForSummary(session), 22000);
+}
+
+function buildChapterOverviewSummaryPrompt({
+    promptTemplate = '',
+    sourceText = '',
+    sourceKind = 'chat',
+    previousSummary = ''
+} = {}) {
+    const sourceLabel = sourceKind === 'composer'
+        ? 'Chapter draft from Composer'
+        : 'Chapter conversation from Chat';
+    const template = String(promptTemplate || '').trim() || String(defaultSummarizationPresets.Standard || '');
+    const previous = String(previousSummary || '').trim() || 'No previous chapter summary.';
+    const replaced = template
+        .replace(/\$\{previousSummary\}/g, previous)
+        .replace(/\$\{newMessages\}/g, sourceText);
+
+    return [
+        replaced,
+        '',
+        'Additional constraints for Book Overview chapter bubble:',
+        '- Summarize this single chapter only (not the whole book).',
+        '- Keep it concise but specific (roughly 3-7 sentences).',
+        `- Source used: ${sourceLabel}.`,
+        '- Preserve character names, places, key events, and important objects.',
+        '- Return only the summary text.'
+    ].join('\n');
+}
+
 function formatSessionMessagesForWorldProposal(messages = [], { startIndex = 0 } = {}) {
     const usableMessages = ensureArray(messages)
         .filter(message => message && (message.role === 'user' || message.role === 'assistant'));
@@ -536,7 +663,7 @@ function getSessionWorldProposalDelta(session, { lastScannedMessageCount = 0, ma
     };
 }
 
-function buildWorldProposalExtractionPrompt({ session, world, worldContextPack, latestMessagesText }) {
+function buildWorldProposalExtractionPrompt({ session, world, worldContextPack, latestMessagesText, composerDraftText }) {
     const visibleItems = Array.isArray(worldContextPack?.selectedItems) ? worldContextPack.selectedItems : [];
     const visibleLines = visibleItems.length > 0
         ? visibleItems.map(item => `- id=${item.id} | type=${item.type} | title=${item.title}`).join('\n')
@@ -583,6 +710,9 @@ function buildWorldProposalExtractionPrompt({ session, world, worldContextPack, 
         '',
         'World Context Pack (spoiler-safe canonical context):',
         trimTextForPrompt(worldContextPack?.contextText || '(none)', 6000),
+        '',
+        'Current chapter draft from Composer (latest excerpt, plain text):',
+        composerDraftText || '(none)',
         '',
         'Recent chat messages:',
         latestMessagesText || '(none)'
@@ -1460,6 +1590,197 @@ export function updateChapterMetadata(payload = {}) {
     return session;
 }
 
+export async function summarizeChapterForOverview(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+
+    const sessionId = resolveTargetSessionId(payload);
+    const session = findSession(project, sessionId);
+    const silent = payload.silent === true;
+    if (!session) {
+        if (!silent) showCustomAlert('Chapter session not found.', 'Chapter Summary');
+        return null;
+    }
+    if (!session.bookId) {
+        if (!silent) showCustomAlert('This chat is not linked to a Book chapter.', 'Chapter Summary');
+        return null;
+    }
+
+    const sourceKind = String(payload.source || 'chat').trim().toLowerCase() === 'composer'
+        ? 'composer'
+        : 'chat';
+    const sourceText = getChapterSummarySourceText(session, sourceKind);
+    if (!sourceText) {
+        if (!silent) {
+            showCustomAlert(
+                sourceKind === 'composer'
+                    ? 'No Composer draft found for this chapter.'
+                    : 'Not enough Chat content to summarize for this chapter.',
+                'Chapter Summary'
+            );
+        }
+        return null;
+    }
+
+    const summarizerAgent = getUtilityAgentForChapterSummary(project);
+    if (!summarizerAgent?.model) {
+        if (!silent) showCustomAlert('No summarization model configured. Check Summary settings.', 'Chapter Summary');
+        return null;
+    }
+
+    const { presetName, promptTemplate } = getActiveSummarizationPreset(project);
+    const summaryPrompt = buildChapterOverviewSummaryPrompt({
+        promptTemplate,
+        sourceText,
+        sourceKind,
+        previousSummary: String(session.chapterSummary || '')
+    });
+
+    try {
+        stateManager.bus.publish('chapter:overviewSummaryProgress', {
+            sessionId: session.id,
+            bookId: session.bookId,
+            source: sourceKind,
+            state: 'start',
+            batch: payload.batch === true
+        });
+        if (!silent) {
+            stateManager.bus.publish('status:update', {
+                message: `Summarizing chapter from ${sourceKind === 'composer' ? 'Composer' : 'Chat'}...`,
+                state: 'loading'
+            });
+        }
+
+        const response = await callLLM(summarizerAgent, [{ role: 'user', content: summaryPrompt }]);
+        const nextSummary = String(response?.content || '').trim();
+        if (!nextSummary) {
+            throw new Error('Received an empty summary response.');
+        }
+
+        session.chapterSummary = nextSummary;
+        session.chapterSummaryMeta = {
+            source: sourceKind,
+            presetName,
+            model: summarizerAgent.model,
+            updatedAt: Date.now()
+        };
+        session.updatedAt = Date.now();
+
+        persistWorldProjectState({
+            bookId: session.bookId,
+            reason: 'chapter:overviewSummary',
+            includeSessionListRefresh: false
+        });
+
+        if (!silent) {
+            stateManager.bus.publish('status:update', { message: 'Chapter summary updated.', state: 'success' });
+            showCustomAlert(
+                `Chapter summary updated from ${sourceKind === 'composer' ? 'Composer' : 'Chat'} (preset: ${presetName}).`,
+                'Chapter Summary'
+            );
+        }
+        return nextSummary;
+    } catch (error) {
+        console.error('Failed to summarize chapter for overview:', error);
+        if (!silent) {
+            stateManager.bus.publish('status:update', { message: 'Failed to summarize chapter.', state: 'error' });
+            showCustomAlert(`Failed to summarize chapter: ${error.message || error}`, 'Chapter Summary');
+        }
+        return null;
+    } finally {
+        stateManager.bus.publish('chapter:overviewSummaryProgress', {
+            sessionId: session.id,
+            bookId: session.bookId,
+            source: sourceKind,
+            state: 'done',
+            batch: payload.batch === true
+        });
+    }
+}
+
+export async function summarizeMissingBookChaptersForOverview(payload = {}) {
+    const project = getProject();
+    if (!project) return null;
+    ensureWorldProjectState(project);
+
+    const book = findBook(project, payload.bookId || project.activeBookId);
+    if (!book) {
+        showCustomAlert('Book not found.', 'Chapter Summary');
+        return null;
+    }
+
+    const sourceKind = String(payload.source || 'composer').trim().toLowerCase() === 'chat' ? 'chat' : 'composer';
+    const allChapters = getOrderedBookChapterSessions(project, book);
+    const missingChapters = allChapters.filter(session => !String(session?.chapterSummary || '').trim());
+    if (missingChapters.length === 0) {
+        showCustomAlert('No missing chapter summaries in this Book.', 'Chapter Summary');
+        return { total: 0, summarized: 0, skippedNoSource: 0, failed: 0 };
+    }
+
+    stateManager.bus.publish('book:overviewSummaryBatchProgress', {
+        bookId: book.id,
+        source: sourceKind,
+        state: 'start',
+        total: missingChapters.length
+    });
+
+    stateManager.bus.publish('status:update', {
+        message: `Summarizing ${missingChapters.length} chapter(s) from ${sourceKind === 'composer' ? 'Composer' : 'Chat'}...`,
+        state: 'loading'
+    });
+
+    let summarized = 0;
+    let skippedNoSource = 0;
+    let failed = 0;
+
+    try {
+        for (const chapterSession of missingChapters) {
+            const sourceText = getChapterSummarySourceText(chapterSession, sourceKind);
+            if (!sourceText) {
+                skippedNoSource += 1;
+                continue;
+            }
+            const result = await summarizeChapterForOverview({
+                sessionId: chapterSession.id,
+                source: sourceKind,
+                silent: true,
+                batch: true
+            });
+            if (typeof result === 'string' && result.trim()) {
+                summarized += 1;
+            } else {
+                failed += 1;
+            }
+        }
+
+        const parts = [];
+        parts.push(`Updated ${summarized} chapter summary${summarized === 1 ? '' : 'ies'}`);
+        if (skippedNoSource > 0) parts.push(`${skippedNoSource} skipped (no ${sourceKind === 'composer' ? 'Composer draft' : 'Chat content'})`);
+        if (failed > 0) parts.push(`${failed} failed`);
+
+        stateManager.bus.publish('status:update', { message: 'Batch chapter summary complete.', state: failed > 0 ? 'warning' : 'success' });
+        showCustomAlert(parts.join(' • '), 'Chapter Summary');
+
+        return {
+            total: missingChapters.length,
+            summarized,
+            skippedNoSource,
+            failed
+        };
+    } finally {
+        stateManager.bus.publish('book:overviewSummaryBatchProgress', {
+            bookId: book.id,
+            source: sourceKind,
+            state: 'done',
+            total: missingChapters.length,
+            summarized,
+            skippedNoSource,
+            failed
+        });
+    }
+}
+
 export function moveChapterInBookOrder(payload = {}) {
     const project = getProject();
     if (!project) return false;
@@ -1833,6 +2154,95 @@ export function createWorldItem(payload = {}) {
     return item;
 }
 
+export function addSelectionVerbatimToWorld(payload = {}) {
+    const project = getProject();
+    if (!project) {
+        showCustomAlert('No project loaded.', 'Codex');
+        return null;
+    }
+    ensureWorldProjectState(project);
+
+    const exactText = String(payload.text || '').trim();
+    if (!exactText) {
+        showCustomAlert('Please select text first.', 'Codex');
+        return null;
+    }
+
+    const session = findSession(project, payload.sessionId || project.activeSessionId);
+    const explicitBook = findBook(project, payload.bookId || null);
+    const sessionBook = session?.bookId ? findBook(project, session.bookId) : null;
+    const activeBook = project.activeBookId ? findBook(project, project.activeBookId) : null;
+    const book = explicitBook || sessionBook || activeBook || null;
+
+    const resolvedWorldId = payload.worldId
+        || book?.linkedWorldId
+        || project.activeWorldId
+        || null;
+    const world = findWorld(project, resolvedWorldId);
+    if (!world?.id) {
+        showCustomAlert('No active Codex/World found. Open a Book with a linked Codex first.', 'Codex');
+        return null;
+    }
+
+    const sourceKind = String(payload.sourceKind || 'chat').trim().toLowerCase() || 'chat';
+    const requestedType = String(payload.type || 'note').trim().toLowerCase() || 'note';
+    const allowedTypes = new Set(['note', 'entity', 'place', 'rule', 'event']);
+    const itemType = allowedTypes.has(requestedType) ? requestedType : 'note';
+
+    const summaryLimit = Math.max(80, Number(payload.summaryLimit) || 280);
+    const summary = exactText.length > summaryLimit
+        ? `${exactText.slice(0, summaryLimit).trimEnd()}…`
+        : exactText;
+
+    const tags = [];
+    uniquePush(tags, 'verbatim');
+    uniquePush(tags, `${sourceKind}-selection`);
+    ensureArray(payload.tags).forEach((tag) => {
+        const normalizedTag = String(tag || '').trim().toLowerCase();
+        if (normalizedTag) uniquePush(tags, normalizedTag);
+    });
+
+    const sourceRefs = [];
+    ensureArray(payload.sourceRefs).forEach((ref) => {
+        const value = String(ref || '').trim();
+        if (value) sourceRefs.push(value);
+    });
+    if (session?.id) {
+        sourceRefs.push(`chat_session:${session.id}`);
+        if (sourceKind === 'composer') {
+            sourceRefs.push(`composer_session:${session.id}`);
+        }
+    }
+    if (sourceKind === 'chat' && payload.messageId) {
+        sourceRefs.push(`chat_message:${session?.id || 'unknown'}:${String(payload.messageId)}`);
+    }
+
+    const titleFallbackMap = {
+        note: 'Chat Selection',
+        entity: 'Character / Entity Draft',
+        place: 'Place Draft',
+        rule: 'Rule Draft',
+        event: 'Event Draft'
+    };
+    const item = createWorldItem({
+        worldId: world.id,
+        type: itemType,
+        title: String(payload.title || '').trim() || buildWorldVerbatimItemTitleFromSelection(exactText, titleFallbackMap[itemType] || 'Selection'),
+        summary,
+        content: exactText,
+        status: 'draft',
+        visibility: 'revealed',
+        tags,
+        sourceRefs
+    });
+
+    if (!item) return null;
+
+    const sourceLabel = sourceKind === 'composer' ? 'Composer' : 'Chat';
+    showCustomAlert(`Added selection to Codex as a draft ${itemType} (${world.name}) from ${sourceLabel}.`, 'Codex');
+    return item;
+}
+
 export function updateWorldItem(payload = {}) {
     const project = getProject();
     if (!project) return null;
@@ -2056,13 +2466,26 @@ export async function proposeWorldUpdatesFromCurrentChat(payload = {}) {
     const latestMessagesText = typeof payload.recentMessagesText === 'string'
         ? payload.recentMessagesText.trim()
         : getRecentSessionMessagesForWorldProposal(session, Number(payload.maxMessages) || 8);
-    if (!latestMessagesText.trim()) {
-        if (!silent) showCustomAlert('Not enough chat content to extract proposals.', 'World Proposals');
+    const includeComposerDraft = payload.includeComposerDraft !== false;
+    const hasComposerDraftOverride = Object.prototype.hasOwnProperty.call(payload, 'composerDraftText');
+    const composerDraftText = includeComposerDraft
+        ? (hasComposerDraftOverride
+            ? String(payload.composerDraftText || '').trim()
+            : getComposerDraftTextForWorldProposal(session, { maxChars: Number(payload.maxComposerChars) || 7000 }))
+        : '';
+
+    if (!latestMessagesText.trim() && !composerDraftText.trim()) {
+        if (!silent) showCustomAlert('Not enough chapter content (chat/composer) to extract proposals.', 'World Proposals');
         return [];
     }
 
+    const hybridSourceText = [
+        composerDraftText ? `[COMPOSER_DRAFT]\n${composerDraftText}` : '',
+        latestMessagesText ? `[RECENT_CHAT]\n${latestMessagesText}` : ''
+    ].filter(Boolean).join('\n\n');
+
     const worldContextPack = buildWorldStructuredContextPack(project, session, {
-        queryText: latestMessagesText,
+        queryText: hybridSourceText || latestMessagesText,
         maxItems: Number(payload.maxWorldItems) || 14
     });
 
@@ -2070,7 +2493,8 @@ export async function proposeWorldUpdatesFromCurrentChat(payload = {}) {
         session,
         world,
         worldContextPack,
-        latestMessagesText
+        latestMessagesText,
+        composerDraftText
     });
 
     if (!silent) {
@@ -2169,6 +2593,18 @@ function ensureBookAgentWorldProposalAutomation(book) {
     wp.autoProposeEnabled = wp.autoProposeEnabled === true;
     const rawCount = Number(wp.lastScannedMessageCount);
     wp.lastScannedMessageCount = Number.isFinite(rawCount) ? Math.max(0, Math.round(rawCount)) : 0;
+    wp.lastScannedComposerFingerprint = typeof wp.lastScannedComposerFingerprint === 'string'
+        ? wp.lastScannedComposerFingerprint
+        : null;
+    wp.lastScanSourceKind = typeof wp.lastScanSourceKind === 'string' ? wp.lastScanSourceKind : null;
+    wp.lastScanMode = typeof wp.lastScanMode === 'string' ? wp.lastScanMode : null;
+    wp.lastScanResult = typeof wp.lastScanResult === 'string' ? wp.lastScanResult : null;
+    wp.lastScanCreatedCount = Number.isFinite(Number(wp.lastScanCreatedCount))
+        ? Math.max(0, Math.round(Number(wp.lastScanCreatedCount)))
+        : 0;
+    wp.lastScanAttemptAt = Number.isFinite(Number(wp.lastScanAttemptAt))
+        ? Math.round(Number(wp.lastScanAttemptAt))
+        : null;
     wp.lastScannedAt = Number.isFinite(wp.lastScannedAt) ? wp.lastScannedAt : null;
     return wp;
 }
@@ -2199,6 +2635,7 @@ export function resetBookAgentProposalScanCursor(payload = {}) {
     }
 
     automation.lastScannedMessageCount = 0;
+    automation.lastScannedComposerFingerprint = null;
     automation.lastScannedAt = Date.now();
     book.updatedAt = Date.now();
     persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:autoProposeCursorReset' });
@@ -2223,8 +2660,22 @@ export async function scanBookAgentForWorldProposals(payload = {}) {
     }
 
     const useDelta = payload.delta !== false;
+    const includeComposerDraft = payload.includeComposerDraft !== false;
     let transcriptText = '';
     let cursorAdvanceCount = automation.lastScannedMessageCount;
+    let composerDraftText = '';
+    let composerFingerprint = null;
+    let composerChanged = false;
+
+    if (includeComposerDraft) {
+        composerDraftText = getComposerDraftTextForWorldProposal(session, {
+            maxChars: Number(payload.maxComposerChars) || 7000
+        });
+        composerFingerprint = composerDraftText
+            ? stableStringify({ composerDraft: normalizeFingerprintText(composerDraftText) })
+            : null;
+        composerChanged = composerFingerprint !== automation.lastScannedComposerFingerprint;
+    }
 
     if (useDelta) {
         const delta = getSessionWorldProposalDelta(session, {
@@ -2233,16 +2684,35 @@ export async function scanBookAgentForWorldProposals(payload = {}) {
         });
         transcriptText = delta.transcriptText || '';
         cursorAdvanceCount = delta.totalUsable;
-        if (!transcriptText.trim()) {
+        if (!transcriptText.trim() && !composerChanged) {
+            automation.lastScanSourceKind = 'none';
+            automation.lastScanMode = useDelta ? 'delta' : 'manual';
+            automation.lastScanResult = 'no_delta';
+            automation.lastScanCreatedCount = 0;
+            automation.lastScanAttemptAt = Date.now();
             if (payload.advanceCursorOnEmpty === true) {
                 automation.lastScannedMessageCount = cursorAdvanceCount;
                 automation.lastScannedAt = Date.now();
                 book.updatedAt = Date.now();
                 persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:autoProposeNoDelta' });
+            } else {
+                stateManager.bus.publish('world:dataChanged', { bookId: book.id, reason: 'bookAgent:autoProposeNoDelta' });
             }
+            stateManager.bus.publish('world:bookAgentAutoProposeResult', {
+                bookId: book.id,
+                sessionId: session.id,
+                createdCount: 0,
+                sourceKind: 'none',
+                usedChatSource: false,
+                usedComposerSource: false,
+                scanMode: useDelta ? 'delta' : 'manual',
+                usedDelta: useDelta,
+                autoTriggered: payload.requireAutoEnabled === true,
+                noDelta: true
+            });
             if (!silent) {
                 showCustomAlert(
-                    'No new Book Agent messages since the last scan. Continue chatting or use Reset Cursor to scan older messages again.',
+                    'No new Book Agent messages or Composer draft changes since the last scan. Continue drafting/chatting or use Reset Cursor to scan older messages again.',
                     'World Proposals'
                 );
             }
@@ -2250,11 +2720,28 @@ export async function scanBookAgentForWorldProposals(payload = {}) {
         }
     }
 
+    const effectiveRecentMessagesText = typeof payload.recentMessagesText === 'string'
+        ? String(payload.recentMessagesText || '').trim()
+        : (useDelta
+            ? String(transcriptText || '').trim()
+            : getRecentSessionMessagesForWorldProposal(session, Number(payload.maxMessages) || 8));
+    const effectiveComposerDraftText = includeComposerDraft
+        ? ((useDelta && !composerChanged) ? '' : String(composerDraftText || '').trim())
+        : '';
+    const usedChatSource = Boolean(effectiveRecentMessagesText);
+    const usedComposerSource = Boolean(effectiveComposerDraftText);
+    const sourceKind = usedChatSource && usedComposerSource
+        ? 'both'
+        : (usedComposerSource ? 'composer' : (usedChatSource ? 'chat' : 'none'));
+
     const created = await proposeWorldUpdatesFromCurrentChat({
         sessionId: session.id,
         bookId: book.id,
         worldId: world.id,
-        recentMessagesText: transcriptText || undefined,
+        recentMessagesText: effectiveRecentMessagesText || undefined,
+        includeComposerDraft: includeComposerDraft && (useDelta ? composerChanged : true),
+        composerDraftText: includeComposerDraft && composerChanged ? composerDraftText : undefined,
+        maxComposerChars: Number(payload.maxComposerChars) || 7000,
         maxMessages: Number(payload.maxMessages) || 8,
         maxWorldItems: Number(payload.maxWorldItems) || 14,
         silent
@@ -2264,6 +2751,23 @@ export async function scanBookAgentForWorldProposals(payload = {}) {
         return null;
     }
 
+    const createdCount = Array.isArray(created) ? created.length : 0;
+    automation.lastScanSourceKind = sourceKind;
+    automation.lastScanMode = useDelta ? 'delta' : 'manual';
+    automation.lastScanResult = 'success';
+    automation.lastScanCreatedCount = createdCount;
+    automation.lastScanAttemptAt = Date.now();
+
+    if (includeComposerDraft && payload.recordComposerFingerprint !== false) {
+        automation.lastScannedComposerFingerprint = composerFingerprint;
+    }
+
+    if (!useDelta) {
+        automation.lastScannedAt = Date.now();
+        book.updatedAt = Date.now();
+        persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:manualProposeScan' });
+    }
+
     if (useDelta && payload.advanceCursor !== false) {
         automation.lastScannedMessageCount = cursorAdvanceCount;
         automation.lastScannedAt = Date.now();
@@ -2271,11 +2775,14 @@ export async function scanBookAgentForWorldProposals(payload = {}) {
         persistWorldProjectState({ bookId: book.id, reason: 'bookAgent:autoProposeScan' });
     }
 
-    const createdCount = Array.isArray(created) ? created.length : 0;
     stateManager.bus.publish('world:bookAgentAutoProposeResult', {
         bookId: book.id,
         sessionId: session.id,
         createdCount,
+        sourceKind,
+        usedChatSource,
+        usedComposerSource,
+        scanMode: useDelta ? 'delta' : 'manual',
         usedDelta: useDelta,
         autoTriggered: payload.requireAutoEnabled === true
     });

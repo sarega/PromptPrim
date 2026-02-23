@@ -1,6 +1,6 @@
 import { stateManager } from '../../core/core.state.js';
 import { callLLM, getFullSystemPrompt, streamLLMResponse } from '../../core/core.api.js';
-import { DOMParser } from "prosemirror-model";
+import { buildWorldStructuredContextPack } from '../world/world.retrieval.js';
 
 // --- Prompt Templates (ที่เราจะนำไปเก็บใน Config ต่อไป) ---
 const templates = {
@@ -11,6 +11,145 @@ const templates = {
   rephrase: `You are an expert prose editor...\n\nRephrase it using the following instructions: <instructions>{instructions}</instructions>\n\nOnly return the rephrased text, nothing else.\n\n[passage]{{selection}}[/passage]`,
   fromInstruction: `{{user_instructions}}\n\nRead the story so far for context:\n[STORY_CONTEXT]\n{{story_context}}\n[/STORY_CONTEXT]\n\nNow, expand on the following scene beat:\n[SCENE_BEAT]\n{{selection}}\n[/SCENE_BEAT]`,
 };
+
+function getActiveSession(project) {
+  if (!project?.activeSessionId) return null;
+  return Array.isArray(project.chatSessions)
+    ? (project.chatSessions.find(session => session?.id === project.activeSessionId) || null)
+    : null;
+}
+
+function extractMessageText(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (part?.type === 'text' ? (part.text || '') : ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+  if (content && typeof content === 'object') {
+    try {
+      return JSON.stringify(content);
+    } catch (_error) {
+      return String(content);
+    }
+  }
+  return '';
+}
+
+function buildInlineAgentWorldContext(project, session, { action, selectionText, instructions }) {
+  if (!project || !session?.bookId) {
+    return {
+      injected: false,
+      text: '',
+      itemCount: 0,
+      mode: null,
+      asOfChapter: null,
+      worldName: null,
+      bookName: null,
+    };
+  }
+
+  const recentChatText = Array.isArray(session.history)
+    ? session.history
+      .filter((message) => message && (message.role === 'user' || message.role === 'assistant'))
+      .slice(-6)
+      .map((message) => extractMessageText(message.content))
+      .filter(Boolean)
+      .join('\n')
+    : '';
+
+  const selectionSample = String(selectionText || '');
+  const queryText = [
+    `inline-agent action: ${String(action || '')}`,
+    String(instructions || ''),
+    selectionSample.length > 1600 ? selectionSample.slice(-1600) : selectionSample,
+    recentChatText.length > 1200 ? recentChatText.slice(-1200) : recentChatText
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  try {
+    const contextPack = buildWorldStructuredContextPack(project, session, {
+      queryText,
+      maxItems: 10
+    });
+    if (!contextPack?.enabled || !contextPack?.contextText) {
+      return {
+        injected: false,
+        text: '',
+        itemCount: 0,
+        mode: contextPack?.access?.mode || null,
+        asOfChapter: contextPack?.access?.asOfChapter ?? null,
+        worldName: contextPack?.world?.name || null,
+        bookName: contextPack?.book?.name || null,
+      };
+    }
+    return {
+      injected: true,
+      text: String(contextPack.contextText || ''),
+      itemCount: Number(contextPack?.diagnostics?.selectedItemCount) || 0,
+      mode: contextPack?.access?.mode || null,
+      asOfChapter: contextPack?.access?.asOfChapter ?? null,
+      worldName: contextPack?.world?.name || null,
+      bookName: contextPack?.book?.name || null,
+    };
+  } catch (error) {
+    console.warn('Inline Agent world context build failed:', error);
+    return {
+      injected: false,
+      text: '',
+      itemCount: 0,
+      mode: null,
+      asOfChapter: null,
+      worldName: null,
+      bookName: null,
+    };
+  }
+}
+
+function findInstructionContextForContinue(editor) {
+  if (!editor?.state?.selection) return null;
+  const { state } = editor;
+  const { selection, doc } = state;
+  const { $from } = selection;
+
+  const buildFromNode = (node, nodePos) => {
+    if (!node || node.type?.name !== 'instructionNode') return null;
+    const from = Number(nodePos);
+    const to = from + node.nodeSize;
+    const instructionText = doc.textBetween(from + 1, to - 1, '\n\n').trim() || String(node.textContent || '').trim();
+    if (!instructionText) return null;
+    return {
+      source: 'instructionNode',
+      instructionText,
+      storyContext: doc.textBetween(0, from, '\n\n'),
+      insertRange: { from: to, to },
+      instructionRange: { from, to },
+    };
+  };
+
+  // Case 1: caret is inside an instruction chunk.
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node?.type?.name !== 'instructionNode') continue;
+    return buildFromNode(node, $from.before(depth));
+  }
+
+  // Case 2: caret is immediately after an instruction chunk.
+  const nodeBefore = $from.nodeBefore;
+  if (nodeBefore?.type?.name === 'instructionNode') {
+    return buildFromNode(nodeBefore, selection.from - nodeBefore.nodeSize);
+  }
+
+  // Case 3: caret is immediately before an instruction chunk.
+  const nodeAfter = $from.nodeAfter;
+  if (nodeAfter?.type?.name === 'instructionNode') {
+    return buildFromNode(nodeAfter, selection.from);
+  }
+
+  return null;
+}
 
 /**
  * [✅ ใหม่] ฟังก์ชัน Helper สำหรับสร้าง User Prompt ที่สมบูรณ์
@@ -41,28 +180,38 @@ export async function invokeAgent({ action, editor, instructions = '' }) {
   if (!editor) return;
 
   const { from, to, empty } = editor.state.selection;
-  let selectionText = editor.state.doc.textBetween(from, to, ' ');
-
-  if (action === 'continue') {
-    if (from <= 1) { // ใช้ <= 1 เพื่อเผื่อกรณีมีแค่ย่อหน้าว่าง
-        alert("Please type something first to continue.");
-        return;
-    }
-    selectionText = editor.state.doc.textBetween(0, from, '\n\n');
-  } else {
-    if (empty) {
-      alert("Please select text to revise.");
-      return;
-    }
+  const project = stateManager.getProject();
+  if (!project) {
+    alert("No project is loaded.");
+    return;
   }
 
-  let prompt = templates[action]
-    .replace('{{selection}}', selectionText)
-    .replace('{{instructions}}', instructions);
-  
-  console.log("Final Prompt:", prompt);
-  
-  const project = stateManager.getProject();
+  let finalAction = action;
+  let storyContext = '';
+  let selectionText = editor.state.doc.textBetween(from, to, ' ');
+  let insertRange = { from, to };
+
+  if (action === 'continue') {
+    const instructionContext = findInstructionContextForContinue(editor);
+    if (instructionContext) {
+      finalAction = 'fromInstruction';
+      selectionText = instructionContext.instructionText;
+      storyContext = instructionContext.storyContext;
+      insertRange = instructionContext.insertRange;
+    } else {
+      if (from <= 1) { // ใช้ <= 1 เพื่อเผื่อกรณีมีแค่ย่อหน้าว่าง
+        alert("Please type something first to continue.");
+        return;
+      }
+      selectionText = editor.state.doc.textBetween(0, from, '\n\n');
+      storyContext = selectionText;
+      insertRange = { from, to: from };
+    }
+  } else if (empty) {
+    alert(`Please select text to ${action}.`);
+    return;
+  }
+
   const agentName = project.activeEntity?.name;
   const agent = project.agentPresets[agentName];
   if (!agent) {
@@ -70,18 +219,49 @@ export async function invokeAgent({ action, editor, instructions = '' }) {
     return;
   }
   
-    const systemPrompt = agent.systemPrompt; // ดึง System Prompt
-  const actionPrompt = templates[action];  // ดึง Action Template
+  const config = project.globalSettings?.inlineAgentConfig || {};
+  const systemPrompt = agent.systemPrompt; // ดึง System Prompt
+  const actionPrompt = templates[finalAction] || templates[action];  // ดึง Action Template
 
-  let finalPrompt = actionPrompt
-    .replace('{{selection}}', selectionText)
-    .replace('{{instructions}}', instructions);
+  let finalPrompt = buildUserPrompt({
+    finalAction,
+    selectionText,
+    storyContext,
+    instructions,
+    config
+  });
+  if (!finalPrompt) {
+    finalPrompt = (templates[action] || '')
+      .replace('{{selection}}', selectionText)
+      .replace('{{instructions}}', instructions);
+  }
+
+  const activeSession = getActiveSession(project);
+  const worldContext = buildInlineAgentWorldContext(project, activeSession, {
+    action: finalAction,
+    selectionText,
+    instructions
+  });
+  const worldContextText = String(worldContext?.text || '');
+  if (worldContextText) {
+    finalPrompt = `${finalPrompt}\n\n[WORLD_CONTEXT]\n${worldContextText}\n[/WORLD_CONTEXT]\n\nUse the WORLD_CONTEXT as canonical chapter/book context. Do not contradict it.`;
+  }
 
   // --- [✅ เพิ่ม] ส่ง Event พร้อมข้อมูล Prompt ทั้งหมด ---
   stateManager.bus.publish('composer:promptConstructed', {
     systemPrompt,
     actionPrompt,
-    userText: selectionText,
+    userText: finalAction === 'fromInstruction'
+      ? `[SCENE_BEAT]\n${selectionText}\n\n[STORY_CONTEXT]\n${storyContext}`
+      : selectionText,
+    finalAction,
+    worldContextInjected: worldContext?.injected === true,
+    worldContextText,
+    worldContextItemCount: Number(worldContext?.itemCount) || 0,
+    worldContextMode: worldContext?.mode || null,
+    worldContextAsOfChapter: worldContext?.asOfChapter ?? null,
+    worldContextWorldName: worldContext?.worldName || null,
+    worldContextBookName: worldContext?.bookName || null,
   });
   // --------------------------------------------------
 
@@ -91,41 +271,36 @@ export async function invokeAgent({ action, editor, instructions = '' }) {
     const response = await callLLM(agent, [{ role: 'user', content: `${systemPrompt}\n\n${finalPrompt}` }]);
     
     const resultText = response.content.trim();
-    
-    // สร้าง HTML ที่ถูกต้อง โดยห่อทุกย่อหน้าด้วย <p> (วิธีนี้ยังคงดีที่สุด)
-    const resultHtml = resultText
+    const resultBlocks = resultText
       .split('\n')
-      .filter(p => p.trim() !== '')
-      .map(paragraph => `<p>${paragraph}</p>`)
-      .join('');
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim() !== '')
+      .map((paragraph) => ({
+        type: 'paragraph',
+        content: [{ type: 'text', text: paragraph }],
+      }));
 
-    // --- [✅ หัวใจของการแก้ไข] ---
-    let transaction = editor.state.tr;
-    const startPos = from;
+    const suggestionContent = resultBlocks.length > 0
+      ? resultBlocks
+      : [{ type: 'paragraph' }];
 
-    // 1. ลบข้อความเดิม (ถ้าจำเป็น)
-    if (action !== 'continue' && !empty) {
-      transaction.delete(from, to);
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(insertRange, {
+        type: 'suggestionNode',
+        attrs: { 'data-status': 'pending' },
+        content: suggestionContent,
+      })
+      .run();
+
+    // Keep cursor inside the inserted pending chunk so user can edit immediately,
+    // and Decisions (Accept/Reject) become available right away.
+    const insertedNode = editor.state.doc.nodeAt(insertRange.from);
+    if (insertedNode?.type?.name === 'suggestionNode') {
+      const innerTextPos = Math.min(insertRange.from + 2, Math.max(1, editor.state.doc.content.size));
+      editor.chain().focus().setTextSelection(innerTextPos).run();
     }
-    
-    // 2. แปลง HTML string ให้เป็น Node ที่ TipTap รู้จัก
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = resultHtml;
-    const slice = DOMParser.fromSchema(editor.schema).parseSlice(tempDiv);
-    
-    // 3. แทรก Node ใหม่เข้าไป และ "จำ" ตำแหน่งใหม่ที่เกิดขึ้น
-    transaction.replace(startPos, startPos, slice);
-    
-    // 4. คำนวณตำแหน่งสิ้นสุดใหม่จาก Transaction โดยตรง (แม่นยำที่สุด)
-    const endPos = transaction.selection.$head.pos;
-    
-    // 5. เพิ่ม Mark 'pendingHighlight' ในขอบเขตที่ถูกต้อง
-    const mark = editor.schema.marks.pendingHighlight.create();
-    transaction.addMark(startPos, endPos, mark);
-    
-    // 6. สั่งให้ Editor ทำงานตาม Transaction
-    editor.view.dispatch(transaction);
-    // ------------------------------------
 
   } catch (error) {
     console.error("Inline Agent Error:", error);

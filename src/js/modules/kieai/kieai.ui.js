@@ -25,6 +25,17 @@ const KieAI_MODELS = [
     { id: 'video/runway-aleph', name: 'Runway Aleph', type: 'video' },
 ];
 
+function getMediaStudioVisibleModels() {
+    const allModels = KieAIHandlers.getKieAiModels();
+    return Array.isArray(allModels)
+        ? allModels.filter((model) => {
+            const id = String(model?.id || '').toLowerCase();
+            const apiId = String(model?.modelApiId || '').toLowerCase();
+            return !id.includes('suno') && !apiId.includes('suno/');
+        })
+        : [];
+}
+
 function ensureWorkspaceDOM() {
     let workspace = document.getElementById(WORKSPACE_ID);
     if (!workspace) {
@@ -139,7 +150,7 @@ export function mountPhotoStudio(agentName) {
     
     const props = {
         agentName: displayAgentName,
-        models: KieAIHandlers.getKieAiModels(),
+        models: getMediaStudioVisibleModels(),
         onGenerate: KieAIHandlers.handleGenerationRequest,
     };    
 // 2. Mount React Component ลงใน DOM Container

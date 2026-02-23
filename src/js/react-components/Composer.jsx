@@ -2,7 +2,7 @@
  * Composer Component for Tiptap Editor
  * This component provides a rich text editor with various formatting options.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { stateManager } from '../core/core.state.js';
 import * as AgentHandlers from '../modules/agent/agent.handlers.js';
@@ -212,9 +212,30 @@ export default function Composer({
   isPeekChat = false
 }) {
     const [menuState, setMenuState] = useState({ visible: false, x: 0, y: 0 });
+    const selectionBarRef = useRef(null);
+    const [selectionBarState, setSelectionBarState] = useState({
+        visible: false,
+        x: 0,
+        y: 0,
+        text: '',
+        sessionId: null
+    });
+    const [selectionBarItemType, setSelectionBarItemType] = useState('note');
     const [loadingState, setLoadingState] = useState({ isLoading: false });
     const [hasPending, setHasPending] = useState(false);
-    const [inspectorState, setInspectorState] = useState({ isVisible: false, systemPrompt: '', actionPrompt: '', userText: '' });
+    const [inspectorState, setInspectorState] = useState({
+        isVisible: false,
+        systemPrompt: '',
+        actionPrompt: '',
+        userText: '',
+        worldContextInjected: false,
+        worldContextText: '',
+        worldContextItemCount: 0,
+        worldContextMode: null,
+        worldContextAsOfChapter: null,
+        worldContextWorldName: null,
+        worldContextBookName: null
+    });
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [peekChatActive, setPeekChatActive] = useState(Boolean(isPeekChat));
 
@@ -229,6 +250,77 @@ export default function Composer({
         if (!editorInstance) return;
         // ใช้ command `rejectSuggestion`
         editorInstance.chain().focus().rejectSuggestion().run();
+    };
+
+    const hideSelectionActionBar = () => {
+        setSelectionBarState(prev => (prev.visible
+            ? { ...prev, visible: false, text: '' }
+            : prev));
+    };
+
+    const readComposerSelectionPayload = (editorInstance = editor) => {
+        if (!editorInstance?.view?.dom) return null;
+        const selection = window.getSelection?.();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+        const selectedText = String(selection.toString() || '').trim();
+        if (!selectedText) return null;
+
+        const range = selection.getRangeAt(0);
+        const commonNode = range.commonAncestorContainer instanceof Element
+            ? range.commonAncestorContainer
+            : range.commonAncestorContainer?.parentElement;
+        if (!commonNode || !editorInstance.view.dom.contains(commonNode)) return null;
+
+        const rect = range.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) return null;
+
+        return {
+            text: selectedText,
+            rect,
+            sessionId: stateManager.getProject()?.activeSessionId || null
+        };
+    };
+
+    const refreshSelectionActionBar = (editorInstance = editor) => {
+        if (menuState.visible) {
+            hideSelectionActionBar();
+            return;
+        }
+        const payload = readComposerSelectionPayload(editorInstance);
+        if (!payload) {
+            hideSelectionActionBar();
+            return;
+        }
+        const approximateWidth = 340;
+        const approximateHeight = 44;
+        const margin = 8;
+        let left = payload.rect.left + (payload.rect.width / 2) - (approximateWidth / 2);
+        left = Math.max(10, Math.min(left, window.innerWidth - approximateWidth - 10));
+        let top = payload.rect.top - approximateHeight - margin;
+        if (top < 10) {
+            top = payload.rect.bottom + margin;
+        }
+        top = Math.max(10, Math.min(top, window.innerHeight - approximateHeight - 10));
+
+        setSelectionBarState({
+            visible: true,
+            x: Math.round(left),
+            y: Math.round(top),
+            text: payload.text,
+            sessionId: payload.sessionId || null
+        });
+    };
+
+    const handleAddSelectionToCodex = () => {
+        const exactText = String(selectionBarState.text || '').trim();
+        if (!exactText) return;
+        stateManager.bus.publish('world:addSelectionVerbatim', {
+            text: exactText,
+            type: selectionBarItemType,
+            sourceKind: 'composer',
+            sessionId: selectionBarState.sessionId || null
+        });
+        hideSelectionActionBar();
     };
 
   const editor = useEditor({
@@ -262,11 +354,13 @@ export default function Composer({
         },
         onSelectionUpdate: ({ editor }) => {
             setHasPending(editor.isActive('suggestionNode', { 'data-status': 'pending' }));
+            window.requestAnimationFrame(() => refreshSelectionActionBar(editor));
         },
         editorProps: {
             handleDOMEvents: {
                 contextmenu: (view, event) => {
                     event.preventDefault();
+                    hideSelectionActionBar();
                     setMenuState({ visible: true, x: event.clientX, y: event.clientY });
                     return true;
                 },
@@ -295,6 +389,31 @@ export default function Composer({
         }
         return () => document.removeEventListener('click', handleCloseMenu);
     }, [menuState.visible]);
+
+    useEffect(() => {
+        if (!editor) return undefined;
+        const handleWindowSelectionRelatedChange = () => {
+            const activeEl = document.activeElement;
+            if (selectionBarRef.current && (selectionBarRef.current.contains(activeEl) || selectionBarRef.current.contains(document.activeElement))) {
+                return;
+            }
+            window.requestAnimationFrame(() => refreshSelectionActionBar());
+        };
+        const handleWindowResizeOrScroll = () => {
+            if (!selectionBarState.visible) return;
+            window.requestAnimationFrame(() => refreshSelectionActionBar());
+        };
+        document.addEventListener('mouseup', handleWindowSelectionRelatedChange);
+        document.addEventListener('keyup', handleWindowSelectionRelatedChange);
+        window.addEventListener('resize', handleWindowResizeOrScroll);
+        window.addEventListener('scroll', handleWindowResizeOrScroll, true);
+        return () => {
+            document.removeEventListener('mouseup', handleWindowSelectionRelatedChange);
+            document.removeEventListener('keyup', handleWindowSelectionRelatedChange);
+            window.removeEventListener('resize', handleWindowResizeOrScroll);
+            window.removeEventListener('scroll', handleWindowResizeOrScroll, true);
+        };
+    }, [editor, menuState.visible, selectionBarState.visible]);
 
     useEffect(() => {
         if (editor && initialContent !== undefined && editor.getHTML() !== initialContent) {
@@ -344,6 +463,36 @@ export default function Composer({
             <EditorContent editor={editor} className="composer-editor" />
 
             {loadingState.isLoading && <ProcessingIndicator />}
+
+            <div
+                ref={selectionBarRef}
+                className={`selection-action-bar ${selectionBarState.visible ? 'is-visible' : ''}`}
+                aria-hidden={selectionBarState.visible ? 'false' : 'true'}
+                style={{ left: selectionBarState.x, top: selectionBarState.y }}
+                onMouseDown={(event) => {
+                    if (event.target.closest('.selection-action-btn')) {
+                        event.preventDefault();
+                    }
+                }}
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="selection-action-bar__label">Selected text</div>
+                <select
+                    className="selection-action-select"
+                    value={selectionBarItemType}
+                    onChange={(event) => setSelectionBarItemType(event.target.value)}
+                    aria-label="Codex item type"
+                >
+                    <option value="note">Note</option>
+                    <option value="entity">Entity</option>
+                    <option value="place">Place</option>
+                    <option value="rule">Rule</option>
+                    <option value="event">Event</option>
+                </select>
+                <button type="button" className="selection-action-btn" onClick={handleAddSelectionToCodex}>
+                    Add to Codex
+                </button>
+            </div>
 
             {menuState.visible && (
                 <ComposerContextMenu

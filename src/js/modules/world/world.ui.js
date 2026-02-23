@@ -48,6 +48,11 @@ const bookWorkspaceUIState = {
     composerDocByBookId: new Map() // bookId -> treatment|synopsis|outline|sceneBeats
 };
 
+const chapterOverviewSummaryUIState = {
+    activeSessionIds: new Set(),
+    batchByBookId: new Map() // bookId -> { source, startedAt, total }
+};
+
 const bookTreeDndState = {
     draggingSessionId: null,
     draggingBookId: null,
@@ -122,6 +127,31 @@ function markBookChangesViewed(project, bookId) {
     return true;
 }
 
+function formatBookAgentScanSourceLabel(sourceKind) {
+    const normalized = String(sourceKind || '').trim().toLowerCase();
+    if (normalized === 'both') return 'Chat + Composer';
+    if (normalized === 'composer') return 'Composer';
+    if (normalized === 'chat') return 'Chat';
+    return '—';
+}
+
+function formatBookAgentScanModeLabel(scanMode) {
+    const normalized = String(scanMode || '').trim().toLowerCase();
+    if (normalized === 'delta') return 'Auto (Delta)';
+    if (normalized === 'manual') return 'Manual';
+    return '—';
+}
+
+function formatAbsoluteTimestamp(timestamp) {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value) || value <= 0) return 'Unknown time';
+    try {
+        return new Date(value).toLocaleString();
+    } catch (_error) {
+        return 'Unknown time';
+    }
+}
+
 function syncBookTreeCollapseStateFromProject(project) {
     const tree = ensureProjectWorldBookTreeUIState(project);
     if (!tree) {
@@ -156,6 +186,36 @@ function clearInlineEditors() {
     bookWorkspaceUIState.activeBookId = null;
     bookWorkspaceUIState.tabByBookId.clear();
     bookWorkspaceUIState.composerDocByBookId.clear();
+    chapterOverviewSummaryUIState.activeSessionIds.clear();
+    chapterOverviewSummaryUIState.batchByBookId.clear();
+}
+
+function handleChapterOverviewSummaryProgressEvent(payload = {}) {
+    const sessionId = String(payload.sessionId || '').trim();
+    if (!sessionId) return;
+    const state = String(payload.state || '').trim().toLowerCase();
+    if (state === 'start') {
+        chapterOverviewSummaryUIState.activeSessionIds.add(sessionId);
+    } else {
+        chapterOverviewSummaryUIState.activeSessionIds.delete(sessionId);
+    }
+    renderWorldUISurfaces();
+}
+
+function handleBookOverviewSummaryBatchProgressEvent(payload = {}) {
+    const bookId = String(payload.bookId || '').trim();
+    if (!bookId) return;
+    const state = String(payload.state || '').trim().toLowerCase();
+    if (state === 'start') {
+        chapterOverviewSummaryUIState.batchByBookId.set(bookId, {
+            source: String(payload.source || 'composer').trim().toLowerCase() === 'chat' ? 'chat' : 'composer',
+            startedAt: Date.now(),
+            total: Number.isFinite(Number(payload.total)) ? Math.max(0, Math.round(Number(payload.total))) : 0
+        });
+    } else {
+        chapterOverviewSummaryUIState.batchByBookId.delete(bookId);
+    }
+    renderWorldUISurfaces();
 }
 
 function parsePositiveIntOrNull(value) {
@@ -2888,15 +2948,49 @@ function buildBookOverviewChapterCard(project, book, session, activeSession) {
     headerActions.className = 'book-overview-chapter-actions';
     headerActions.appendChild(createDropdown([
         { label: 'Open Chapter', action: 'worldui:bookChapterOpen', data: { sessionId: session.id, bookId: book.id } },
-        { label: 'Chapter Settings...', action: 'worldui:chapterSettingsOpen', data: { sessionId: session.id } }
+        { label: 'Chapter Settings...', action: 'worldui:chapterSettingsOpen', data: { sessionId: session.id } },
+        { label: 'Summarize Bubble from Chat', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'chat' } },
+        { label: 'Summarize Bubble from Composer', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'composer' } }
     ]));
     header.appendChild(headerActions);
     card.appendChild(header);
 
-    const summary = document.createElement('div');
-    summary.className = 'book-overview-chapter-summary';
-    summary.textContent = String(session?.chapterSummary || '').trim() || 'No chapter summary yet.';
-    card.appendChild(summary);
+    const summaryWrap = document.createElement('div');
+    summaryWrap.className = 'book-overview-chapter-summary';
+    const isSummaryRunning = chapterOverviewSummaryUIState.activeSessionIds.has(String(session?.id || ''));
+    const chapterSummaryText = String(session?.chapterSummary || '').trim();
+    const chapterSummaryMeta = (session?.chapterSummaryMeta && typeof session.chapterSummaryMeta === 'object')
+        ? session.chapterSummaryMeta
+        : null;
+    if (chapterSummaryText && chapterSummaryMeta?.source) {
+        const badgeRow = document.createElement('div');
+        badgeRow.className = 'book-overview-chapter-summary-badges';
+        const sourceBadge = createLabelPill(
+            chapterSummaryMeta.source === 'composer' ? 'Summary: Composer' : 'Summary: Chat',
+            chapterSummaryMeta.source === 'composer' ? 'linked' : 'muted'
+        );
+        const presetName = String(chapterSummaryMeta?.presetName || '').trim();
+        const updatedAt = Number(chapterSummaryMeta?.updatedAt);
+        const tooltipParts = [];
+        if (presetName) tooltipParts.push(`Preset: ${presetName}`);
+        if (Number.isFinite(updatedAt) && updatedAt > 0) tooltipParts.push(`Updated: ${new Date(updatedAt).toLocaleString()}`);
+        if (tooltipParts.length > 0) {
+            sourceBadge.title = tooltipParts.join(' • ');
+        }
+        badgeRow.appendChild(sourceBadge);
+        summaryWrap.appendChild(badgeRow);
+    }
+    if (isSummaryRunning) {
+        const progressRow = document.createElement('div');
+        progressRow.className = 'book-overview-chapter-summary-badges';
+        progressRow.appendChild(createLabelPill('Summarizing…', 'linked'));
+        summaryWrap.appendChild(progressRow);
+    }
+    const summaryText = document.createElement('div');
+    summaryText.className = 'book-overview-chapter-summary-text';
+    summaryText.textContent = chapterSummaryText || 'No chapter summary yet.';
+    summaryWrap.appendChild(summaryText);
+    card.appendChild(summaryWrap);
 
     const meta = document.createElement('div');
     meta.className = 'book-overview-chapter-meta';
@@ -2962,6 +3056,57 @@ function buildBookOverviewTab(project, book) {
 
     const activeSession = getActiveSession(project);
     const groups = groupBookChaptersByAct(project, book);
+    const totalChapters = groups.reduce((sum, group) => sum + (Array.isArray(group?.sessions) ? group.sessions.length : 0), 0);
+    const missingSummaryCount = groups.reduce((sum, group) => {
+        const sessions = Array.isArray(group?.sessions) ? group.sessions : [];
+        return sum + sessions.filter((session) => !String(session?.chapterSummary || '').trim()).length;
+    }, 0);
+    const toolbar = document.createElement('div');
+    toolbar.className = 'book-overview-toolbar';
+    const toolbarMeta = document.createElement('div');
+    toolbarMeta.className = 'book-overview-toolbar-meta';
+    toolbarMeta.textContent = `${totalChapters} chapter${totalChapters === 1 ? '' : 's'} • ${missingSummaryCount} missing summaries`;
+    toolbar.appendChild(toolbarMeta);
+    const toolbarActions = document.createElement('div');
+    toolbarActions.className = 'book-overview-toolbar-actions';
+    const activeBatch = chapterOverviewSummaryUIState.batchByBookId.get(book.id) || null;
+    const isBatchRunning = Boolean(activeBatch);
+    const activeBatchSource = activeBatch?.source === 'chat' ? 'chat' : 'composer';
+    const summarizeBtn = document.createElement('button');
+    summarizeBtn.type = 'button';
+    summarizeBtn.className = 'btn btn-small';
+    summarizeBtn.dataset.action = 'book:summarizeMissingOverview';
+    summarizeBtn.dataset.bookId = book.id;
+    summarizeBtn.dataset.source = 'composer';
+    summarizeBtn.textContent = isBatchRunning && activeBatchSource === 'composer'
+        ? 'Summarizing...'
+        : 'Summarize Missing (Composer)';
+    if (missingSummaryCount === 0 || isBatchRunning) {
+        summarizeBtn.disabled = true;
+        summarizeBtn.title = missingSummaryCount === 0
+            ? 'All chapters already have summary bubbles.'
+            : 'A batch summarize job is currently running.';
+    }
+    toolbarActions.appendChild(summarizeBtn);
+    const summarizeChatBtn = document.createElement('button');
+    summarizeChatBtn.type = 'button';
+    summarizeChatBtn.className = 'btn btn-small btn-secondary';
+    summarizeChatBtn.dataset.action = 'book:summarizeMissingOverview';
+    summarizeChatBtn.dataset.bookId = book.id;
+    summarizeChatBtn.dataset.source = 'chat';
+    summarizeChatBtn.textContent = isBatchRunning && activeBatchSource === 'chat'
+        ? 'Summarizing...'
+        : 'Summarize Missing (Chat)';
+    if (missingSummaryCount === 0 || isBatchRunning) {
+        summarizeChatBtn.disabled = true;
+        summarizeChatBtn.title = missingSummaryCount === 0
+            ? 'All chapters already have summary bubbles.'
+            : 'A batch summarize job is currently running.';
+    }
+    toolbarActions.appendChild(summarizeChatBtn);
+    toolbar.appendChild(toolbarActions);
+    wrap.appendChild(toolbar);
+
     const board = document.createElement('div');
     board.className = 'book-overview-board';
     if (groups.length === 0) {
@@ -3336,14 +3481,30 @@ function buildBookChangesTab(project, book) {
     const reviewed = changes.filter(change => String(change.status || 'pending') !== 'pending');
     const lastViewedAt = getBookChangesLastViewedAt(project, book.id);
     const newPending = pending.filter(change => Number(change?.createdAt) > lastViewedAt).length;
-    const autoEnabled = book?.agentAutomation?.worldProposals?.autoProposeEnabled === true;
+    const automation = (book?.agentAutomation?.worldProposals && typeof book.agentAutomation.worldProposals === 'object')
+        ? book.agentAutomation.worldProposals
+        : {};
+    const autoEnabled = automation.autoProposeEnabled === true;
     const codexAgentPresetName = getBookCodexAgentResolvedPresetName(project, book);
     const codexReady = Boolean(codexAgentPresetName);
     const bookAgentPresetName = getBookAgentPresetName(project, book);
     const bookAgentReady = Boolean(bookAgentPresetName);
-    const scanCursor = Number.isFinite(Number(book?.agentAutomation?.worldProposals?.lastScannedMessageCount))
-        ? Math.max(0, Math.round(Number(book.agentAutomation.worldProposals.lastScannedMessageCount)))
+    const scanCursor = Number.isFinite(Number(automation.lastScannedMessageCount))
+        ? Math.max(0, Math.round(Number(automation.lastScannedMessageCount)))
         : 0;
+    const lastScanSourceLabel = formatBookAgentScanSourceLabel(automation.lastScanSourceKind);
+    const lastScanModeLabel = formatBookAgentScanModeLabel(automation.lastScanMode);
+    const lastScanCreatedCount = Number.isFinite(Number(automation.lastScanCreatedCount))
+        ? Math.max(0, Math.round(Number(automation.lastScanCreatedCount)))
+        : 0;
+    const lastScanAttemptAt = Number.isFinite(Number(automation.lastScanAttemptAt))
+        ? Math.round(Number(automation.lastScanAttemptAt))
+        : 0;
+    const hasLastScan = lastScanAttemptAt > 0;
+    const lastScanResult = String(automation.lastScanResult || '').trim().toLowerCase();
+    const lastScanRelative = hasLastScan ? formatRelativeTimestamp(lastScanAttemptAt) : '—';
+    const lastScanAbsolute = hasLastScan ? formatAbsoluteTimestamp(lastScanAttemptAt) : 'Unknown time';
+    const showNoDeltaBadge = hasLastScan && lastScanResult === 'no_delta' && String(automation.lastScanMode || '').trim().toLowerCase() === 'delta';
 
     const card = document.createElement('div');
     card.className = 'studio-world-focus-card book-changes-card';
@@ -3365,7 +3526,23 @@ function buildBookChangesTab(project, book) {
     statusPills.appendChild(createLabelPill(`${newPending} New`, newPending > 0 ? 'danger' : 'muted'));
     statusPills.appendChild(createLabelPill(`Auto ${autoEnabled ? 'On' : 'Off'}`, autoEnabled ? 'linked' : 'muted'));
     statusPills.appendChild(createLabelPill(`Cursor ${scanCursor}`, 'muted'));
+    statusPills.appendChild(createLabelPill(`Last Scan: ${lastScanSourceLabel}`, hasLastScan ? 'linked' : 'muted'));
+    statusPills.appendChild(createLabelPill(`Mode: ${lastScanModeLabel}`, hasLastScan ? 'muted' : 'muted'));
+    statusPills.appendChild(createLabelPill(`At ${lastScanRelative}`, hasLastScan ? 'muted' : 'muted'));
+    if (showNoDeltaBadge) {
+        statusPills.appendChild(createLabelPill('No new delta', 'pending'));
+    }
     card.appendChild(statusPills);
+
+    if (hasLastScan) {
+        const scanMeta = document.createElement('div');
+        scanMeta.className = 'studio-world-focus-meta';
+        const resultLabel = showNoDeltaBadge
+            ? 'no new delta'
+            : `${lastScanCreatedCount} proposal${lastScanCreatedCount === 1 ? '' : 's'} created`;
+        scanMeta.textContent = `Last scan at ${lastScanAbsolute} (${lastScanRelative}) • used ${lastScanSourceLabel.toLowerCase()} • ${lastScanModeLabel.toLowerCase()} • ${resultLabel}.`;
+        card.appendChild(scanMeta);
+    }
 
     const actionGroupPrimary = document.createElement('div');
     actionGroupPrimary.className = 'studio-world-focus-actions book-changes-actions';
@@ -4908,6 +5085,8 @@ export function initWorldUI() {
     stateManager.bus.subscribe('world:dataChanged', renderWorldUISurfaces);
     stateManager.bus.subscribe('session:loaded', renderWorldUISurfaces);
     stateManager.bus.subscribe('session:listChanged', renderWorldUISurfaces);
+    stateManager.bus.subscribe('chapter:overviewSummaryProgress', handleChapterOverviewSummaryProgressEvent);
+    stateManager.bus.subscribe('book:overviewSummaryBatchProgress', handleBookOverviewSummaryBatchProgressEvent);
 
     try {
         renderWorldUISurfaces();

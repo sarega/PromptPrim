@@ -1,6 +1,58 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
 
+function findSuggestionNodeRangeFromSelection(state, typeName) {
+  const { selection } = state;
+  if (!selection) return null;
+
+  // Case 1: NodeSelection directly on the suggestion chunk.
+  if (selection.node && selection.node.type?.name === typeName) {
+    return {
+      node: selection.node,
+      from: selection.from,
+      to: selection.to,
+      pos: selection.from,
+    };
+  }
+
+  // Case 2: Caret/selection is inside a nested block within the suggestion chunk.
+  const $from = selection.$from;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node?.type?.name !== typeName) continue;
+    const from = $from.before(depth);
+    return {
+      node,
+      from,
+      to: from + node.nodeSize,
+      pos: from,
+    };
+  }
+
+  // Case 3: Caret is immediately before/after the chunk.
+  const before = $from.nodeBefore;
+  if (before?.type?.name === typeName) {
+    const from = selection.from - before.nodeSize;
+    return {
+      node: before,
+      from,
+      to: selection.from,
+      pos: from,
+    };
+  }
+  const after = $from.nodeAfter;
+  if (after?.type?.name === typeName) {
+    return {
+      node: after,
+      from: selection.from,
+      to: selection.from + after.nodeSize,
+      pos: selection.from,
+    };
+  }
+
+  return null;
+}
+
 export const SuggestionNode = Node.create({
   name: 'suggestionNode',
   group: 'block',
@@ -82,20 +134,21 @@ export const SuggestionNode = Node.create({
       },
       // [✅ ใหม่] คำสั่งสำหรับ "ยอมรับ"
       acceptSuggestion: () => ({ state, dispatch }) => {
-        const { selection } = state;
-        const node = selection.$from.node(selection.$from.depth);
-        if (node && node.type.name === this.name) {
-          const startPos = selection.$from.start(selection.$from.depth);
-          const endPos = startPos + node.nodeSize;
-          // แทนที่ Node ทั้งก้อนด้วยเนื้อหาข้างใน
-          dispatch(state.tr.replaceWith(startPos - 1, endPos, node.content));
-          return true;
-        }
-        return false;
+        const range = findSuggestionNodeRangeFromSelection(state, this.name);
+        if (!range?.node) return false;
+
+        const tr = state.tr.replaceWith(range.from, range.to, range.node.content);
+        dispatch(tr.scrollIntoView());
+        return true;
       },
       // [✅ ใหม่] คำสั่งสำหรับ "ปฏิเสธ"
-      rejectSuggestion: () => ({ commands }) => {
-        return commands.deleteSelection();
+      rejectSuggestion: () => ({ state, dispatch }) => {
+        const range = findSuggestionNodeRangeFromSelection(state, this.name);
+        if (!range?.node) return false;
+
+        const tr = state.tr.delete(range.from, range.to);
+        dispatch(tr.scrollIntoView());
+        return true;
       },
     };
   },

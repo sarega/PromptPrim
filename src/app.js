@@ -592,6 +592,7 @@ function setupEventSubscriptions() {
     bus.subscribe('world:delete', (payload) => WorldHandlers.deleteWorld(payload));
     bus.subscribe('world:setActive', (payload) => WorldHandlers.setActiveWorld(payload));
     bus.subscribe('world:itemCreate', (payload) => WorldHandlers.createWorldItem(payload));
+    bus.subscribe('world:addSelectionVerbatim', (payload) => WorldHandlers.addSelectionVerbatimToWorld(payload));
     bus.subscribe('world:itemCreatePrompt', (payload) => WorldHandlers.createWorldItemPrompt(payload));
     bus.subscribe('world:itemUpdate', (payload) => WorldHandlers.updateWorldItem(payload));
     bus.subscribe('world:itemEditPrompt', (payload) => WorldHandlers.editWorldItemPrompt(payload));
@@ -622,6 +623,8 @@ function setupEventSubscriptions() {
     bus.subscribe('chapter:reorderInBook', (payload) => WorldHandlers.reorderChapterInBook(payload));
     bus.subscribe('chapter:moveToAct', (payload) => WorldHandlers.moveChapterToAct(payload));
     bus.subscribe('chapter:updateMeta', (payload) => WorldHandlers.updateChapterMetadata(payload));
+    bus.subscribe('chapter:summarizeOverview', (payload) => WorldHandlers.summarizeChapterForOverview(payload));
+    bus.subscribe('book:summarizeMissingOverview', (payload) => WorldHandlers.summarizeMissingBookChaptersForOverview(payload));
     bus.subscribe('chapter:updateMetaPrompt', (payload) => WorldHandlers.updateChapterMetadataPrompt(payload));
 
     bus.subscribe('chat:summarize', SummaryUI.showSummarizationCenter);
