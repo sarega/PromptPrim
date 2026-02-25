@@ -748,6 +748,71 @@ body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studi
     color: #cbd5e1;
 }
 
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-entity {
+    background: #3b1124;
+    border-color: #9d174d;
+    color: #fbcfe8;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-place {
+    background: #0f1f3f;
+    border-color: #1d4ed8;
+    color: #bfdbfe;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-rule {
+    background: #241046;
+    border-color: #6d28d9;
+    color: #ddd6fe;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-event {
+    background: #3a2610;
+    border-color: #b45309;
+    color: #fde68a;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-relationship {
+    background: #072a21;
+    border-color: #047857;
+    color: #bbf7d0;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-note {
+    background: #111827;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill.is-type-source {
+    background: #171d4a;
+    border-color: #4338ca;
+    color: #c7d2fe;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-item-thumb {
+    background: #111827;
+    border-color: #334155;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview {
+    background: #0f172a;
+    border-color: #334155;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview-img {
+    background: #111827;
+    border-color: #334155;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview-label {
+    color: #e2e8f0;
+}
+
+body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview-text {
+    color: #94a3b8;
+}
+
 body.dark-mode :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-editor {
     background: #0f172a;
     border-color: #334155;

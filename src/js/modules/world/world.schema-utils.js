@@ -136,12 +136,19 @@ export function normalizeWorldItem(item = {}) {
     const visibility = item?.visibility === WORLD_ITEM_VISIBILITY_GATED
         ? WORLD_ITEM_VISIBILITY_GATED
         : fallbackVisibility;
+    const subtypeRaw = normalizeNullableString(item?.subtype);
+    const thumbnailUrl = normalizeNullableString(
+        item?.thumbnailUrl ?? item?.imageUrl ?? item?.portraitUrl
+    );
 
     return {
         id: normalizeNullableString(item?.id) || createWorldItemId(),
         type: ALLOWED_WORLD_ITEM_TYPES.has(item?.type) ? item.type : 'note',
+        subtype: subtypeRaw ? subtypeRaw.toLowerCase() : null,
         title: normalizeString(item?.title, 'Untitled'),
         summary: normalizeString(item?.summary, ''),
+        aliases: uniqueStringArray(item?.aliases),
+        thumbnailUrl,
         content: cloneJsonish(item?.content ?? ''),
         status: ALLOWED_WORLD_ITEM_STATUSES.has(item?.status) ? item.status : WORLD_ITEM_STATUS_DRAFT,
         visibility,
@@ -315,6 +322,9 @@ export function normalizeBook(book = {}, options = {}) {
     const agentAutomation = normalizeBookAgentAutomation(book?.agentAutomation);
     const bookAgentConfig = normalizeBookSurfaceAgentConfig(book?.bookAgentConfig);
     const codexAgentConfig = normalizeBookCodexAgentConfig(book?.codexAgentConfig);
+    const chapterStructureDefaults = isPlainObject(book?.chapterStructureDefaults)
+        ? cloneJsonish(book.chapterStructureDefaults)
+        : {};
 
     return {
         id: normalizeNullableString(book?.id) || createBookId(),
@@ -330,6 +340,7 @@ export function normalizeBook(book = {}, options = {}) {
         exportProfile,
         bookAgentConfig,
         codexAgentConfig,
+        chapterStructureDefaults,
         agentAutomation,
         structure: {
             acts,

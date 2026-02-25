@@ -705,6 +705,13 @@ body.dark-mode #model-count-status {
     min-width: 0;
 }
 
+.world-workspace-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .world-workspace-heading h2 {
     margin: 0;
     font-size: 1rem;

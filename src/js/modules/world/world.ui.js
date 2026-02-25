@@ -50,7 +50,7 @@ const bookWorkspaceUIState = {
 
 const chapterOverviewSummaryUIState = {
     activeSessionIds: new Set(),
-    batchByBookId: new Map() // bookId -> { source, startedAt, total }
+    batchByBookId: new Map() // bookId -> { source, mode, startedAt, total }
 };
 
 const bookTreeDndState = {
@@ -209,6 +209,7 @@ function handleBookOverviewSummaryBatchProgressEvent(payload = {}) {
     if (state === 'start') {
         chapterOverviewSummaryUIState.batchByBookId.set(bookId, {
             source: String(payload.source || 'composer').trim().toLowerCase() === 'chat' ? 'chat' : 'composer',
+            mode: String(payload.mode || 'missing').trim().toLowerCase() === 'regenerate' ? 'regenerate' : 'missing',
             startedAt: Date.now(),
             total: Number.isFinite(Number(payload.total)) ? Math.max(0, Math.round(Number(payload.total))) : 0
         });
@@ -241,6 +242,91 @@ function readCheckboxChecked(container, selector, fallback = false) {
     const el = container.querySelector(selector);
     if (!(el instanceof HTMLInputElement) || el.type !== 'checkbox') return fallback;
     return el.checked;
+}
+
+function findNamedFormControl(container, name) {
+    if (!container) return null;
+    const targetName = String(name || '').trim();
+    if (!targetName) return null;
+    return Array.from(container.querySelectorAll('[name]')).find((el) => (
+        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)
+        && el.name === targetName
+    )) || null;
+}
+
+function findThumbnailPreviewBlock(container, urlInputName) {
+    if (!container) return null;
+    const targetName = String(urlInputName || '').trim();
+    if (!targetName) return null;
+    return Array.from(container.querySelectorAll('.studio-world-thumb-preview'))
+        .find((el) => el instanceof HTMLElement && String(el.dataset.thumbPreviewFor || '') === targetName) || null;
+}
+
+function refreshWorldItemThumbnailPreview(container, urlInputName) {
+    const editor = container?.closest?.('.studio-world-inline-editor') || container;
+    if (!(editor instanceof Element)) return;
+    const urlInput = findNamedFormControl(editor, urlInputName);
+    const preview = findThumbnailPreviewBlock(editor, urlInputName);
+    if (!(preview instanceof HTMLElement)) return;
+    const img = preview.querySelector('.studio-world-thumb-preview-img');
+    const text = preview.querySelector('.studio-world-thumb-preview-text');
+    if (!(img instanceof HTMLImageElement) || !(text instanceof HTMLElement)) return;
+
+    const url = String(urlInput?.value || '').trim();
+    if (!url) {
+        preview.classList.add('is-empty');
+        img.removeAttribute('src');
+        text.textContent = 'No thumbnail selected';
+        return;
+    }
+
+    preview.classList.remove('is-empty');
+    img.src = url;
+    if (url.startsWith('data:image/')) {
+        text.textContent = 'Embedded image selected';
+    } else {
+        text.textContent = url.length > 90 ? `${url.slice(0, 87)}...` : url;
+    }
+}
+
+function handleWorldItemThumbnailFileInputChange(fileInput) {
+    if (!(fileInput instanceof HTMLInputElement)) return;
+    const urlInputName = String(fileInput.dataset.thumbUrlTarget || '').trim();
+    const editor = fileInput.closest('.studio-world-inline-editor');
+    if (!editor || !urlInputName) return;
+    const urlInput = findNamedFormControl(editor, urlInputName);
+    if (!(urlInput instanceof HTMLInputElement)) return;
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) {
+        refreshWorldItemThumbnailPreview(editor, urlInputName);
+        return;
+    }
+    if (!String(file.type || '').startsWith('image/')) {
+        showCustomAlert('Please choose an image file.', 'World Item');
+        fileInput.value = '';
+        return;
+    }
+    const maxBytes = 2 * 1024 * 1024;
+    if (Number(file.size || 0) > maxBytes) {
+        showCustomAlert('Image is too large for embedded thumbnail (max 2MB). Use a URL instead.', 'World Item');
+        fileInput.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        if (!result) {
+            showCustomAlert('Could not read the selected image.', 'World Item');
+            return;
+        }
+        urlInput.value = result;
+        refreshWorldItemThumbnailPreview(editor, urlInputName);
+    };
+    reader.onerror = () => {
+        showCustomAlert('Failed to read image file.', 'World Item');
+    };
+    reader.readAsDataURL(file);
 }
 
 function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
@@ -338,11 +424,15 @@ function buildWorldWorkspaceShellDOM() {
         <div class="world-workspace-shell">
             <div class="world-workspace-header">
                 <div class="world-workspace-heading">
-                    <h2 id="world-workspace-title">World</h2>
+                    <div class="world-workspace-title-row">
+                        <h2 id="world-workspace-title">World</h2>
+                        <button type="button" id="world-workspace-rename-btn" class="btn btn-small btn-secondary" data-action="world:renamePrompt" disabled>Rename</button>
+                    </div>
                     <p id="world-workspace-meta">Open a project to start building worlds.</p>
+                    <div id="world-workspace-status-pills" class="world-workspace-status-pills"></div>
                 </div>
                 <div class="world-workspace-header-actions">
-                    <button type="button" class="btn btn-small btn-secondary" data-action="world:proposeFromCurrentChat">Propose Updates</button>
+                    <button type="button" id="world-workspace-propose-btn" class="btn btn-small btn-secondary" data-action="world:proposeFromCurrentChat" disabled>Propose Updates</button>
                 </div>
             </div>
             <div id="world-workspace-content" class="world-workspace-content"></div>
@@ -1322,6 +1412,96 @@ function createLabelPill(text, tone = 'default') {
     return pill;
 }
 
+function getWorldItemTypeDisplayMeta(type = 'note') {
+    const normalized = String(type || 'note').trim().toLowerCase() || 'note';
+    switch (normalized) {
+        case 'entity':
+            return { key: 'entity', label: 'Entity', icon: '👤', tone: 'type-entity' };
+        case 'place':
+            return { key: 'place', label: 'Place', icon: '📍', tone: 'type-place' };
+        case 'rule':
+            return { key: 'rule', label: 'Rule', icon: '📜', tone: 'type-rule' };
+        case 'event':
+            return { key: 'event', label: 'Event', icon: '✨', tone: 'type-event' };
+        case 'relationship':
+            return { key: 'relationship', label: 'Relationship', icon: '🔗', tone: 'type-relationship' };
+        case 'source':
+            return { key: 'source', label: 'Source', icon: '📚', tone: 'type-source' };
+        case 'note':
+        default:
+            return { key: 'note', label: 'Note', icon: '📝', tone: 'type-note' };
+    }
+}
+
+function formatWorldItemSubtypeLabel(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    return raw
+        .split(/[\s_-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function getWorldItemSubtypeIcon(item = {}) {
+    const subtype = String(item?.subtype || '').trim().toLowerCase();
+    const type = String(item?.type || '').trim().toLowerCase();
+    if (!subtype) return null;
+
+    if (type === 'entity') {
+        if (['character', 'person', 'human'].includes(subtype)) return '🧑';
+        if (['animal', 'pet', 'creature'].includes(subtype)) return '🐾';
+        if (['faction', 'group', 'organization', 'organisation'].includes(subtype)) return '👥';
+        if (['object', 'item', 'artifact', 'artefact'].includes(subtype)) return '🧰';
+    }
+    if (type === 'place') {
+        if (['city', 'town', 'village'].includes(subtype)) return '🏙️';
+        if (['room', 'house', 'home', 'building'].includes(subtype)) return '🏠';
+    }
+    return null;
+}
+
+function formatWorldItemAliasesMeta(item = {}) {
+    const aliases = Array.isArray(item?.aliases)
+        ? item.aliases.map(alias => String(alias || '').trim()).filter(Boolean)
+        : [];
+    if (aliases.length === 0) return null;
+    if (aliases.length === 1) return `Alias: ${aliases[0]}`;
+    const [first] = aliases;
+    return `Aliases: ${first} +${aliases.length - 1}`;
+}
+
+function appendWorldItemThumbnailToHeader(header, item) {
+    const thumbnailUrl = String(item?.thumbnailUrl || '').trim();
+    if (!thumbnailUrl) return;
+    const img = document.createElement('img');
+    img.className = 'studio-world-item-thumb';
+    img.src = thumbnailUrl;
+    img.alt = `${item?.title || 'World item'} thumbnail`;
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.addEventListener('error', () => {
+        img.remove();
+    }, { once: true });
+    header.insertBefore(img, header.firstChild || null);
+}
+
+function appendWorldItemTitleContent(nameEl, item) {
+    const typeMeta = getWorldItemTypeDisplayMeta(item?.type);
+    const subtypeIcon = getWorldItemSubtypeIcon(item);
+
+    const icon = document.createElement('span');
+    icon.className = 'item-icon';
+    icon.textContent = subtypeIcon || typeMeta.icon;
+    icon.setAttribute('aria-hidden', 'true');
+
+    const titleText = document.createElement('span');
+    titleText.textContent = item?.title || 'Untitled';
+
+    nameEl.append(icon, titleText);
+    return typeMeta;
+}
+
 function createMetaRow(parts = []) {
     const row = document.createElement('div');
     row.className = 'studio-world-item-meta';
@@ -1363,6 +1543,19 @@ function createInlineTextInput({
     if (name) input.name = name;
     input.value = value ?? '';
     if (placeholder) input.placeholder = placeholder;
+    return input;
+}
+
+function createInlineFileInput({
+    className = 'studio-world-inline-input studio-world-inline-file-input',
+    name = '',
+    accept = ''
+} = {}) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.className = className;
+    if (name) input.name = name;
+    if (accept) input.accept = accept;
     return input;
 }
 
@@ -1447,6 +1640,45 @@ function createInlineEditorActions({ saveAction, cancelAction, saveLabel = 'Save
 
     row.append(saveBtn, cancelBtn);
     return row;
+}
+
+function buildWorldItemThumbnailEditorControls({
+    urlInputName = 'itemThumbnailUrl',
+    fileInputName = 'itemThumbnailFile',
+    value = ''
+} = {}) {
+    const urlInput = createInlineTextInput({
+        name: urlInputName,
+        value: value || '',
+        placeholder: 'https://... or embed via file picker'
+    });
+    urlInput.classList.add('studio-world-inline-thumb-url-input');
+    urlInput.dataset.thumbUrlInput = 'true';
+
+    const urlField = createInlineField('Thumbnail URL', urlInput);
+
+    const fileInput = createInlineFileInput({
+        name: fileInputName,
+        accept: 'image/*'
+    });
+    fileInput.classList.add('studio-world-inline-thumb-file-input');
+    fileInput.dataset.thumbUrlTarget = urlInputName;
+    const fileField = createInlineField('Thumbnail Image', fileInput);
+
+    const preview = document.createElement('div');
+    preview.className = 'studio-world-thumb-preview is-empty';
+    preview.dataset.thumbPreviewFor = urlInputName;
+    preview.innerHTML = `
+        <img class="studio-world-thumb-preview-img" alt="Thumbnail preview" loading="lazy" />
+        <div class="studio-world-thumb-preview-meta">
+            <div class="studio-world-thumb-preview-label">Thumbnail Preview</div>
+            <div class="studio-world-thumb-preview-text">No thumbnail selected</div>
+            <button type="button" class="btn btn-small btn-secondary" data-action="worldui:itemThumbClear" data-thumb-url-target="${urlInputName}" data-thumb-file-target="${fileInputName}">Clear</button>
+        </div>
+    `;
+    preview.style.gridColumn = '1 / -1';
+
+    return { urlField, fileField, preview };
 }
 
 function buildBookInlineEditor(project, book) {
@@ -1617,22 +1849,42 @@ function buildWorldItemCreateInlineEditor(project) {
         value: draft.type || 'entity',
         options: ['entity', 'place', 'rule', 'event', 'note', 'source', 'relationship']
     })));
+    grid.appendChild(createInlineField('Subtype', createInlineTextInput({
+        name: 'newItemSubtype',
+        value: '',
+        placeholder: 'character, object, faction...'
+    })));
     grid.appendChild(createInlineField('Title', createInlineTextInput({
         name: 'newItemTitle',
         value: '',
         placeholder: 'Item title'
     })));
-    grid.appendChild(createInlineField('Summary', createInlineTextarea({
+    grid.appendChild(createInlineField('Description', createInlineTextarea({
         name: 'newItemSummary',
         value: '',
         rows: 3,
-        placeholder: 'Summary / note'
+        placeholder: 'Description / note'
     })));
     grid.appendChild(createInlineField('Tags', createInlineTextInput({
         name: 'newItemTags',
         value: '',
         placeholder: 'comma, separated, tags'
     })));
+    grid.appendChild(createInlineField('Aliases', createInlineTextInput({
+        name: 'newItemAliases',
+        value: '',
+        placeholder: 'nickname, alt spelling'
+    })));
+    {
+        const thumbControls = buildWorldItemThumbnailEditorControls({
+            urlInputName: 'newItemThumbnailUrl',
+            fileInputName: 'newItemThumbnailFile',
+            value: ''
+        });
+        grid.appendChild(thumbControls.urlField);
+        grid.appendChild(thumbControls.fileField);
+        grid.appendChild(thumbControls.preview);
+    }
     grid.appendChild(createInlineField('Visibility', createInlineSelect({
         name: 'newItemVisibility',
         value: 'revealed',
@@ -1648,6 +1900,7 @@ function buildWorldItemCreateInlineEditor(project) {
     })));
 
     editor.appendChild(grid);
+    refreshWorldItemThumbnailPreview(editor, 'newItemThumbnailUrl');
     editor.appendChild(createInlineEditorActions({
         saveAction: 'worldui:itemCreateSave',
         cancelAction: 'worldui:itemCreateCancel',
@@ -1829,22 +2082,42 @@ function buildWorldItemInlineEditor(worldId, item) {
         value: item.type || 'note',
         options: ['entity', 'place', 'rule', 'event', 'note', 'source', 'relationship']
     })));
+    grid.appendChild(createInlineField('Subtype', createInlineTextInput({
+        name: 'itemSubtype',
+        value: item.subtype || '',
+        placeholder: 'character, object, faction...'
+    })));
     grid.appendChild(createInlineField('Title', createInlineTextInput({
         name: 'itemTitle',
         value: item.title || '',
         placeholder: 'Item title'
     })));
-    grid.appendChild(createInlineField('Summary', createInlineTextarea({
+    grid.appendChild(createInlineField('Description', createInlineTextarea({
         name: 'itemSummary',
         value: item.summary || '',
         rows: 3,
-        placeholder: 'Summary / note'
+        placeholder: 'Description / note'
     })));
     grid.appendChild(createInlineField('Tags', createInlineTextInput({
         name: 'itemTags',
         value: Array.isArray(item.tags) ? item.tags.join(', ') : '',
         placeholder: 'comma, separated, tags'
     })));
+    grid.appendChild(createInlineField('Aliases', createInlineTextInput({
+        name: 'itemAliases',
+        value: Array.isArray(item.aliases) ? item.aliases.join(', ') : '',
+        placeholder: 'nickname, alt spelling'
+    })));
+    {
+        const thumbControls = buildWorldItemThumbnailEditorControls({
+            urlInputName: 'itemThumbnailUrl',
+            fileInputName: 'itemThumbnailFile',
+            value: item.thumbnailUrl || ''
+        });
+        grid.appendChild(thumbControls.urlField);
+        grid.appendChild(thumbControls.fileField);
+        grid.appendChild(thumbControls.preview);
+    }
     grid.appendChild(createInlineField('Visibility', createInlineSelect({
         name: 'itemVisibility',
         value: item.visibility || 'revealed',
@@ -1873,6 +2146,7 @@ function buildWorldItemInlineEditor(worldId, item) {
     }
 
     editor.appendChild(grid);
+    refreshWorldItemThumbnailPreview(editor, 'itemThumbnailUrl');
     editor.appendChild(createInlineEditorActions({
         saveAction: 'worldui:itemEditSave',
         cancelAction: 'worldui:itemEditCancel',
@@ -2243,7 +2517,7 @@ function renderBookSidebarModal() {
         } else {
             const openBtn = document.createElement('div');
             openBtn.className = 'world-book-settings-modal-quick-actions';
-            openBtn.innerHTML = `<button type="button" class="btn btn-small btn-secondary" data-action="worldui:bookChapterOpen" data-session-id="${session.id}" ${book ? `data-book-id="${book.id}"` : ''}>Open Chapter Chat</button>`;
+            openBtn.innerHTML = `<button type="button" class="btn btn-small btn-secondary" data-action="worldui:bookChapterOpen" data-workspace="chat" data-session-id="${session.id}" ${book ? `data-book-id="${book.id}"` : ''}>Open Chapter Chat</button>`;
             bodyEl.appendChild(openBtn);
             bodyEl.appendChild(buildChapterMetaInlineEditor(session));
         }
@@ -2421,13 +2695,15 @@ function renderBooksSection(assetsContainer, project) {
 function buildWorldItemPreviewRow(worldId, item) {
     const row = document.createElement('div');
     row.className = 'item world-entry-item';
+    let typeMeta = getWorldItemTypeDisplayMeta(item?.type);
 
     const header = document.createElement('div');
     header.className = 'item-header';
+    appendWorldItemThumbnailToHeader(header, item);
 
     const name = document.createElement('div');
     name.className = 'item-name';
-    name.textContent = `${item.title || 'Untitled'} (${item.type || 'note'})`;
+    typeMeta = appendWorldItemTitleContent(name, item);
     header.appendChild(name);
 
     appendItemDropdownToHeader(header, [
@@ -2437,18 +2713,22 @@ function buildWorldItemPreviewRow(worldId, item) {
     ]);
     row.appendChild(header);
 
-    if (item.summary || item.visibility === 'gated') {
+    const aliasMeta = formatWorldItemAliasesMeta(item);
+    if (item.summary || item.visibility === 'gated' || aliasMeta) {
         row.appendChild(createMetaRow([
             item.summary ? String(item.summary).slice(0, 80) : null,
+            aliasMeta,
             item.visibility === 'gated' ? `Gated${item.revealGate?.value ? ` @ch${item.revealGate.value}` : ''}` : 'Revealed'
         ]));
     }
 
     const footer = document.createElement('div');
     footer.className = 'studio-world-item-footer';
+    footer.appendChild(createLabelPill(typeMeta.label, typeMeta.tone));
+    if (item.subtype) footer.appendChild(createLabelPill(formatWorldItemSubtypeLabel(item.subtype), 'muted'));
     const editBtn = document.createElement('button');
     editBtn.type = 'button';
-    editBtn.className = 'btn btn-small btn-secondary';
+    editBtn.className = 'btn btn-small btn-secondary studio-world-inline-edit-toggle';
     editBtn.dataset.action = worldInlineUIState.editingWorldItemId === item.id
         ? 'worldui:itemEditCancel'
         : 'worldui:itemEditStart';
@@ -2468,23 +2748,28 @@ function buildWorldItemPreviewRow(worldId, item) {
 function buildWorldPeekPreviewRow(item) {
     const row = document.createElement('div');
     row.className = 'item world-entry-item';
+    let typeMeta = getWorldItemTypeDisplayMeta(item?.type);
 
     const header = document.createElement('div');
     header.className = 'item-header';
+    appendWorldItemThumbnailToHeader(header, item);
 
     const name = document.createElement('div');
     name.className = 'item-name';
-    name.textContent = `${item.title || 'Untitled'} (${item.type || 'note'})`;
+    typeMeta = appendWorldItemTitleContent(name, item);
     header.appendChild(name);
     row.appendChild(header);
 
     row.appendChild(createMetaRow([
         item.summary ? String(item.summary).slice(0, 90) : null,
+        formatWorldItemAliasesMeta(item),
         item.visibility === 'gated' ? 'Gated' : 'Visible'
     ]));
 
     const footer = document.createElement('div');
     footer.className = 'studio-world-item-footer';
+    footer.appendChild(createLabelPill(typeMeta.label, typeMeta.tone));
+    if (item.subtype) footer.appendChild(createLabelPill(formatWorldItemSubtypeLabel(item.subtype), 'muted'));
     if (item.status) footer.appendChild(createLabelPill(item.status, 'muted'));
     if (Array.isArray(item.tags) && item.tags.length > 0) {
         footer.appendChild(createLabelPill(`#${item.tags[0]}`, 'muted'));
@@ -2528,6 +2813,7 @@ function buildWorldItemQuickAddToolbar(activeWorld) {
         buttonRow.appendChild(btn);
     });
     toolbar.appendChild(buttonRow);
+
     return toolbar;
 }
 
@@ -2896,25 +3182,75 @@ function renderWorldChangesSection(assetsContainer, project) {
 }
 
 function estimateSessionWordCount(session) {
-    const composerText = typeof session?.composerContent === 'string' ? session.composerContent.trim() : '';
-    const source = composerText || (Array.isArray(session?.history)
-        ? session.history
-            .map((message) => {
-                const content = message?.content;
-                if (typeof content === 'string') return content;
-                if (Array.isArray(content)) {
-                    return content
-                        .filter(part => part?.type === 'text')
-                        .map(part => part.text || '')
-                        .join(' ');
-                }
-                return '';
-            })
-            .join(' ')
-            .trim()
-        : '');
-    if (!source) return 0;
-    return source.split(/\s+/).filter(Boolean).length;
+    const composerHtml = typeof session?.composerContent === 'string' ? session.composerContent : '';
+    const composerPlainText = extractPlainTextFromHtmlForWordCount(composerHtml);
+    const composerWordCount = countWordsForBookOverview(composerPlainText);
+    if (composerWordCount > 0) return composerWordCount;
+
+    if (!Array.isArray(session?.history)) return 0;
+    const chatText = session.history
+        .filter((message) => {
+            if (!message || String(message.role || '').toLowerCase() === 'system') return false;
+            if (isLikelySceneBeatUserPromptMessage(message)) return false;
+            return true;
+        })
+        .map((message) => extractTextFromMessageContent(message.content))
+        .filter(Boolean)
+        .join(' ');
+    return countWordsForBookOverview(chatText);
+}
+
+function extractPlainTextFromHtmlForWordCount(html = '') {
+    const raw = String(html || '').trim();
+    if (!raw) return '';
+
+    const withBreakHints = raw
+        .replace(/<\s*br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li|ul|ol|h[1-6]|blockquote|section|article)>/gi, '$&\n');
+
+    if (typeof document !== 'undefined' && document.createElement) {
+        const temp = document.createElement('div');
+        temp.innerHTML = withBreakHints;
+        return String(temp.textContent || temp.innerText || '')
+            .replace(/\u00A0/g, ' ')
+            .replace(/\r\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
+    return withBreakHints
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/\s+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+}
+
+function countWordsForBookOverview(text = '') {
+    const normalized = String(text || '').trim();
+    if (!normalized) return 0;
+    if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+        try {
+            const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+            let count = 0;
+            for (const part of segmenter.segment(normalized)) {
+                if (part?.isWordLike) count += 1;
+            }
+            if (count > 0) return count;
+        } catch (_error) {
+            // Fallback to whitespace-based counting below if segmentation is unavailable.
+        }
+    }
+    return normalized.split(/\s+/).filter(Boolean).length;
+}
+
+function isLikelySceneBeatUserPromptMessage(message) {
+    if (!message || String(message.role || '').toLowerCase() !== 'user') return false;
+    const text = extractTextFromMessageContent(message.content);
+    if (!text) return false;
+    const upper = text.toUpperCase();
+    return upper.includes('[SCENE_BEAT]') && (upper.includes('[/SCENE_BEAT]') || upper.includes('[STORY_CONTEXT]'));
 }
 
 function formatWordCountLabel(count) {
@@ -2950,7 +3286,9 @@ function buildBookOverviewChapterCard(project, book, session, activeSession) {
         { label: 'Open Chapter', action: 'worldui:bookChapterOpen', data: { sessionId: session.id, bookId: book.id } },
         { label: 'Chapter Settings...', action: 'worldui:chapterSettingsOpen', data: { sessionId: session.id } },
         { label: 'Summarize Bubble from Chat', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'chat' } },
-        { label: 'Summarize Bubble from Composer', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'composer' } }
+        { label: 'Summarize Bubble from Composer', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'composer' } },
+        { label: 'Regenerate Bubble from Chat', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'chat', force: true } },
+        { label: 'Regenerate Bubble from Composer', action: 'chapter:summarizeOverview', data: { sessionId: session.id, source: 'composer', force: true } }
     ]));
     header.appendChild(headerActions);
     card.appendChild(header);
@@ -3057,6 +3395,10 @@ function buildBookOverviewTab(project, book) {
     const activeSession = getActiveSession(project);
     const groups = groupBookChaptersByAct(project, book);
     const totalChapters = groups.reduce((sum, group) => sum + (Array.isArray(group?.sessions) ? group.sessions.length : 0), 0);
+    const totalBookWords = groups.reduce((sum, group) => {
+        const sessions = Array.isArray(group?.sessions) ? group.sessions : [];
+        return sum + sessions.reduce((sessionSum, session) => sessionSum + estimateSessionWordCount(session), 0);
+    }, 0);
     const missingSummaryCount = groups.reduce((sum, group) => {
         const sessions = Array.isArray(group?.sessions) ? group.sessions : [];
         return sum + sessions.filter((session) => !String(session?.chapterSummary || '').trim()).length;
@@ -3065,13 +3407,18 @@ function buildBookOverviewTab(project, book) {
     toolbar.className = 'book-overview-toolbar';
     const toolbarMeta = document.createElement('div');
     toolbarMeta.className = 'book-overview-toolbar-meta';
-    toolbarMeta.textContent = `${totalChapters} chapter${totalChapters === 1 ? '' : 's'} • ${missingSummaryCount} missing summaries`;
+    toolbarMeta.textContent = [
+        `${totalChapters} chapter${totalChapters === 1 ? '' : 's'}`,
+        formatWordCountLabel(totalBookWords),
+        `${missingSummaryCount} missing summaries`
+    ].join(' • ');
     toolbar.appendChild(toolbarMeta);
     const toolbarActions = document.createElement('div');
     toolbarActions.className = 'book-overview-toolbar-actions';
     const activeBatch = chapterOverviewSummaryUIState.batchByBookId.get(book.id) || null;
     const isBatchRunning = Boolean(activeBatch);
     const activeBatchSource = activeBatch?.source === 'chat' ? 'chat' : 'composer';
+    const activeBatchMode = activeBatch?.mode === 'regenerate' ? 'regenerate' : 'missing';
     const summarizeBtn = document.createElement('button');
     summarizeBtn.type = 'button';
     summarizeBtn.className = 'btn btn-small';
@@ -3079,7 +3426,7 @@ function buildBookOverviewTab(project, book) {
     summarizeBtn.dataset.bookId = book.id;
     summarizeBtn.dataset.source = 'composer';
     summarizeBtn.textContent = isBatchRunning && activeBatchSource === 'composer'
-        ? 'Summarizing...'
+        ? (activeBatchMode === 'regenerate' ? 'Regenerating...' : 'Summarizing...')
         : 'Summarize Missing (Composer)';
     if (missingSummaryCount === 0 || isBatchRunning) {
         summarizeBtn.disabled = true;
@@ -3095,7 +3442,7 @@ function buildBookOverviewTab(project, book) {
     summarizeChatBtn.dataset.bookId = book.id;
     summarizeChatBtn.dataset.source = 'chat';
     summarizeChatBtn.textContent = isBatchRunning && activeBatchSource === 'chat'
-        ? 'Summarizing...'
+        ? (activeBatchMode === 'regenerate' ? 'Regenerating...' : 'Summarizing...')
         : 'Summarize Missing (Chat)';
     if (missingSummaryCount === 0 || isBatchRunning) {
         summarizeChatBtn.disabled = true;
@@ -3104,6 +3451,21 @@ function buildBookOverviewTab(project, book) {
             : 'A batch summarize job is currently running.';
     }
     toolbarActions.appendChild(summarizeChatBtn);
+    const regenAllMenu = createDropdown([
+        { label: 'Regenerate All Summaries (Composer)', action: 'book:summarizeMissingOverview', data: { bookId: book.id, source: 'composer', force: true } },
+        { label: 'Regenerate All Summaries (Chat)', action: 'book:summarizeMissingOverview', data: { bookId: book.id, source: 'chat', force: true } }
+    ]);
+    regenAllMenu.querySelector('button')?.setAttribute('title', 'Regenerate all chapter summaries');
+    if (isBatchRunning || totalChapters === 0) {
+        const regenMenuBtn = regenAllMenu.querySelector('button');
+        if (regenMenuBtn) {
+            regenMenuBtn.disabled = true;
+            regenMenuBtn.title = totalChapters === 0
+                ? 'No chapters in this Book yet.'
+                : 'A batch summarize job is currently running.';
+        }
+    }
+    toolbarActions.appendChild(regenAllMenu);
     toolbar.appendChild(toolbarActions);
     wrap.appendChild(toolbar);
 
@@ -3438,6 +3800,7 @@ function buildBookWorldTab(project, book) {
         <div class="studio-world-focus-meta">Book-level canon and references • ${items.length} item${items.length === 1 ? '' : 's'} • ${ownership.mode === 'shared' ? 'Shared World' : (ownership.mode === 'book' ? 'Book-owned World' : 'World')}</div>
         <div class="studio-world-focus-actions">
             <button type="button" class="btn btn-small btn-secondary" data-action="world:setActive" data-world-id="${world.id}">Set Active World</button>
+            <button type="button" class="btn btn-small btn-secondary" data-action="world:renamePrompt" data-world-id="${world.id}">Rename World...</button>
             <button type="button" class="btn btn-small btn-secondary" data-action="worldui:bookWorldFocus" data-book-id="${book.id}">Focus Book World</button>
             <button type="button" class="btn btn-small btn-secondary" data-action="worldui:openWorldWorkspace">Open World Hub</button>
         </div>
@@ -3747,11 +4110,23 @@ function buildWorldWorkspaceOverviewCard(project) {
 function updateWorldWorkspaceHeader(project) {
     const headerTitle = document.getElementById('world-workspace-title');
     const headerMeta = document.getElementById('world-workspace-meta');
-    if (!headerTitle && !headerMeta) return;
+    const headerStatusPills = document.getElementById('world-workspace-status-pills');
+    const renameBtn = document.getElementById('world-workspace-rename-btn');
+    const proposeBtn = document.getElementById('world-workspace-propose-btn');
+    if (!headerTitle && !headerMeta && !headerStatusPills) return;
 
     if (!project) {
         if (headerTitle) headerTitle.textContent = 'World';
         if (headerMeta) headerMeta.textContent = 'Open a project to start building worlds.';
+        if (headerStatusPills) headerStatusPills.innerHTML = '';
+        if (renameBtn) {
+            renameBtn.disabled = true;
+            delete renameBtn.dataset.worldId;
+            renameBtn.title = 'Select a world first';
+        }
+        if (proposeBtn) {
+            proposeBtn.disabled = true;
+        }
         return;
     }
 
@@ -3759,18 +4134,50 @@ function updateWorldWorkspaceHeader(project) {
     const activeWorld = getWorldById(project, project.activeWorldId);
     const activeBook = getBookById(project, project.activeBookId);
     const activeSession = getActiveSession(project);
+    const pendingChanges = Array.isArray(project.worldChanges)
+        ? project.worldChanges.filter(change => String(change.status || 'pending') === 'pending').length
+        : 0;
+    const ownership = activeWorld ? getWorldOwnershipMeta(project, activeWorld) : null;
 
     if (headerTitle) {
-        headerTitle.textContent = activeWorld ? `World: ${activeWorld.name}` : 'World';
+        headerTitle.textContent = activeWorld ? (activeWorld.name || 'Untitled World') : 'World';
     }
     if (headerMeta) {
         const parts = [
             `${(project.worlds || []).length} world${(project.worlds || []).length === 1 ? '' : 's'}`,
             `${(project.books || []).length} book${(project.books || []).length === 1 ? '' : 's'}`,
-            activeBook ? `Book: ${activeBook.name}` : null,
-            activeSession ? `Chat: ${activeSession.name}` : null
         ].filter(Boolean);
         headerMeta.textContent = parts.join(' • ');
+    }
+    if (renameBtn) {
+        if (activeWorld?.id) {
+            renameBtn.disabled = false;
+            renameBtn.dataset.worldId = activeWorld.id;
+            renameBtn.title = `Rename ${activeWorld.name || 'active world'}`;
+        } else {
+            renameBtn.disabled = true;
+            delete renameBtn.dataset.worldId;
+            renameBtn.title = 'Select a world first';
+        }
+    }
+    if (proposeBtn) {
+        proposeBtn.disabled = !activeWorld?.id || !activeSession?.id;
+    }
+    if (headerStatusPills) {
+        headerStatusPills.innerHTML = '';
+        headerStatusPills.appendChild(createLabelPill(activeWorld ? `World: ${activeWorld.name}` : 'No active world', activeWorld ? 'active' : 'muted'));
+        if (activeWorld && ownership) {
+            if (ownership.mode === 'shared') {
+                headerStatusPills.appendChild(createLabelPill('Shared World', 'linked'));
+            } else if (ownership.mode === 'book') {
+                headerStatusPills.appendChild(createLabelPill('Book World', 'muted'));
+            } else {
+                headerStatusPills.appendChild(createLabelPill('Unassigned World', 'pending'));
+            }
+        }
+        headerStatusPills.appendChild(createLabelPill(activeBook ? `Book: ${activeBook.name}` : 'No active book', activeBook ? 'linked' : 'muted'));
+        headerStatusPills.appendChild(createLabelPill(activeSession ? `Chat: ${activeSession.name}` : 'No active chat', 'muted'));
+        headerStatusPills.appendChild(createLabelPill(`${pendingChanges} pending`, pendingChanges > 0 ? 'pending' : 'muted'));
     }
 }
 
@@ -3808,7 +4215,6 @@ function renderWorldWorkspace() {
     }
 
     ensureWorldStudioState(project);
-    content.appendChild(buildWorldWorkspaceOverviewCard(project));
     renderWorldsSection(content, project);
     renderWorldChangesSection(content, project);
 }
@@ -3961,7 +4367,7 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
                 return true;
             }
             SessionHandlers.loadChatSession(agentSession.id);
-            openChatWorkspaceFallback();
+            openChatComposerWorkspaceFallback('chat');
             return true;
         }
         setBookWorkspaceActiveTab(bookId, tab);
@@ -4089,7 +4495,7 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
         }
         publishWorldUIAction('book:setActive', { bookId: book.id });
         SessionHandlers.loadChatSession(agentSession.id);
-        openChatWorkspaceFallback();
+        openChatComposerWorkspaceFallback('chat');
         return true;
     }
 
@@ -4312,6 +4718,23 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
         return true;
     }
 
+    if (action === 'worldui:itemThumbClear') {
+        const editor = actionTarget.closest('.studio-world-inline-editor');
+        if (!editor) return true;
+        const urlInputName = String(eventPayload.thumbUrlTarget || '').trim();
+        const fileInputName = String(eventPayload.thumbFileTarget || '').trim();
+        const urlInput = findNamedFormControl(editor, urlInputName);
+        if (urlInput && (urlInput instanceof HTMLInputElement || urlInput instanceof HTMLTextAreaElement)) {
+            urlInput.value = '';
+        }
+        const fileInput = findNamedFormControl(editor, fileInputName);
+        if (fileInput instanceof HTMLInputElement && fileInput.type === 'file') {
+            fileInput.value = '';
+        }
+        refreshWorldItemThumbnailPreview(editor, urlInputName);
+        return true;
+    }
+
     if (action === 'worldui:actToggleOpen') {
         const bookId = String(eventPayload.bookId || '').trim();
         if (!bookId) return true;
@@ -4471,7 +4894,7 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
                 bookId: book.id,
                 ...(actNumber ? { actNumber } : {})
             });
-            openChatWorkspaceFallback();
+            openChatComposerWorkspaceFallback('composer');
             bookSidebarUIState.modal = { type: 'chapter-settings', sessionId: newSessionId };
             renderWorldUISurfaces();
         } catch (error) {
@@ -4484,6 +4907,9 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
     if (action === 'worldui:bookChapterOpen') {
         const sessionId = String(eventPayload.sessionId || '').trim();
         const bookId = String(eventPayload.bookId || '').trim() || null;
+        const requestedWorkspace = String(eventPayload.workspace || '').trim().toLowerCase() === 'chat'
+            ? 'chat'
+            : 'composer';
         if (!sessionId || !project) return true;
         if (bookId) {
             publishWorldUIAction('book:setActive', { bookId });
@@ -4491,10 +4917,10 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
         bookSidebarUIState.modal = null;
         try {
             SessionHandlers.loadChatSession(sessionId);
-            openChatWorkspaceFallback();
+            openChatComposerWorkspaceFallback(requestedWorkspace);
         } catch (error) {
             console.error('Failed to open chapter session from Book tree:', error);
-            showCustomAlert('Could not open chapter chat.', 'Book');
+            showCustomAlert('Could not open chapter.', 'Book');
         }
         return true;
     }
@@ -4631,11 +5057,18 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
             showCustomAlert('Item title is required.', 'Info');
             return true;
         }
+        const subtype = String(readInputValue(editor, '[name="newItemSubtype"]', '') || '').trim().toLowerCase() || null;
         const summary = String(readInputValue(editor, '[name="newItemSummary"]', '') || '');
         const tags = String(readInputValue(editor, '[name="newItemTags"]', '') || '')
             .split(',')
             .map(tag => tag.trim())
             .filter(Boolean);
+        const aliases = String(readInputValue(editor, '[name="newItemAliases"]', '') || '')
+            .split(',')
+            .map(alias => alias.trim())
+            .filter(Boolean);
+        const thumbnailUrlRaw = String(readInputValue(editor, '[name="newItemThumbnailUrl"]', '') || '').trim();
+        const thumbnailUrl = thumbnailUrlRaw || null;
         const visibility = String(readInputValue(editor, '[name="newItemVisibility"]', 'revealed') || 'revealed')
             .trim()
             .toLowerCase() === 'gated'
@@ -4652,8 +5085,11 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
         publishWorldUIAction('world:itemCreate', {
             worldId,
             type,
+            subtype,
             title,
             summary,
+            aliases,
+            thumbnailUrl,
             tags,
             status: 'canon',
             visibility,
@@ -4772,11 +5208,18 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
         const title = String(readInputValue(editor, '[name="itemTitle"]', '') || '').trim();
         if (!title) return true;
         const type = String(readInputValue(editor, '[name="itemType"]', 'note') || 'note').trim().toLowerCase() || 'note';
+        const subtype = String(readInputValue(editor, '[name="itemSubtype"]', '') || '').trim().toLowerCase() || null;
         const summary = String(readInputValue(editor, '[name="itemSummary"]', '') || '');
         const tags = String(readInputValue(editor, '[name="itemTags"]', '') || '')
             .split(',')
             .map(tag => tag.trim())
             .filter(Boolean);
+        const aliases = String(readInputValue(editor, '[name="itemAliases"]', '') || '')
+            .split(',')
+            .map(alias => alias.trim())
+            .filter(Boolean);
+        const thumbnailUrlRaw = String(readInputValue(editor, '[name="itemThumbnailUrl"]', '') || '').trim();
+        const thumbnailUrl = thumbnailUrlRaw || null;
         const visibility = String(readInputValue(editor, '[name="itemVisibility"]', 'revealed') || 'revealed')
             .trim()
             .toLowerCase() === 'gated'
@@ -4800,8 +5243,11 @@ function handleLocalWorldUIAction(actionTarget, eventPayload) {
             itemId,
             patch: {
                 type,
+                subtype,
                 title,
                 summary,
+                aliases,
+                thumbnailUrl,
                 tags,
                 visibility,
                 revealGate
@@ -4965,6 +5411,24 @@ function attachWorldActionSurface(container) {
         }
         dispatchWorldAction(actionTarget, event);
     });
+
+    container.addEventListener('input', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        if (!target.classList.contains('studio-world-inline-thumb-url-input')) return;
+        refreshWorldItemThumbnailPreview(target.closest('.studio-world-inline-editor'), target.name);
+    });
+
+    container.addEventListener('change', (event) => {
+        const target = event.target;
+        if (target instanceof HTMLInputElement && target.classList.contains('studio-world-inline-thumb-file-input')) {
+            handleWorldItemThumbnailFileInputChange(target);
+            return;
+        }
+        if (target instanceof HTMLInputElement && target.classList.contains('studio-world-inline-thumb-url-input')) {
+            refreshWorldItemThumbnailPreview(target.closest('.studio-world-inline-editor'), target.name);
+        }
+    });
 }
 
 let isWorldUIInitialized = false;
@@ -4990,7 +5454,20 @@ function openChatWorkspaceFallback() {
     }
     document.getElementById('world-workspace')?.classList.add('hidden');
     document.getElementById('book-workspace')?.classList.add('hidden');
-    setWorkspaceToggleActiveFallback('chat');
+    const mainChatArea = document.querySelector('#main-chat-panel .main-chat-area') || document.querySelector('.main-chat-area');
+    const isComposerActive = Boolean(mainChatArea?.classList.contains('composer-is-active'));
+    setWorkspaceToggleActiveFallback(isComposerActive ? 'composer' : 'chat');
+}
+
+function openChatComposerWorkspaceFallback(workspace = 'chat') {
+    const normalized = String(workspace || '').trim().toLowerCase() === 'chat' ? 'chat' : 'composer';
+    const button = document.getElementById(normalized === 'composer' ? 'switch-to-composer-btn' : 'switch-to-chat-btn');
+    if (button && typeof button.click === 'function') {
+        button.click();
+        return true;
+    }
+    openChatWorkspaceFallback();
+    return false;
 }
 
 function openWorldWorkspaceFallback() {

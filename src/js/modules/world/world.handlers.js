@@ -596,6 +596,18 @@ function getChapterSummarySourceText(session, source = 'chat') {
     return trimTextForPrompt(getAllSessionMessagesForSummary(session), 22000);
 }
 
+function detectSummaryOutputLanguageHint(sourceText = '') {
+    const text = String(sourceText || '');
+    if (!text) return 'same_as_source';
+    const sample = text.slice(0, 16000);
+    const thaiCount = (sample.match(/[ก-๙]/g) || []).length;
+    const latinCount = (sample.match(/[A-Za-z]/g) || []).length;
+    if (thaiCount >= 24 && thaiCount >= (latinCount * 0.7)) return 'thai';
+    if (latinCount >= 24 && latinCount >= (thaiCount * 1.5)) return 'english';
+    if (thaiCount > 0 && latinCount > 0) return 'mixed';
+    return 'same_as_source';
+}
+
 function buildChapterOverviewSummaryPrompt({
     promptTemplate = '',
     sourceText = '',
@@ -607,9 +619,18 @@ function buildChapterOverviewSummaryPrompt({
         : 'Chapter conversation from Chat';
     const template = String(promptTemplate || '').trim() || String(defaultSummarizationPresets.Standard || '');
     const previous = String(previousSummary || '').trim() || 'No previous chapter summary.';
+    const languageHint = detectSummaryOutputLanguageHint(sourceText);
     const replaced = template
         .replace(/\$\{previousSummary\}/g, previous)
         .replace(/\$\{newMessages\}/g, sourceText);
+
+    const languageConstraint = languageHint === 'thai'
+        ? '- Write the summary in Thai (same language as the source chapter content). Do not translate to English.'
+        : (languageHint === 'english'
+            ? '- Write the summary in English (same language as the source chapter content). Do not translate to Thai.'
+            : (languageHint === 'mixed'
+                ? '- Source content is mixed-language. Write the summary in the dominant language used in the chapter text/chat, and keep proper nouns/quoted terms as written.'
+                : '- Write the summary in the same primary language as the source content. Do not translate unless the source itself is translated.'));
 
     return [
         replaced,
@@ -619,6 +640,7 @@ function buildChapterOverviewSummaryPrompt({
         '- Keep it concise but specific (roughly 3-7 sentences).',
         `- Source used: ${sourceLabel}.`,
         '- Preserve character names, places, key events, and important objects.',
+        languageConstraint,
         '- Return only the summary text.'
     ].join('\n');
 }
@@ -836,6 +858,7 @@ function applyWorldItemPatch(item, patch = {}) {
         ...item,
         ...patch,
         content: patch.content !== undefined ? cloneJsonish(patch.content) : cloneJsonish(item.content),
+        aliases: patch.aliases !== undefined ? cloneJsonish(patch.aliases) : cloneJsonish(item.aliases),
         tags: patch.tags !== undefined ? cloneJsonish(patch.tags) : cloneJsonish(item.tags),
         sourceRefs: patch.sourceRefs !== undefined ? cloneJsonish(patch.sourceRefs) : cloneJsonish(item.sourceRefs)
     };
@@ -1131,6 +1154,12 @@ export function updateBook(payload = {}) {
             ...cloneJsonish(payload.codexAgentConfig)
         };
     }
+    if (payload.chapterStructureDefaults && typeof payload.chapterStructureDefaults === 'object') {
+        book.chapterStructureDefaults = {
+            ...(book.chapterStructureDefaults || {}),
+            ...cloneJsonish(payload.chapterStructureDefaults)
+        };
+    }
     if (payload.agentAutomation && typeof payload.agentAutomation === 'object') {
         book.agentAutomation = {
             ...(book.agentAutomation || {}),
@@ -1421,6 +1450,110 @@ export function updateChapterMetadataPrompt(payload = {}) {
     });
 }
 
+function escapeHtmlForComposerScaffold(text = '') {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function normalizeChapterStructureConfigForScaffold(rawConfig = {}) {
+    const source = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+    const titleTemplatePreset = [
+        'chapter_number_title',
+        'chapter_number_only',
+        'chapter_title_only',
+        'thai_chapter_number_title',
+        'thai_chapter_number_only',
+        'custom'
+    ].includes(String(source.titleTemplatePreset || '').trim())
+        ? String(source.titleTemplatePreset).trim()
+        : 'chapter_number_title';
+    const titleTemplateCustom = String(source.titleTemplateCustom || 'Chapter {number}: {title}');
+    const titleAlign = ['left', 'center', 'right'].includes(String(source.titleAlign || '').trim())
+        ? String(source.titleAlign).trim()
+        : 'left';
+    const rawFontSize = Number(source.titleFontSizePx);
+    const titleFontSizePx = Number.isFinite(rawFontSize)
+        ? Math.max(14, Math.min(96, Math.round(rawFontSize)))
+        : 32;
+    return {
+        titleTemplatePreset,
+        titleTemplateCustom,
+        titleAlign,
+        titleFontSizePx
+    };
+}
+
+function buildDefaultChapterTitleForComposer(session = {}, structureConfig = {}) {
+    const normalizedConfig = normalizeChapterStructureConfigForScaffold(structureConfig);
+    const chapterNumber = Number.isFinite(Number(session?.chapterNumber))
+        ? Math.round(Number(session.chapterNumber))
+        : null;
+    const chapterTitle = String(session?.chapterTitle || '').trim();
+
+    let template = 'Chapter {number}: {title}';
+    if (normalizedConfig.titleTemplatePreset === 'chapter_number_only') template = 'Chapter {number}';
+    if (normalizedConfig.titleTemplatePreset === 'chapter_title_only') template = '{title}';
+    if (normalizedConfig.titleTemplatePreset === 'thai_chapter_number_title') template = 'บทที่ {number}: {title}';
+    if (normalizedConfig.titleTemplatePreset === 'thai_chapter_number_only') template = 'บทที่ {number}';
+    if (normalizedConfig.titleTemplatePreset === 'custom') {
+        template = String(normalizedConfig.titleTemplateCustom || '').trim() || 'Chapter {number}: {title}';
+    }
+
+    const filled = template
+        .replace(/\{number\}/g, chapterNumber ? String(chapterNumber) : '')
+        .replace(/\{title\}/g, chapterTitle);
+
+    const cleaned = filled
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\s+([:.\-–—])/g, '$1')
+        .replace(/([:.\-–—])\s*$/, '$1')
+        .trim();
+
+    if (cleaned) return cleaned;
+    if (chapterNumber && chapterTitle) return `Chapter ${chapterNumber}: ${chapterTitle}`;
+    if (chapterNumber) return `Chapter ${chapterNumber}`;
+    if (chapterTitle) return chapterTitle;
+    return normalizedConfig.titleTemplatePreset.startsWith('thai_') ? 'บทที่' : 'Chapter';
+}
+
+function buildDefaultChapterComposerScaffoldHtml(session = {}, structureConfig = {}) {
+    const normalizedConfig = normalizeChapterStructureConfigForScaffold(structureConfig);
+    const chapterHeading = escapeHtmlForComposerScaffold(buildDefaultChapterTitleForComposer(session, normalizedConfig));
+    const headingAlign = normalizedConfig.titleAlign && normalizedConfig.titleAlign !== 'left'
+        ? ` style="text-align: ${normalizedConfig.titleAlign};"`
+        : '';
+    const titleSpan = `<span style="font-size: ${normalizedConfig.titleFontSizePx}px;">${chapterHeading}</span>`;
+    return `<h1${headingAlign}>${titleSpan}</h1><p></p>`;
+}
+
+function isDefaultChapterComposerScaffoldHtml(html = '') {
+    const normalized = String(html || '')
+        .replace(/\s+/g, '')
+        .toLowerCase();
+    if (!normalized) return true;
+    return normalized === '<h2>scene1</h2><p></p>'
+        || normalized === '<h1>chapter</h1><p></p>'
+        || normalized === '<h1>chapter</h1><h2>scene1</h2><p></p>'
+        || /^<h1>chapter\d*(?::[^<]*)?<\/h1><p><\/p>$/.test(normalized)
+        || /^<h1>chapter\d*(?::[^<]*)?<\/h1><h2>scene1<\/h2><p><\/p>$/.test(normalized)
+        || /^<h1(?:[^>]*)?>.*<\/h1><p><\/p>$/.test(normalized)
+        || /^<h1(?:[^>]*)?>.*<\/h1><h2(?:[^>]*)?>scene1<\/h2><p><\/p>$/.test(normalized);
+}
+
+function maybeInitializeChapterComposerScaffold(session = {}, options = {}) {
+    if (!session || String(session.kind || '').toLowerCase() !== 'chapter') return;
+    const currentComposerHtml = typeof session?.composerContent === 'string' ? session.composerContent : '';
+    if (!isDefaultChapterComposerScaffoldHtml(currentComposerHtml)) return;
+    const structureConfig = options?.structureConfig && typeof options.structureConfig === 'object'
+        ? options.structureConfig
+        : (session.chapterStructureConfig && typeof session.chapterStructureConfig === 'object' ? session.chapterStructureConfig : {});
+    session.composerContent = buildDefaultChapterComposerScaffoldHtml(session, structureConfig);
+}
+
 export function assignSessionToBook(payload = {}) {
     const project = getProject();
     if (!project) return null;
@@ -1466,6 +1599,41 @@ export function assignSessionToBook(payload = {}) {
         };
     }
     session.kind = SESSION_KIND_CHAPTER;
+    if (!book.chapterStructureDefaults || typeof book.chapterStructureDefaults !== 'object') {
+        book.chapterStructureDefaults = cloneJsonish(
+            session.chapterStructureConfig && typeof session.chapterStructureConfig === 'object'
+                ? session.chapterStructureConfig
+                : {
+                    titleTemplatePreset: 'chapter_number_title',
+                    titleTemplateCustom: 'Chapter {number}: {title}',
+                    titleAlign: 'left',
+                    titleFontSizePx: 32,
+                    segmentNoun: 'scene',
+                    customSegmentNoun: '',
+                    implicitFirstSegment: true,
+                    segmentMarkerStyle: 'heading',
+                    segmentMarkerSymbol: '***'
+                }
+        ) || {};
+    }
+    if (!session.chapterStructureConfig || typeof session.chapterStructureConfig !== 'object') {
+        session.chapterStructureConfig = {
+            titleTemplatePreset: 'chapter_number_title',
+            titleTemplateCustom: 'Chapter {number}: {title}',
+            titleAlign: 'left',
+            titleFontSizePx: 32,
+            segmentNoun: 'scene',
+            customSegmentNoun: '',
+            implicitFirstSegment: true,
+            segmentMarkerStyle: 'heading',
+            segmentMarkerSymbol: '***'
+        };
+    }
+    maybeInitializeChapterComposerScaffold(session, {
+        structureConfig: (book && typeof book.chapterStructureDefaults === 'object' && book.chapterStructureDefaults)
+            ? book.chapterStructureDefaults
+            : session.chapterStructureConfig
+    });
     session.updatedAt = Date.now();
 
     (project.books || []).forEach(otherBook => {
@@ -1577,7 +1745,14 @@ export function updateChapterMetadata(payload = {}) {
             uniquePush(book.structure.chapterSessionIds, session.id);
             sanitizeBookChapterReferences(project, book);
             book.updatedAt = Date.now();
+            maybeInitializeChapterComposerScaffold(session, {
+                structureConfig: (book.chapterStructureDefaults && typeof book.chapterStructureDefaults === 'object')
+                    ? book.chapterStructureDefaults
+                    : session.chapterStructureConfig
+            });
         }
+    } else {
+        maybeInitializeChapterComposerScaffold(session, { structureConfig: session.chapterStructureConfig });
     }
 
     refreshActiveChatTitleIfNeeded(project, session);
@@ -1711,22 +1886,33 @@ export async function summarizeMissingBookChaptersForOverview(payload = {}) {
     }
 
     const sourceKind = String(payload.source || 'composer').trim().toLowerCase() === 'chat' ? 'chat' : 'composer';
+    const forceRegenerate = payload.force === true || String(payload.force || '').trim().toLowerCase() === 'true';
     const allChapters = getOrderedBookChapterSessions(project, book);
-    const missingChapters = allChapters.filter(session => !String(session?.chapterSummary || '').trim());
-    if (missingChapters.length === 0) {
-        showCustomAlert('No missing chapter summaries in this Book.', 'Chapter Summary');
-        return { total: 0, summarized: 0, skippedNoSource: 0, failed: 0 };
+    const targetChapters = forceRegenerate
+        ? allChapters
+        : allChapters.filter(session => !String(session?.chapterSummary || '').trim());
+    if (targetChapters.length === 0) {
+        showCustomAlert(
+            forceRegenerate
+                ? 'No chapters in this Book to regenerate summaries for.'
+                : 'No missing chapter summaries in this Book.',
+            'Chapter Summary'
+        );
+        return { total: 0, summarized: 0, skippedNoSource: 0, failed: 0, mode: forceRegenerate ? 'regenerate' : 'missing' };
     }
 
     stateManager.bus.publish('book:overviewSummaryBatchProgress', {
         bookId: book.id,
         source: sourceKind,
         state: 'start',
-        total: missingChapters.length
+        total: targetChapters.length,
+        mode: forceRegenerate ? 'regenerate' : 'missing'
     });
 
     stateManager.bus.publish('status:update', {
-        message: `Summarizing ${missingChapters.length} chapter(s) from ${sourceKind === 'composer' ? 'Composer' : 'Chat'}...`,
+        message: forceRegenerate
+            ? `Regenerating ${targetChapters.length} chapter summary(s) from ${sourceKind === 'composer' ? 'Composer' : 'Chat'}...`
+            : `Summarizing ${targetChapters.length} chapter(s) from ${sourceKind === 'composer' ? 'Composer' : 'Chat'}...`,
         state: 'loading'
     });
 
@@ -1735,7 +1921,7 @@ export async function summarizeMissingBookChaptersForOverview(payload = {}) {
     let failed = 0;
 
     try {
-        for (const chapterSession of missingChapters) {
+        for (const chapterSession of targetChapters) {
             const sourceText = getChapterSummarySourceText(chapterSession, sourceKind);
             if (!sourceText) {
                 skippedNoSource += 1;
@@ -1755,28 +1941,33 @@ export async function summarizeMissingBookChaptersForOverview(payload = {}) {
         }
 
         const parts = [];
-        parts.push(`Updated ${summarized} chapter summary${summarized === 1 ? '' : 'ies'}`);
+        parts.push(`${forceRegenerate ? 'Regenerated' : 'Updated'} ${summarized} chapter summary${summarized === 1 ? '' : 'ies'}`);
         if (skippedNoSource > 0) parts.push(`${skippedNoSource} skipped (no ${sourceKind === 'composer' ? 'Composer draft' : 'Chat content'})`);
         if (failed > 0) parts.push(`${failed} failed`);
 
-        stateManager.bus.publish('status:update', { message: 'Batch chapter summary complete.', state: failed > 0 ? 'warning' : 'success' });
+        stateManager.bus.publish('status:update', {
+            message: forceRegenerate ? 'Batch chapter summary regeneration complete.' : 'Batch chapter summary complete.',
+            state: failed > 0 ? 'warning' : 'success'
+        });
         showCustomAlert(parts.join(' • '), 'Chapter Summary');
 
         return {
-            total: missingChapters.length,
+            total: targetChapters.length,
             summarized,
             skippedNoSource,
-            failed
+            failed,
+            mode: forceRegenerate ? 'regenerate' : 'missing'
         };
     } finally {
         stateManager.bus.publish('book:overviewSummaryBatchProgress', {
             bookId: book.id,
             source: sourceKind,
             state: 'done',
-            total: missingChapters.length,
+            total: targetChapters.length,
             summarized,
             skippedNoSource,
-            failed
+            failed,
+            mode: forceRegenerate ? 'regenerate' : 'missing'
         });
     }
 }
@@ -2042,7 +2233,7 @@ export function createWorldItemPrompt(payload = {}) {
     const type = String(typeRaw || '').trim().toLowerCase() || 'entity';
     const title = prompt('Item title:', '');
     if (!title || !title.trim()) return null;
-    const summary = prompt('Summary / note (optional):', '') ?? '';
+    const summary = prompt('Description / note (optional):', '') ?? '';
     const tagsRaw = prompt('Tags (comma-separated, optional):', '') ?? '';
     const gatedRaw = prompt('Reveal gate chapter number (blank for revealed now):', '') ?? '';
 
@@ -2081,7 +2272,7 @@ export function editWorldItemPrompt(payload = {}) {
 
     const title = prompt('Item title:', item.title || '');
     if (title === null || !title.trim()) return null;
-    const summary = prompt('Summary / note:', item.summary || '') ?? '';
+    const summary = prompt('Description / note:', item.summary || '') ?? '';
     const tagsRaw = prompt('Tags (comma-separated):', ensureArray(item.tags).join(', ')) ?? '';
     const visibilityRaw = prompt('Visibility ("revealed" or "gated"):', item.visibility || 'revealed');
     if (visibilityRaw === null) return null;
