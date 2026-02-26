@@ -128,6 +128,7 @@ const ComposerToolbar = ({
   const liveWordCountLabel = formatComposerWordCountLabel(liveWordCount);
   const formatToolbarElementId = 'composer-format-toolbar';
   const isFocusMenu = Boolean(isFocusMode);
+  const formatToolbarScrollRef = useRef(null);
   const structureInsertMenuLabel = String(structureInsertLabel || '+ Scene').trim().startsWith('+ ')
     ? `Add ${String(structureInsertLabel || '+ Scene').trim().slice(2)}`
     : `Add ${String(structureInsertLabel || 'Segment').replace(/^\+\s*/, '')}`;
@@ -156,6 +157,15 @@ const ComposerToolbar = ({
   const handleInsertUserBeat = () => {
     editor.chain().focus().setInstructionNode().run();
   };
+  const handleFormatToolbarWheel = (event) => {
+    const node = formatToolbarScrollRef.current;
+    if (!(node instanceof HTMLElement)) return;
+    if (node.scrollWidth <= node.clientWidth + 1) return;
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    const before = node.scrollLeft;
+    node.scrollLeft += event.deltaY;
+    if (node.scrollLeft !== before) event.preventDefault();
+  };
   const handleExportContent = () => {
     if (typeof onExport === 'function') {
       onExport({
@@ -178,8 +188,10 @@ const ComposerToolbar = ({
         <div
           id={formatToolbarElementId}
           className="composer-tools-area"
+          ref={formatToolbarScrollRef}
           hidden={!isFormatToolbarVisible}
           aria-hidden={isFormatToolbarVisible ? 'false' : 'true'}
+          onWheel={handleFormatToolbarWheel}
         >
           {/* Paragraph & Headings */}
           <div className="tw-flex tw-items-center tw-gap-x-1">

@@ -531,6 +531,10 @@
     background: #fcfdff;
 }
 
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview .btn {
+    align-self: flex-start;
+}
+
 :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview.is-empty {
     opacity: 0.92;
 }
@@ -567,6 +571,35 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview--compact {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 8px;
+    padding: 7px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview--compact .studio-world-thumb-preview-img {
+    width: 46px;
+    height: 46px;
+    border-radius: 7px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview--compact .studio-world-thumb-preview-meta {
+    gap: 3px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview--compact .studio-world-thumb-preview-label {
+    font-size: 0.68rem;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview--compact .studio-world-thumb-preview-text {
+    font-size: 0.66rem;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-thumb-preview--compact .btn {
+    padding: 3px 8px;
+    font-size: 0.68rem;
 }
 
 :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-pill {
@@ -677,6 +710,124 @@
     gap: 4px;
     font-size: 0.72rem;
     color: #516072;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field--description .studio-world-inline-textarea {
+    min-height: 88px;
+    resize: vertical;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-corner {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-corner > .studio-world-thumb-preview {
+    width: 100%;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-sidebar {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-self: start;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-sidebar .studio-world-thumb-preview {
+    width: 100%;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-sidebar .studio-world-thumb-preview--compact {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 6px;
+    padding: 6px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-sidebar .studio-world-thumb-preview--compact .studio-world-thumb-preview-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-sidebar .studio-world-thumb-preview--compact .studio-world-thumb-preview-meta {
+    gap: 2px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-thumb-sidebar .studio-world-thumb-preview--compact .btn {
+    align-self: flex-start;
+    width: auto;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field--media {
+    gap: 3px;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field--media .studio-world-inline-field-label {
+    font-size: 0.68rem;
+}
+
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field--media .studio-world-inline-input,
+:is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field--media .studio-world-inline-file-input {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 0.72rem;
+}
+
+@media (min-width: 900px) {
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-field {
+        grid-column: span 3;
+        min-width: 0;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-field--span-2 {
+        grid-column: span 6;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-field--span-3 {
+        grid-column: span 9;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-field--span-4 {
+        grid-column: span 4;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-field--span-8 {
+        grid-column: span 8;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-field--span-all {
+        grid-column: 1 / -1;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-thumb-corner {
+        grid-column: span 4;
+        align-self: start;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item > .studio-world-inline-thumb-sidebar {
+        grid-column: span 3;
+    }
+}
+
+@media (max-width: 899px) {
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item .studio-world-inline-thumb-corner {
+        order: 1;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item .studio-world-inline-thumb-sidebar {
+        order: 1;
+    }
+
+    :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-grid--world-item .studio-world-inline-field--description {
+        order: 0;
+    }
 }
 
 :is(#world-workspace, #book-sidebar-slot, #book-workspace) .studio-world-inline-field-label {

@@ -101,7 +101,9 @@
     overflow-x: auto;
     overflow-y: hidden;
     padding: 0;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-color: transparent transparent;
     scroll-padding-inline: 8px;
     margin-inline: 2px;
 }
@@ -134,12 +136,26 @@
 }
 
 .composer-tools-area::-webkit-scrollbar {
-    height: 6px;
+    width: 0;
+    height: 0;
+    display: none;
+    background: transparent;
 }
 
 .composer-tools-area::-webkit-scrollbar-thumb {
     background: rgba(120, 120, 120, 0.35);
     border-radius: 999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+}
+
+.composer-tools-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.composer-tools-area::-webkit-scrollbar-track-piece,
+.composer-tools-area::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 .composer-actions > * {
@@ -234,6 +250,11 @@
         flex: 1 1 100%;
         min-width: 0;
         margin-inline: 0;
+        flex-wrap: wrap;
+        overflow-x: visible;
+        overflow-y: visible;
+        row-gap: 4px;
+        align-content: flex-start;
     }
 
     .composer-actions {
@@ -471,6 +492,29 @@ body.dark-mode .composer-toolbar .btn-icon.is-active {
 
 body.dark-mode .composer-display-panel {
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+}
+
+body.dark-mode .composer-tools-area {
+    scrollbar-color: rgba(148, 163, 184, 0.34) rgba(15, 23, 42, 0.08);
+}
+
+body.dark-mode .composer-tools-area::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.34);
+    border-color: rgba(15, 23, 42, 0.08);
+}
+
+body.dark-mode .composer-tools-area::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.08);
+    border-radius: 999px;
+}
+
+body.dark-mode .composer-tools-area::-webkit-scrollbar {
+    background: rgba(15, 23, 42, 0.08);
+}
+
+body.dark-mode .composer-tools-area::-webkit-scrollbar-track-piece,
+body.dark-mode .composer-tools-area::-webkit-scrollbar-corner {
+    background: rgba(15, 23, 42, 0.08);
 }
 
 body.dark-mode .composer-display-panel-section {

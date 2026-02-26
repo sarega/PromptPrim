@@ -1666,7 +1666,7 @@ function buildWorldItemThumbnailEditorControls({
     const fileField = createInlineField('Thumbnail Image', fileInput);
 
     const preview = document.createElement('div');
-    preview.className = 'studio-world-thumb-preview is-empty';
+    preview.className = 'studio-world-thumb-preview studio-world-thumb-preview--compact is-empty';
     preview.dataset.thumbPreviewFor = urlInputName;
     preview.innerHTML = `
         <img class="studio-world-thumb-preview-img" alt="Thumbnail preview" loading="lazy" />
@@ -1676,9 +1676,16 @@ function buildWorldItemThumbnailEditorControls({
             <button type="button" class="btn btn-small btn-secondary" data-action="worldui:itemThumbClear" data-thumb-url-target="${urlInputName}" data-thumb-file-target="${fileInputName}">Clear</button>
         </div>
     `;
-    preview.style.gridColumn = '1 / -1';
-
     return { urlField, fileField, preview };
+}
+
+function buildWorldItemThumbnailSidebar(thumbControls) {
+    const sidebar = document.createElement('div');
+    sidebar.className = 'studio-world-inline-thumb-sidebar';
+    thumbControls.urlField.classList.add('studio-world-inline-field--media');
+    thumbControls.fileField.classList.add('studio-world-inline-field--media');
+    sidebar.append(thumbControls.preview, thumbControls.urlField, thumbControls.fileField);
+    return sidebar;
 }
 
 function buildBookInlineEditor(project, book) {
@@ -1836,7 +1843,7 @@ function buildWorldItemCreateInlineEditor(project) {
         : {};
 
     const grid = document.createElement('div');
-    grid.className = 'studio-world-inline-grid';
+    grid.className = 'studio-world-inline-grid studio-world-inline-grid--world-item';
 
     const worldOptions = (project?.worlds || []).map(world => ({ value: world.id, label: world.name || world.id }));
     grid.appendChild(createInlineField('World', createInlineSelect({
@@ -1854,50 +1861,63 @@ function buildWorldItemCreateInlineEditor(project) {
         value: '',
         placeholder: 'character, object, faction...'
     })));
-    grid.appendChild(createInlineField('Title', createInlineTextInput({
+    const titleField = createInlineField('Title', createInlineTextInput({
         name: 'newItemTitle',
         value: '',
         placeholder: 'Item title'
-    })));
-    grid.appendChild(createInlineField('Description', createInlineTextarea({
+    }));
+    titleField.classList.add('studio-world-inline-field--span-2');
+    grid.appendChild(titleField);
+    const descriptionField = createInlineField('Description', createInlineTextarea({
         name: 'newItemSummary',
         value: '',
         rows: 3,
         placeholder: 'Description / note'
-    })));
-    grid.appendChild(createInlineField('Tags', createInlineTextInput({
+    }));
+    descriptionField.classList.add('studio-world-inline-field--span-3', 'studio-world-inline-field--description');
+    grid.appendChild(descriptionField);
+
+    const thumbControls = buildWorldItemThumbnailEditorControls({
+        urlInputName: 'newItemThumbnailUrl',
+        fileInputName: 'newItemThumbnailFile',
+        value: ''
+    });
+    grid.appendChild(buildWorldItemThumbnailSidebar(thumbControls));
+
+    const tagsField = createInlineField('Tags', createInlineTextInput({
         name: 'newItemTags',
         value: '',
         placeholder: 'comma, separated, tags'
-    })));
-    grid.appendChild(createInlineField('Aliases', createInlineTextInput({
+    }));
+    tagsField.classList.add('studio-world-inline-field--span-2');
+    grid.appendChild(tagsField);
+
+    const aliasesField = createInlineField('Aliases', createInlineTextInput({
         name: 'newItemAliases',
         value: '',
         placeholder: 'nickname, alt spelling'
-    })));
-    {
-        const thumbControls = buildWorldItemThumbnailEditorControls({
-            urlInputName: 'newItemThumbnailUrl',
-            fileInputName: 'newItemThumbnailFile',
-            value: ''
-        });
-        grid.appendChild(thumbControls.urlField);
-        grid.appendChild(thumbControls.fileField);
-        grid.appendChild(thumbControls.preview);
-    }
-    grid.appendChild(createInlineField('Visibility', createInlineSelect({
+    }));
+    aliasesField.classList.add('studio-world-inline-field--span-2');
+    grid.appendChild(aliasesField);
+
+    const visibilityField = createInlineField('Visibility', createInlineSelect({
         name: 'newItemVisibility',
         value: 'revealed',
         options: [
             { value: 'revealed', label: 'revealed' },
             { value: 'gated', label: 'gated' }
         ]
-    })));
-    grid.appendChild(createInlineField('Reveal @ chapter', createInlineNumberInput({
+    }));
+    visibilityField.classList.add('studio-world-inline-field--span-4');
+    grid.appendChild(visibilityField);
+
+    const revealField = createInlineField('Reveal @ chapter', createInlineNumberInput({
         name: 'newItemRevealChapter',
         value: '',
         placeholder: 'optional'
-    })));
+    }));
+    revealField.classList.add('studio-world-inline-field--span-4');
+    grid.appendChild(revealField);
 
     editor.appendChild(grid);
     refreshWorldItemThumbnailPreview(editor, 'newItemThumbnailUrl');
@@ -2075,7 +2095,7 @@ function buildWorldItemInlineEditor(worldId, item) {
     editor.dataset.itemId = item.id;
 
     const grid = document.createElement('div');
-    grid.className = 'studio-world-inline-grid';
+    grid.className = 'studio-world-inline-grid studio-world-inline-grid--world-item';
 
     grid.appendChild(createInlineField('Type', createInlineSelect({
         name: 'itemType',
@@ -2087,52 +2107,65 @@ function buildWorldItemInlineEditor(worldId, item) {
         value: item.subtype || '',
         placeholder: 'character, object, faction...'
     })));
-    grid.appendChild(createInlineField('Title', createInlineTextInput({
+    const titleField = createInlineField('Title', createInlineTextInput({
         name: 'itemTitle',
         value: item.title || '',
         placeholder: 'Item title'
-    })));
-    grid.appendChild(createInlineField('Description', createInlineTextarea({
+    }));
+    titleField.classList.add('studio-world-inline-field--span-2');
+    grid.appendChild(titleField);
+    const descriptionField = createInlineField('Description', createInlineTextarea({
         name: 'itemSummary',
         value: item.summary || '',
         rows: 3,
         placeholder: 'Description / note'
-    })));
-    grid.appendChild(createInlineField('Tags', createInlineTextInput({
+    }));
+    descriptionField.classList.add('studio-world-inline-field--span-3', 'studio-world-inline-field--description');
+    grid.appendChild(descriptionField);
+
+    const thumbControls = buildWorldItemThumbnailEditorControls({
+        urlInputName: 'itemThumbnailUrl',
+        fileInputName: 'itemThumbnailFile',
+        value: item.thumbnailUrl || ''
+    });
+    grid.appendChild(buildWorldItemThumbnailSidebar(thumbControls));
+
+    const tagsField = createInlineField('Tags', createInlineTextInput({
         name: 'itemTags',
         value: Array.isArray(item.tags) ? item.tags.join(', ') : '',
         placeholder: 'comma, separated, tags'
-    })));
-    grid.appendChild(createInlineField('Aliases', createInlineTextInput({
+    }));
+    tagsField.classList.add('studio-world-inline-field--span-2');
+    grid.appendChild(tagsField);
+
+    const aliasesField = createInlineField('Aliases', createInlineTextInput({
         name: 'itemAliases',
         value: Array.isArray(item.aliases) ? item.aliases.join(', ') : '',
         placeholder: 'nickname, alt spelling'
-    })));
-    {
-        const thumbControls = buildWorldItemThumbnailEditorControls({
-            urlInputName: 'itemThumbnailUrl',
-            fileInputName: 'itemThumbnailFile',
-            value: item.thumbnailUrl || ''
-        });
-        grid.appendChild(thumbControls.urlField);
-        grid.appendChild(thumbControls.fileField);
-        grid.appendChild(thumbControls.preview);
-    }
-    grid.appendChild(createInlineField('Visibility', createInlineSelect({
+    }));
+    aliasesField.classList.add('studio-world-inline-field--span-2');
+    grid.appendChild(aliasesField);
+
+    const visibilityField = createInlineField('Visibility', createInlineSelect({
         name: 'itemVisibility',
         value: item.visibility || 'revealed',
         options: [
             { value: 'revealed', label: 'revealed' },
             { value: 'gated', label: 'gated' }
         ]
-    })));
-    grid.appendChild(createInlineField('Reveal @ chapter', createInlineNumberInput({
+    }));
+    visibilityField.classList.add('studio-world-inline-field--span-4');
+    grid.appendChild(visibilityField);
+
+    const revealField = createInlineField('Reveal @ chapter', createInlineNumberInput({
         name: 'itemRevealChapter',
         value: item.revealGate?.kind === 'chapter_threshold' && Number.isFinite(item.revealGate?.value)
             ? String(item.revealGate.value)
             : '',
         placeholder: 'blank = manual gate / none'
-    })));
+    }));
+    revealField.classList.add('studio-world-inline-field--span-4');
+    grid.appendChild(revealField);
 
     if (item.revealGate?.kind === 'manual_unlock') {
         const manualField = document.createElement('label');
