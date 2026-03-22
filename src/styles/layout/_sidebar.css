@@ -103,6 +103,18 @@
     margin-bottom: 3px;
 }
 
+.sessions-panel .chat-sessions-section-body {
+    display: block;
+}
+
+.sessions-panel .chat-sessions-section.is-collapsed .chat-sessions-section-body {
+    display: none;
+}
+
+.sessions-panel .chat-sessions-section.is-collapsed .section-header {
+    margin-bottom: 0;
+}
+
 .sessions-panel .section-header {
     min-height: 30px;
     margin-bottom: 3px;

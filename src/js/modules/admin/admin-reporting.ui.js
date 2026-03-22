@@ -1,6 +1,7 @@
 //file: src/js/modules/admin/admin-reporting.ui.js
 
 import * as UserService from '../user/user.service.js';
+import * as BackendAccountDataService from '../billing/backend-account-data.service.js';
 import * as ReportingHandlers from './admin-reporting.handlers.js';
 
 const modal = document.getElementById('financial-report-modal');
@@ -9,11 +10,27 @@ const modalBody = document.getElementById('financial-report-body');
 function showModal() { modal.style.display = 'flex'; }
 function hideModal() { modal.style.display = 'none'; }
 
-function renderReport() {
+async function resolveReportData() {
+    if (BackendAccountDataService.isBackendAccountDataAvailable()) {
+        try {
+            return await BackendAccountDataService.fetchBackendFinancialReport();
+        } catch (error) {
+            console.error('Could not load backend financial report. Falling back to local report.', error);
+        }
+    }
+
+    return {
+        summary: UserService.getFinancialSummary(),
+        perUser: UserService.getPerUserFinancials()
+    };
+}
+
+async function renderReport() {
     if (!modalBody) return;
 
-    const summary = UserService.getFinancialSummary();
-    const perUserData = UserService.getPerUserFinancials();
+    const reportData = await resolveReportData();
+    const summary = reportData.summary;
+    const perUserData = reportData.perUser;
 
     const perUserRows = perUserData.map(user => `
         <tr>
@@ -56,7 +73,15 @@ function renderReport() {
 }
 
 export function initAdminReportingUI() {
-    document.getElementById('generate-report-btn')?.addEventListener('click', renderReport);
+    document.getElementById('generate-report-btn')?.addEventListener('click', () => {
+        renderReport().catch((error) => {
+            console.error('Could not render the financial report.', error);
+        });
+    });
     modal?.querySelectorAll('.modal-close-btn').forEach(btn => btn.addEventListener('click', hideModal));
-    document.getElementById('export-report-csv-btn')?.addEventListener('click', ReportingHandlers.exportReportToCSV);
+    document.getElementById('export-report-csv-btn')?.addEventListener('click', () => {
+        ReportingHandlers.exportReportToCSV().catch((error) => {
+            console.error('Could not export the financial report CSV.', error);
+        });
+    });
 }

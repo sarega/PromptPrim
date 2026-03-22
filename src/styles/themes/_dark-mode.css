@@ -569,6 +569,11 @@ body.dark-mode #studio-panel .studio-visibility-option.is-selected {
     color: #e2e8f0;
 }
 
+body.dark-mode #studio-panel .studio-header-actions .studio-search-toggle-btn.is-active {
+    background: #334155;
+    color: #e2e8f0;
+}
+
 body.dark-mode #studio-panel .studio-visibility-check {
     color: #93c5fd;
 }

@@ -1159,7 +1159,8 @@ export function addMessageToUI(message, index, session) {
 
 export function renderMessages() {
     const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    const sessions = Array.isArray(project?.chatSessions) ? project.chatSessions : [];
+    const session = sessions.find(s => s?.id === project?.activeSessionId);
     if (!session) {
         console.error("[UI] renderMessages: No active session found!");
         return;
@@ -1173,11 +1174,21 @@ export function renderMessages() {
     
     container.innerHTML = '';
 
-    if (session.history && session.history.length > 0) {
-        session.history.forEach((msg, index) => {
-            // [แก้ไข] ส่ง session เข้าไปเป็นพารามิเตอร์ตัวที่สาม
-            const messageElement = createMessageElement(msg, index, session); 
-            container.appendChild(messageElement);
+    const history = Array.isArray(session.history) ? session.history : [];
+    if (history.length > 0) {
+        history.forEach((msg, index) => {
+            if (!msg || typeof msg !== 'object') return;
+            try {
+                const messageElement = createMessageElement(msg, index, session);
+                container.appendChild(messageElement);
+            } catch (error) {
+                console.error('[UI] renderMessages: Failed to render a legacy message.', error, msg);
+                const fallbackElement = createMessageElement({
+                    role: 'system',
+                    content: '[A legacy message could not be displayed safely.]'
+                }, index, session);
+                container.appendChild(fallbackElement);
+            }
         });
     }
 
@@ -1194,10 +1205,10 @@ export function showStreamingTarget(index) {
 
 export function updateMessageContent(index, container) {
     const project = stateManager.getProject();
-    const session = project.chatSessions.find(s => s.id === project.activeSessionId);
+    const session = project?.chatSessions?.find?.(s => s?.id === project?.activeSessionId);
     if (!session) return;
 
-    const messageData = session.history[index];
+    const messageData = Array.isArray(session.history) ? session.history[index] : null;
     const contentEl = container.querySelector('.content');
     if (contentEl && messageData) {
         contentEl.innerHTML = messageData.content;

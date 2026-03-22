@@ -312,9 +312,13 @@ export function showAgentEditor(isEditing = false, agentName = null) {
     stateManager.setState('editingAgentName', isEditing ? agentName : null);
 
     const project = stateManager.getProject();
-    const agentData = (isEditing && project.agentPresets[agentName]) 
+    const baseAgentData = (isEditing && project.agentPresets[agentName]) 
         ? project.agentPresets[agentName] 
         : defaultAgentSettings;
+    const agentData = {
+        ...baseAgentData,
+        model: String(baseAgentData?.model || '').trim() || UserService.getPreferredModelIdForCurrentUser()
+    };
 
     // 1. รีเซ็ต Tab กลับไปหน้าแรกเสมอ
     agentEditorModal.querySelectorAll('.tab-btn, .tab-content').forEach(el => el.classList.remove('active'));

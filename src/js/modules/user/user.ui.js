@@ -5,43 +5,81 @@ import { toggleDropdown, showCustomAlert } from '../../core/core.ui.js';
 import * as SettingsUI from '../settings/settings.ui.js';
 import * as UserService from './user.service.js';
 import * as UserHandlers from './user.handlers.js';
+import * as AuthService from '../auth/auth.service.js';
 import { initThemeSwitcher } from '../../core/core.theme.js';
+
+function getSanitizedAvatarUrl(value) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return '';
+    if (/^https?:\/\/\S+$/i.test(trimmed)) return trimmed;
+    if (/^blob:\S+$/i.test(trimmed)) return trimmed;
+    if (/^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(trimmed)) return trimmed;
+    return '';
+}
 
 function updateUserProfileDisplay() {
     const profile = UserService.getCurrentUserProfile();
     if (!profile) return;
-    const isMaster = UserService.isMasterProfile(profile);
+    const isAdmin = UserService.isAdminProfile(profile);
+    const effectiveAccountStatus = UserService.getEffectiveAccountStatus(profile);
+    const isStudio = effectiveAccountStatus === 'studio_active';
+    const creditBuckets = UserService.getCreditBucketSummary(profile);
 
     const nameSpan = document.querySelector('#user-profile-menu .user-name');
     const planSpan = document.querySelector('#user-profile-menu .user-plan');
     const creditItem = document.getElementById('user-userCredits');
     const creditSpan = creditItem?.querySelector('span:last-child');
-    const avatarSpan = document.querySelector('#user-profile-btn span');
+    const avatarButton = document.getElementById('user-profile-btn');
+    const safeAvatarUrl = getSanitizedAvatarUrl(profile.avatarUrl || profile.billingProfile?.avatarUrl || '');
 
-    if (avatarSpan && profile.userName) avatarSpan.textContent = profile.userName.charAt(0).toUpperCase();
+    if (avatarButton) {
+        avatarButton.replaceChildren();
+        if (safeAvatarUrl) {
+            const avatarImage = document.createElement('img');
+            avatarImage.src = safeAvatarUrl;
+            avatarImage.alt = '';
+            avatarImage.decoding = 'async';
+            avatarButton.appendChild(avatarImage);
+            avatarButton.classList.add('has-image');
+        } else {
+            const avatarSpan = document.createElement('span');
+            avatarSpan.textContent = profile.userName ? profile.userName.charAt(0).toUpperCase() : 'U';
+            avatarButton.appendChild(avatarSpan);
+            avatarButton.classList.remove('has-image');
+        }
+    }
     if (nameSpan) nameSpan.textContent = profile.userName || 'User';
 
     if (planSpan) {
         let statusText = 'Unknown';
         let statusClass = 'status-blocked';
 
-        if (isMaster) {
-            statusText = (profile.planStatus === 'active') ? 'Master Plan' : 'Subscription Expired';
-            statusClass = (profile.planStatus === 'active') ? 'status-master' : 'status-blocked';
-        } else if (profile.plan === 'pro') {
-            if (profile.planStatus === 'active' && profile.credits.current > 0) {
+        if (isAdmin) {
+            statusText = 'Admin';
+            statusClass = 'status-studio';
+        } else if (effectiveAccountStatus === 'paid_suspended') {
+            statusText = 'Access Suspended';
+            statusClass = 'status-blocked';
+        } else if (isStudio) {
+            statusText = 'Studio Plan';
+            statusClass = 'status-studio';
+        } else if (effectiveAccountStatus === 'pro_active' || profile.plan === 'pro') {
+            if (profile.credits.current > 0) {
                 statusText = 'Pro Plan';
                 statusClass = 'status-active';
             } else if (profile.planStatus === 'grace_period') {
                 statusText = 'Pro (Grace Period)';
                 statusClass = 'status-grace';
             } else {
-                statusText = 'Account Blocked';
+                statusText = 'Credits Depleted';
                 statusClass = 'status-blocked';
             }
-        } else if (profile.plan === 'free') {
-            statusText = (profile.credits.current > 0) ? 'Free Plan' : 'Credits Depleted';
-            statusClass = (profile.credits.current > 0) ? 'status-free' : 'status-blocked';
+        } else if (effectiveAccountStatus === 'free' || profile.plan === 'free') {
+            const freeTrialExpired = UserService.isFreeTrialExpired(profile);
+            statusText = freeTrialExpired
+                ? 'Free Trial Ended'
+                : ((profile.credits.current > 0) ? 'Free Plan' : 'Credits Depleted');
+            statusClass = (!freeTrialExpired && profile.credits.current > 0) ? 'status-free' : 'status-blocked';
         }
         
         planSpan.textContent = statusText;
@@ -49,12 +87,11 @@ function updateUserProfileDisplay() {
     }
 
     if (creditItem && creditSpan) {
-        if (isMaster) {
+        if (isAdmin || isStudio) {
             creditItem.style.display = 'none';
         } else {
             creditItem.style.display = 'flex';
-            // Call the function via the imported UserService
-            const balanceUSD = UserService.convertCreditsToUSD(profile.credits?.current ?? 0);
+            const balanceUSD = UserService.convertCreditsToUSD(creditBuckets.totalMicrocredits);
             creditSpan.textContent = `$${balanceUSD.toFixed(2)}`;
         }
     }
@@ -65,7 +102,7 @@ export function initUserProfileUI() {
     if (!profileContainer || !userSwitcherModal) return;
 
     // --- Event Listener หลักสำหรับ User Profile Dropdown ---
-    profileContainer.addEventListener('click', (e) => {
+    profileContainer.addEventListener('click', async (e) => {
         const actionTarget = e.target.closest('[data-action]');
         if (!actionTarget) return;
 
@@ -85,8 +122,17 @@ export function initUserProfileUI() {
                 profileContainer.classList.remove('open'); // << ย้ายมาไว้ข้างใน
                 break;
             case 'user:logout':
+                profileContainer.classList.remove('open');
+                if (AuthService.isSupabaseEnabled()) {
+                    const { error } = await AuthService.signOut();
+                    if (error) {
+                        showCustomAlert(`Could not sign out: ${error.message}`, "Sign Out Failed");
+                        break;
+                    }
+                    window.location.href = AuthService.getAuthPageUrl('app.html');
+                    break;
+                }
                 userSwitcherModal.style.display = 'flex';
-                profileContainer.classList.remove('open'); // << ย้ายมาไว้ข้างใน
                 break;
             // ... case อื่นๆ ...
         }
@@ -105,9 +151,11 @@ export function initUserProfileUI() {
                 return;
             }
 
-            const profileLabel = UserService.isMasterProfile(switchedProfile)
-                ? 'Admin (Master)'
-                : (switchedProfile.userName || switchedProfile.userId || userIdToSwitch);
+            const profileLabel = UserService.isAdminProfile(switchedProfile)
+                ? 'Admin'
+                : (UserService.isStudioProfile(switchedProfile)
+                    ? `${switchedProfile.userName || switchedProfile.userId || userIdToSwitch} (Studio)`
+                    : (switchedProfile.userName || switchedProfile.userId || userIdToSwitch));
 
             showCustomAlert(`Switched to ${profileLabel}. Reloading app...`, "Success");
             userSwitcherModal.style.display = 'none';

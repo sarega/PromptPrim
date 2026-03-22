@@ -3,6 +3,7 @@ import { ReactBridge } from '../../react-entry.jsx';
 import PhotoStudioWorkspace from '../../react-components/PhotoStudioWorkspace.jsx';
 import * as KieAIHandlers from './kieai.handlers.js';
 import * as UserService from '../user/user.service.js';
+import { showCustomAlert } from '../../core/core.ui.js';
 
 const WORKSPACE_ID = 'kieai-studio-workspace';
 const MOUNT_ID = 'photo-studio-root';
@@ -131,6 +132,14 @@ function restoreSidePanelsAfterMediaStudio() {
 }
 
 export function mountPhotoStudio(agentName) {
+    if (!UserService.canUseMediaStudio()) {
+        showCustomAlert(
+            'Media Studio is available only in Studio Plan / BYOK mode. Pro focuses on hosted text workflow, and Free is trial-only.',
+            'Studio Plan Required'
+        );
+        return false;
+    }
+
     const workspace = ensureWorkspaceDOM();
     const chatWorkspace = document.getElementById('chat-compose-workspace');
 
@@ -152,9 +161,10 @@ export function mountPhotoStudio(agentName) {
         agentName: displayAgentName,
         models: getMediaStudioVisibleModels(),
         onGenerate: KieAIHandlers.handleGenerationRequest,
-    };    
+    };
 // 2. Mount React Component ลงใน DOM Container
     ReactBridge.mount(PhotoStudioWorkspace, props, document.getElementById(MOUNT_ID));
+    return true;
 }
 
 export function unmountPhotoStudio() {

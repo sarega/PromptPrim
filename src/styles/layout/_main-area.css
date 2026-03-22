@@ -125,7 +125,19 @@
     font-size: 1rem;
     cursor: pointer;
     border: 2px solid transparent;
+    overflow: hidden;
     transition: all 0.2s ease;
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.user-avatar.has-image {
+    background-color: #e2e8f0;
 }
 
 .user-avatar:hover,
@@ -209,6 +221,10 @@
 /* Dark Mode Styles */
 body.dark-mode .user-avatar {
     background-color: #a78bfa;
+}
+
+body.dark-mode .user-avatar.has-image {
+    background-color: #1e293b;
 }
 body.dark-mode #user-profile-menu a.menu-item:hover {
     background-color: #374151;

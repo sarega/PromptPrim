@@ -50,6 +50,9 @@ import * as SummaryHandlers from './js/modules/summary/summary.handlers.js';
 import * as UserUI from './js/modules/user/user.ui.js';
 import * as UserService from './js/modules/user/user.service.js';
 import * as UserHandlers from './js/modules/user/user.handlers.js';
+import { ensurePageAccess } from './js/modules/auth/auth.guard.js';
+import * as ModelAccessService from './js/modules/models/model-access.service.js';
+import * as BackendBillingSettingsService from './js/modules/billing/backend-billing-settings.service.js';
 import * as ModelManagerUI from './js/modules/models/model-manager.ui.js';
 import * as GroupChat from './js/modules/chat/chat.group.js';
 import * as AccountUI from './js/modules/account/account.ui.js';
@@ -831,6 +834,9 @@ function initializeUI() {
 document.addEventListener('DOMContentLoaded', async () => {
     const loadingOverlay = document.getElementById('loading-overlay');
     try {
+        const authContext = await ensurePageAccess({ requireAdmin: false });
+        if (authContext?.redirected) return;
+
         // Always start with a collapsed composer on first load.  Clearing any
         // persisted composer state prevents previously maximized or normal
         // states from being restored automatically, which would otherwise
@@ -843,23 +849,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         await UserService.initUserSettings();
+        if (authContext?.mode === 'supabase' && authContext.user) {
+            await UserService.activateExternalAuthUser(authContext.user);
+            try {
+                await BackendBillingSettingsService.syncBackendBillingSettingsToLocalCache();
+            } catch (error) {
+                console.error('Could not sync backend billing settings. Keeping local billing cache for this session.', error);
+            }
+        }
         // --- [CRITICAL FIX] ---
         const currentUser = UserService.getCurrentUserProfile();
-        const isMasterUser = UserService.isMasterProfile(currentUser);
+        const usesPersonalApiKeys = UserService.usesPersonalApiKeys(currentUser);
         const systemSettings = UserService.getSystemApiSettings();
         const systemProviderEnabled = systemSettings.providerEnabled || {};
 
         // 1. โหลดโมเดลของระบบเฉพาะผู้ใช้ Free/Pro
-        if (!isMasterUser) {
-            await loadAllProviderModels({
-                apiKey: systemProviderEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
-                ollamaBaseUrl: systemProviderEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
-                isUserKey: false
-            });
+        if (!usesPersonalApiKeys) {
+            if (authContext?.mode === 'supabase') {
+                try {
+                    await ModelAccessService.loadManagedPlanPresets();
+                    await ModelAccessService.loadBackendModelCatalog({ hydrateState: true });
+                } catch (error) {
+                    console.error('Could not load backend model access. Falling back to legacy system model loading.', error);
+                    await loadAllProviderModels({
+                        apiKey: systemProviderEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
+                        ollamaBaseUrl: systemProviderEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
+                        isUserKey: false
+                    });
+                }
+            } else {
+                await loadAllProviderModels({
+                    apiKey: systemProviderEnabled.openrouter !== false ? systemSettings.openrouterKey : '',
+                    ollamaBaseUrl: systemProviderEnabled.ollama !== false ? systemSettings.ollamaBaseUrl : '',
+                    isUserKey: false
+                });
+            }
         }
 
-        // 2. โหลดโมเดลของผู้ใช้เองสำหรับ Master Plan
-        if (isMasterUser && currentUser) {
+        // 2. โหลดโมเดลของผู้ใช้เองสำหรับ Studio/admin BYOK mode
+        if (usesPersonalApiKeys && currentUser) {
             const userProviderEnabled = currentUser.apiSettings?.providerEnabled || {};
             await loadAllProviderModels({
                 apiKey: userProviderEnabled.openrouter !== false ? currentUser.apiSettings?.openrouterKey : '',

@@ -49,6 +49,32 @@ const styles = {
     backgroundColor: '#e9ecef',
     borderRadius: '8px',
   },
+  pricingSection: {
+    marginTop: '40px',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '20px',
+  },
+  pricingCard: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    padding: '24px',
+    boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
+    textAlign: 'left',
+  },
+  pricingTitle: {
+    fontSize: '1.3em',
+    marginBottom: '8px',
+  },
+  pricingPrice: {
+    fontSize: '2em',
+    fontWeight: 'bold',
+    marginBottom: '10px',
+  },
+  pricingMeta: {
+    color: '#555',
+    lineHeight: 1.6,
+  },
   heroTitle: {
     fontSize: '2.5em',
     marginBottom: '15px',
@@ -77,7 +103,7 @@ const styles = {
 // --- The React Component ---
 function LandingPage() {
   const handleLogin = () => {
-    window.location.href = `${import.meta.env.BASE_URL}app.html`;
+    window.location.href = `${import.meta.env.BASE_URL}auth.html`;
   };
 
   return (
@@ -99,6 +125,27 @@ function LandingPage() {
           <h1 style={styles.heroTitle}>Unlock the Power of AI</h1>
           <p style={styles.heroSubtitle}>Create, manage, and deploy intelligent prompts with ease.</p>
           <button onClick={handleLogin} style={styles.primaryButton}>Get Started</button>
+        </section>
+
+        <section id="pricing" style={styles.pricingSection}>
+          <article style={styles.pricingCard}>
+            <h2 style={styles.pricingTitle}>Free</h2>
+            <div style={styles.pricingPrice}>$0</div>
+            <p style={styles.pricingMeta}>$0.20 trial credit</p>
+            <p style={styles.pricingMeta}>Expires in 7 days</p>
+          </article>
+          <article style={styles.pricingCard}>
+            <h2 style={styles.pricingTitle}>Studio</h2>
+            <div style={styles.pricingPrice}>$8/mo</div>
+            <p style={styles.pricingMeta}>Use your own API key.</p>
+            <p style={styles.pricingMeta}>Full control and lower monthly cost.</p>
+          </article>
+          <article style={styles.pricingCard}>
+            <h2 style={styles.pricingTitle}>Pro</h2>
+            <div style={styles.pricingPrice}>$10/mo</div>
+            <p style={styles.pricingMeta}>Ready to use.</p>
+            <p style={styles.pricingMeta}>Includes $3 credits and supports top-up.</p>
+          </article>
         </section>
       </main>
 

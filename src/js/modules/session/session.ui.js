@@ -115,6 +115,23 @@ function ensureSessionsPanelVisible() {
     document.querySelector('.app-wrapper')?.classList.remove('sidebar-collapsed');
 }
 
+function setChatSessionsSectionCollapsed(shouldCollapse) {
+    const section = document.getElementById('chat-sessions-section');
+    const trigger = document.getElementById('session-list-locate-trigger');
+    if (!section || !trigger) return;
+
+    const isExpanded = !Boolean(shouldCollapse);
+    section.classList.toggle('is-collapsed', !isExpanded);
+    trigger.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    trigger.title = isExpanded ? 'Hide chat sessions' : 'Show chat sessions';
+}
+
+function toggleChatSessionsSectionCollapsed() {
+    const section = document.getElementById('chat-sessions-section');
+    if (!section) return;
+    setChatSessionsSectionCollapsed(!section.classList.contains('is-collapsed'));
+}
+
 function highlightLocatedSession(item) {
     if (!item) return;
     item.classList.remove('session-locate-highlight');
@@ -131,6 +148,7 @@ function revealActiveSessionInList() {
     if (!project || !activeSessionId) return;
 
     ensureSessionsPanelVisible();
+    setChatSessionsSectionCollapsed(false);
 
     let targetItem = document.querySelector(`.session-item[data-session-id="${escapeSelectorValue(activeSessionId)}"]`);
     if (!targetItem) {
@@ -1307,13 +1325,16 @@ export function initSessionUI() {
             }
 
             if (target.closest('#new-chat-btn') && !target.closest('#new-session-menu')) {
+                e.preventDefault();
+                e.stopPropagation();
                 stateManager.bus.publish('session:new');
                 return;
             }
 
             if (target.closest('#session-list-locate-trigger')) {
                 e.preventDefault();
-                revealActiveSessionInList();
+                e.stopPropagation();
+                toggleChatSessionsSectionCollapsed();
                 return;
             }
 
@@ -1539,7 +1560,7 @@ export function initSessionUI() {
         }
         if ((event.key === 'Enter' || event.key === ' ') && event.target?.id === 'session-list-locate-trigger') {
             event.preventDefault();
-            revealActiveSessionInList();
+            toggleChatSessionsSectionCollapsed();
         }
     });
 
@@ -1552,6 +1573,8 @@ export function initSessionUI() {
         event.preventDefault();
         revealActiveSessionInList();
     });
+
+    setChatSessionsSectionCollapsed(false);
 
     console.log('✅ Session UI initialized with folder support.');
 }

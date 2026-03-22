@@ -1,6 +1,7 @@
 // file: src/js/modules/admin/admin-reporting.handlers.js
 
 import * as UserService from '../user/user.service.js';
+import * as BackendAccountDataService from '../billing/backend-account-data.service.js';
 
 function convertToCSV(summary, perUserData) {
     let csv = "Metric,Value\n";
@@ -19,9 +20,24 @@ function convertToCSV(summary, perUserData) {
     return csv;
 }
 
-export function exportReportToCSV() {
-    const summary = UserService.getFinancialSummary();
-    const perUserData = UserService.getPerUserFinancials();
+export async function exportReportToCSV() {
+    let summary;
+    let perUserData;
+
+    if (BackendAccountDataService.isBackendAccountDataAvailable()) {
+        try {
+            const reportData = await BackendAccountDataService.fetchBackendFinancialReport();
+            summary = reportData.summary;
+            perUserData = reportData.perUser;
+        } catch (error) {
+            console.error('Could not load backend report export. Falling back to local report.', error);
+        }
+    }
+
+    if (!summary || !perUserData) {
+        summary = UserService.getFinancialSummary();
+        perUserData = UserService.getPerUserFinancials();
+    }
     
     const csvData = convertToCSV(summary, perUserData);
     const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });

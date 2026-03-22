@@ -7,7 +7,7 @@
     display: inline-block;
 }
 
-.user-plan.status-master {
+.user-plan.status-studio {
     color: #8b5cf6;
     background-color: #f5f3ff;
 }
@@ -33,7 +33,7 @@
 }
 
 /* Dark Mode Adjustments */
-body.dark-mode .user-plan.status-master {
+body.dark-mode .user-plan.status-studio {
     color: #c4b5fd;
     background-color: #3730a3;
 }

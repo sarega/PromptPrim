@@ -1,6 +1,8 @@
 //src/js/modules/admin/admin-model-manager.ui.js
 import { stateManager } from '../../core/core.state.js';
+import * as AuthService from '../auth/auth.service.js';
 import * as AdminModelHandlers from './admin-model-manager.handlers.js';
+import * as ModelAccessService from '../models/model-access.service.js';
 import * as UserService from '../user/user.service.js';
 
 let selectedModelIdSet = new Set();
@@ -34,8 +36,8 @@ function renderIncludedList() {
     });
 }
 
-function renderMasterList() {
-    const container = document.getElementById('admin-model-master-list');
+function renderPlanList() {
+    const container = document.getElementById('admin-model-plan-list');
     const searchInput = document.getElementById('admin-model-search-input');
     const filterToggle = document.getElementById('admin-filter-selected-toggle');
     if (!container || !searchInput || !filterToggle) return;
@@ -72,30 +74,77 @@ function renderMasterList() {
     });
 }
 
+function syncManagementModeUI() {
+    const isBackendMode = AuthService.isSupabaseEnabled() && ModelAccessService.isBackendModelAccessReady();
+    const selectorLabel = document.querySelector('label[for="admin-preset-selector"]');
+    const nameLabel = document.querySelector('label[for="admin-preset-name-input"]');
+    const presetNameInput = document.getElementById('admin-preset-name-input');
+    const deleteBtn = document.getElementById('admin-delete-preset-btn');
+    const importBtn = document.getElementById('import-presets-btn');
+    const exportBtn = document.getElementById('export-presets-btn');
+
+    if (selectorLabel) {
+        selectorLabel.textContent = isBackendMode ? 'Edit Plan Allowlist' : 'Edit Plan Preset';
+    }
+    if (nameLabel) {
+        nameLabel.textContent = isBackendMode ? 'Plan Name' : 'Preset Name';
+    }
+    if (presetNameInput) {
+        presetNameInput.readOnly = isBackendMode;
+        presetNameInput.placeholder = isBackendMode
+            ? 'Managed by billing plans'
+            : 'e.g., pro_tier_models';
+    }
+    if (deleteBtn) {
+        deleteBtn.style.display = isBackendMode ? 'none' : '';
+    }
+    if (importBtn) {
+        importBtn.style.display = isBackendMode ? 'none' : '';
+    }
+    if (exportBtn) {
+        exportBtn.textContent = isBackendMode ? 'Export Access' : 'Export';
+    }
+}
+
 export function renderAdminModelManager() {
-    const presets = UserService.getMasterModelPresets();
     const presetSelector = document.getElementById('admin-preset-selector');
     const presetNameInput = document.getElementById('admin-preset-name-input');
     if (!presetSelector || !presetNameInput) return;
 
+    const isBackendMode = AuthService.isSupabaseEnabled() && ModelAccessService.isBackendModelAccessReady();
+    const presets = isBackendMode
+        ? ModelAccessService.getManagedPlanPresets()
+        : UserService.getPlanModelPresets();
     const previouslySelectedKey = presetSelector.value;
-    presetSelector.innerHTML = '<option value="--new--">-- Create New Master Preset --</option>';
-    for (const key in presets) {
-        presetSelector.add(new Option(presets[key].name, key));
+
+    if (isBackendMode) {
+        presetSelector.innerHTML = '';
+        ModelAccessService.getManagedPlanPresetDefinitions().forEach(preset => {
+            presetSelector.add(new Option(preset.name, preset.key));
+        });
+    } else {
+        presetSelector.innerHTML = '<option value="--new--">-- Create New Plan Preset --</option>';
+        for (const key in presets) {
+            presetSelector.add(new Option(presets[key].name, key));
+        }
     }
+
     if (presets[previouslySelectedKey]) {
         presetSelector.value = previouslySelectedKey;
+    } else if (isBackendMode) {
+        presetSelector.value = ModelAccessService.getManagedPlanPresetDefinitions()[0]?.key || '';
     }
 
     const selectedKey = presetSelector.value;
-    if (selectedKey === '--new--') {
+    if (!isBackendMode && selectedKey === '--new--') {
         presetNameInput.value = '';
         selectedModelIdSet.clear();
     } else if (presets[selectedKey]) {
         presetNameInput.value = presets[selectedKey].name;
         selectedModelIdSet = new Set(presets[selectedKey].modelIds);
     }
-    renderMasterList();
+    syncManagementModeUI();
+    renderPlanList();
     renderIncludedList();
 }
 
@@ -103,7 +152,7 @@ export function initAdminModelManagerUI() {
     const saveBtn = document.getElementById('admin-save-preset-btn');
     const deleteBtn = document.getElementById('admin-delete-preset-btn');
     const presetSelector = document.getElementById('admin-preset-selector');
-    const masterListContainer = document.getElementById('admin-model-master-list');
+    const planListContainer = document.getElementById('admin-model-plan-list');
     const searchInput = document.getElementById('admin-model-search-input');
     const filterToggle = document.getElementById('admin-filter-selected-toggle');
     const selectAllBtn = document.getElementById('admin-select-all-btn');
@@ -117,17 +166,17 @@ export function initAdminModelManagerUI() {
     fileInput.style.display = 'none';
     
     importBtn?.addEventListener('click', () => fileInput.click());
-    exportBtn?.addEventListener('click', AdminModelHandlers.exportMasterPresets);
-    fileInput.addEventListener('change', AdminModelHandlers.importMasterPresets);
+    exportBtn?.addEventListener('click', AdminModelHandlers.exportPlanPresets);
+    fileInput.addEventListener('change', AdminModelHandlers.importPlanPresets);
 
-    saveBtn?.addEventListener('click', () => AdminModelHandlers.saveMasterPreset(selectedModelIdSet));
-    deleteBtn?.addEventListener('click', AdminModelHandlers.deleteMasterPreset);
+    saveBtn?.addEventListener('click', () => AdminModelHandlers.savePlanPreset(selectedModelIdSet));
+    deleteBtn?.addEventListener('click', AdminModelHandlers.deletePlanPreset);
     presetSelector?.addEventListener('change', renderAdminModelManager);
-    searchInput?.addEventListener('input', renderMasterList);
-    filterToggle?.addEventListener('change', renderMasterList);
+    searchInput?.addEventListener('input', renderPlanList);
+    filterToggle?.addEventListener('change', renderPlanList);
 
     selectAllBtn?.addEventListener('click', () => {
-        const visibleCheckboxes = masterListContainer.querySelectorAll('.model-manager-item input[type="checkbox"]');
+        const visibleCheckboxes = planListContainer.querySelectorAll('.model-manager-item input[type="checkbox"]');
         visibleCheckboxes.forEach(cb => {
             cb.checked = true;
             selectedModelIdSet.add(cb.dataset.modelId);
@@ -136,7 +185,7 @@ export function initAdminModelManagerUI() {
     });
 
     deselectAllBtn?.addEventListener('click', () => {
-        const visibleCheckboxes = masterListContainer.querySelectorAll('.model-manager-item input[type="checkbox"]');
+        const visibleCheckboxes = planListContainer.querySelectorAll('.model-manager-item input[type="checkbox"]');
         visibleCheckboxes.forEach(cb => {
             cb.checked = false;
             selectedModelIdSet.delete(cb.dataset.modelId);
@@ -144,10 +193,10 @@ export function initAdminModelManagerUI() {
         renderIncludedList();
     });
 
-    masterListContainer?.addEventListener('click', (e) => {
+    planListContainer?.addEventListener('click', (e) => {
         const checkbox = e.target.closest('input[type="checkbox"]');
         if (!checkbox) return;
-        const checkboxes = Array.from(masterListContainer.querySelectorAll('input[type="checkbox"]'));
+        const checkboxes = Array.from(planListContainer.querySelectorAll('input[type="checkbox"]'));
         const currentIndex = checkboxes.indexOf(checkbox);
         if (e.altKey || e.metaKey) {
             e.preventDefault();

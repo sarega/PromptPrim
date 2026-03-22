@@ -125,6 +125,20 @@
     height: 24px;
 }
 
+#studio-panel .studio-header-actions .studio-search-toggle-btn {
+    width: 24px;
+    height: 24px;
+}
+
+#studio-panel .studio-header-actions .studio-search-toggle-btn.is-active {
+    background: #e9eef7;
+    color: #1f2937;
+}
+
+#studio-panel .studio-header-actions .studio-search-toggle-btn:not(.is-active) {
+    opacity: 0.8;
+}
+
 #studio-panel .studio-visibility-dropdown {
     min-width: 188px;
     padding: 4px;

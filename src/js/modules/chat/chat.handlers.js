@@ -410,8 +410,8 @@ export async function sendMessage() {
 
     // 2. User status and credit checks are preserved
     const profile = UserService.getCurrentUserProfile();
-    if (profile.planStatus === 'expired') {
-        showCustomAlert("Your account is suspended. Please refill your credits to continue.", "Account Suspended");
+    if (UserService.isPaidSuspendedProfile(profile) || profile.planStatus === 'expired') {
+        showCustomAlert("Your paid access is suspended. Renew Studio or Pro, or activate Studio Access Pass to continue.", "Account Suspended");
         return;
     }
     if (profile.credits.current <= 0 && (profile.plan === 'free' || (profile.plan === 'pro' && profile.planStatus === 'active'))) {
@@ -628,7 +628,7 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
         const calculatedCost = calculateCost(agent.model, response.usage);
 
         const currentUser = UserService.getCurrentUserProfile();
-        if (currentUser && currentUser.plan !== 'master') {
+        if (currentUser && !UserService.usesPersonalApiKeys(currentUser)) {
             const logEntry = {
                 timestamp: Date.now(),
                 model: agent.model,
@@ -642,8 +642,12 @@ async function sendSingleAgentMessage(forcedAgentName = null) {
             UserService.logUserActivity(currentUser.userId, logEntry);
         }
         
-        UserService.logSystemApiCost(calculatedCost);
-        UserService.burnCreditsForUsage(response.usage, agent.model, response.cost);
+        if (!UserService.usesPersonalApiKeys(currentUser)) {
+            UserService.logSystemApiCost(calculatedCost);
+        }
+        if (response.billedServerSide !== true) {
+            UserService.burnCreditsForUsage(response.usage, agent.model, response.cost);
+        }
         
         const finalResponseText = renderer.getFinalContent();
         const finalMessage = { 
@@ -1265,7 +1269,9 @@ async function triggerAutoNameGeneration(session) {
         const response = await callLLM({ ...utilityAgent, temperature: 0.1 }, [{ role: 'user', content: titlePrompt }]);
         
         // Burn userCredits using the `usage` part of the response
-        UserService.burnCreditsForUsage(response.usage, utilityAgent.model);
+        if (response.billedServerSide !== true) {
+            UserService.burnCreditsForUsage(response.usage, utilityAgent.model);
+        }
         
         let newTitleData = {};
         try {

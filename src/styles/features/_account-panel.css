@@ -1,0 +1,989 @@
+/* ===============================================
+   FILE: src/styles/features/_account-panel.css
+   DESCRIPTION: Large responsive account workspace modal.
+   =============================================== */
+
+.account-modal-box {
+    width: min(96vw, 1120px);
+    max-width: 1120px;
+    min-height: min(78vh, 760px);
+    max-height: 92vh;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+    background:
+        radial-gradient(circle at top right, rgba(188, 213, 255, 0.35), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+}
+
+#account-modal .modal-header {
+    padding: 22px 24px 18px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(12px);
+}
+
+#account-modal .modal-body {
+    padding: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+#account-modal .modal-actions {
+    margin-top: 0;
+    padding: 16px 24px 20px;
+    border-top: 1px solid rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(12px);
+}
+
+.account-modal-heading {
+    display: grid;
+    gap: 4px;
+}
+
+.account-modal-heading p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.account-workspace {
+    display: grid;
+    grid-template-columns: minmax(290px, 340px) minmax(0, 1fr);
+    min-height: 0;
+    height: 100%;
+}
+
+.account-sidebar {
+    display: grid;
+    gap: 18px;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+    padding: 22px;
+    background:
+        linear-gradient(180deg, rgba(241, 245, 249, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+    border-right: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.account-content {
+    display: grid;
+    gap: 16px;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: 22px;
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.88) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.account-hero-card,
+.account-section-card,
+.account-section-btn,
+.account-action-card,
+.account-profile-photo-card,
+.account-metric-card,
+.account-timeline-item,
+.account-placeholder-card {
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    box-shadow: 0 8px 24px rgba(148, 163, 184, 0.08);
+}
+
+.account-hero-card {
+    display: grid;
+    gap: 18px;
+    padding: 18px;
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.96), transparent 36%),
+        linear-gradient(135deg, rgba(226, 243, 253, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.account-hero-main {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.account-avatar-stack {
+    display: grid;
+    gap: 10px;
+    justify-items: center;
+}
+
+.account-avatar-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: grid;
+    overflow: hidden;
+    place-items: center;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #0f172a;
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.account-avatar-preview.is-large {
+    width: 104px;
+    height: 104px;
+    font-size: 2rem;
+}
+
+.account-avatar-preview.has-image {
+    background: #ffffff;
+}
+
+.account-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.account-avatar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.account-hero-copy {
+    min-width: 0;
+}
+
+.account-hero-copy h4 {
+    margin: 0 0 6px;
+    font-size: 1.5rem;
+    color: #0f172a;
+}
+
+.account-hero-copy p {
+    margin: 0;
+    font-size: 1.02rem;
+    color: #475569;
+    word-break: break-word;
+}
+
+.account-hero-eyebrow {
+    margin-bottom: 6px;
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.account-badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.account-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #1e3a8a;
+    background: rgba(219, 234, 254, 0.95);
+    border: 1px solid rgba(147, 197, 253, 0.85);
+}
+
+.account-badge.is-muted {
+    color: #475569;
+    background: rgba(241, 245, 249, 0.98);
+    border-color: rgba(203, 213, 225, 0.9);
+}
+
+.account-badge.is-accent {
+    color: #065f46;
+    background: rgba(209, 250, 229, 0.95);
+    border-color: rgba(110, 231, 183, 0.9);
+}
+
+.account-hero-side {
+    display: grid;
+    gap: 6px;
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.account-hero-stat-label,
+.account-metric-label,
+.account-timeline-item .label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.account-hero-stat-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #0f172a;
+}
+
+.account-hero-stat-meta,
+.account-metric-helper,
+.account-section-btn-helper,
+.account-section-card-header p,
+.account-placeholder-card p,
+.account-inline-note,
+.account-inline-stack p,
+.account-action-card p,
+.account-profile-photo-card p {
+    color: #64748b;
+}
+
+.account-section-btn-helper {
+    font-size: 0.94rem;
+    line-height: 1.35;
+}
+
+.account-section-nav {
+    display: grid;
+    gap: 10px;
+}
+
+.account-section-btn {
+    width: 100%;
+    display: grid;
+    gap: 4px;
+    text-align: left;
+    padding: 14px 15px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.94);
+    cursor: pointer;
+    transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.account-section-btn:hover,
+.account-section-btn:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(148, 163, 184, 0.5);
+    box-shadow: 0 12px 24px rgba(148, 163, 184, 0.12);
+}
+
+.account-section-btn.is-active {
+    border-color: rgba(96, 165, 250, 0.95);
+    background: linear-gradient(135deg, rgba(219, 234, 254, 0.98) 0%, rgba(239, 246, 255, 0.98) 100%);
+    box-shadow: 0 14px 28px rgba(59, 130, 246, 0.14);
+}
+
+.account-section-btn-label {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #0f172a;
+}
+
+.account-section-card {
+    padding: 18px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.94);
+}
+
+.account-section-card-header {
+    margin-bottom: 14px;
+}
+
+.account-section-card-header h4,
+.account-action-card h5,
+.account-profile-photo-card h5 {
+    margin: 0 0 6px;
+    color: #0f172a;
+}
+
+.account-section-card-header p,
+.account-action-card p,
+.account-profile-photo-card p,
+.account-placeholder-card p,
+.account-empty-copy {
+    margin: 0;
+    font-size: 0.98rem;
+    line-height: 1.5;
+}
+
+.account-section-card-body,
+.account-inline-stack,
+.account-action-stack,
+.account-placeholder-card {
+    display: grid;
+    gap: 12px;
+}
+
+.account-form-actions,
+.account-security-fields {
+    display: grid;
+    gap: 12px;
+}
+
+.account-metric-grid,
+.account-timeline-grid,
+.account-action-grid,
+.account-form-grid,
+.account-plan-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.account-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-timeline-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.account-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+}
+
+.account-plan-grid--upgrade {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-metric-card,
+.account-timeline-item,
+.account-action-card,
+.account-profile-photo-card,
+.account-placeholder-card,
+.account-plan-card {
+    padding: 15px;
+    border-radius: 16px;
+    background: rgba(248, 250, 252, 0.94);
+}
+
+.account-action-status {
+    display: none;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(96, 165, 250, 0.32);
+    background: linear-gradient(135deg, rgba(219, 234, 254, 0.9) 0%, rgba(239, 246, 255, 0.96) 100%);
+    color: #1d4ed8;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.account-action-status.is-visible {
+    display: block;
+}
+
+.account-content.is-busy {
+    cursor: progress;
+}
+
+.account-current-plan-strip {
+    display: grid;
+    gap: 10px;
+    padding: 15px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(203, 213, 225, 0.92);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+}
+
+.account-current-plan-label,
+.account-plan-compare-title,
+.account-billing-footnote {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.account-current-plan-main {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.account-current-plan-copy,
+.account-current-plan-meta {
+    min-width: 0;
+}
+
+.account-current-plan-value {
+    font-size: 1.18rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.account-current-plan-detail,
+.account-current-plan-recommendation,
+.account-inline-muted {
+    margin: 0;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.account-current-plan-recommendation {
+    font-weight: 600;
+    color: #2563eb;
+}
+
+.account-plan-card {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.account-plan-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(148, 163, 184, 0.5);
+    box-shadow: 0 16px 32px rgba(148, 163, 184, 0.12);
+}
+
+.account-plan-card.is-current {
+    border-color: rgba(59, 130, 246, 0.72);
+    background:
+        radial-gradient(circle at top right, rgba(191, 219, 254, 0.42), transparent 38%),
+        linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(248, 250, 252, 0.98) 100%);
+}
+
+.account-plan-card.is-recommended {
+    border-color: rgba(16, 185, 129, 0.38);
+    box-shadow: 0 18px 36px rgba(16, 185, 129, 0.12);
+}
+
+.account-plan-card.is-primary {
+    background:
+        radial-gradient(circle at top right, rgba(219, 234, 254, 0.72), transparent 38%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+}
+
+.account-plan-card.is-secondary {
+    background:
+        radial-gradient(circle at top right, rgba(226, 232, 240, 0.52), transparent 42%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.94) 100%);
+}
+
+.account-plan-card.is-busy,
+.account-action-card.is-busy {
+    border-color: rgba(96, 165, 250, 0.72);
+    box-shadow: 0 18px 36px rgba(59, 130, 246, 0.16);
+}
+
+.account-plan-card-header {
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: start;
+}
+
+.account-plan-card h5 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #0f172a;
+}
+
+.account-plan-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #475569;
+    background: rgba(226, 232, 240, 0.92);
+    border: 1px solid rgba(203, 213, 225, 0.92);
+    white-space: nowrap;
+}
+
+.account-plan-pill.is-current {
+    color: #1d4ed8;
+    background: rgba(219, 234, 254, 0.96);
+    border-color: rgba(96, 165, 250, 0.75);
+}
+
+.account-plan-pill.is-recommended {
+    color: #065f46;
+    background: rgba(209, 250, 229, 0.95);
+    border-color: rgba(52, 211, 153, 0.68);
+}
+
+.account-plan-pill.is-suspended {
+    color: #92400e;
+    background: rgba(254, 243, 199, 0.96);
+    border-color: rgba(251, 191, 36, 0.66);
+}
+
+.account-plan-card-summary,
+.account-plan-helper {
+    margin: 0;
+    color: #64748b;
+    line-height: 1.55;
+}
+
+.account-plan-price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.account-plan-price {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #0f172a;
+}
+
+.account-plan-price-suffix {
+    font-size: 0.96rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.account-plan-cta .btn {
+    width: 100%;
+    justify-content: center;
+}
+
+.account-plan-feature-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.account-plan-feature-list li {
+    position: relative;
+    padding-left: 18px;
+    color: #334155;
+    line-height: 1.45;
+}
+
+.account-plan-feature-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: #2563eb;
+    font-weight: 800;
+}
+
+.account-plan-compare-card {
+    padding: 14px 15px;
+    border-radius: 16px;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    background: rgba(248, 250, 252, 0.9);
+}
+
+.account-plan-compare-wrapper {
+    overflow-x: auto;
+}
+
+.account-plan-compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.94rem;
+}
+
+.account-plan-compare-table th,
+.account-plan-compare-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+    text-align: left;
+}
+
+.account-plan-compare-table thead th {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.account-plan-compare-table tbody th {
+    font-weight: 600;
+    color: #334155;
+}
+
+.account-plan-compare-table tbody tr:last-child th,
+.account-plan-compare-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.account-reactivation-list {
+    display: grid;
+    gap: 8px;
+    color: #334155;
+}
+
+.account-billing-footnote {
+    margin-top: 14px;
+    line-height: 1.55;
+}
+
+.account-metric-value {
+    margin-top: 8px;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.account-profile-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    gap: 18px;
+}
+
+.account-profile-sidebar,
+.account-profile-fields {
+    min-width: 0;
+}
+
+.account-profile-photo-card {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+}
+
+.account-form-grid .form-group {
+    margin-bottom: 0;
+}
+
+.account-action-card .form-group,
+.account-profile-fields .form-group,
+.account-section-card .form-group {
+    margin-bottom: 0;
+}
+
+.account-section-card .form-group p {
+    margin: 6px 0 0;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: #64748b;
+}
+
+.account-form-grid input[readonly] {
+    background: rgba(255, 255, 255, 0.98);
+    color: #0f172a;
+}
+
+.account-form-actions .btn,
+.account-action-card .btn {
+    justify-self: start;
+}
+
+.account-inline-note {
+    margin-top: 14px;
+    padding: 14px 15px;
+    border-radius: 16px;
+    background: rgba(241, 245, 249, 0.9);
+    border: 1px dashed rgba(148, 163, 184, 0.45);
+}
+
+.account-table-wrapper {
+    border-radius: 16px;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    background: rgba(255, 255, 255, 0.98);
+}
+
+.account-table-wrapper table {
+    width: 100%;
+    font-size: 0.94rem;
+}
+
+.account-empty-copy {
+    color: #64748b;
+}
+
+@media (max-width: 980px) {
+    .account-modal-box {
+        width: min(98vw, 1120px);
+        min-height: 72vh;
+    }
+
+    .account-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .account-sidebar {
+        border-right: none;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+        padding-bottom: 18px;
+    }
+
+    .account-section-nav {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(180px, 1fr);
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .account-profile-grid,
+    .account-action-grid,
+    .account-timeline-grid,
+    .account-plan-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .account-current-plan-main {
+        flex-direction: column;
+        align-items: start;
+    }
+}
+
+@media (max-width: 720px) {
+    #account-modal {
+        align-items: stretch;
+        justify-content: stretch;
+    }
+
+    .account-modal-box {
+        width: 100vw;
+        max-width: none;
+        min-height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    #account-modal .modal-header,
+    #account-modal .modal-actions {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .account-sidebar,
+    .account-content {
+        padding: 18px;
+    }
+
+    .account-hero-main {
+        align-items: start;
+    }
+
+    .account-metric-grid,
+    .account-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+body.dark-mode .account-modal-box {
+    border-color: rgba(71, 85, 105, 0.9);
+    box-shadow: 0 28px 72px rgba(2, 6, 23, 0.46);
+    background:
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.16), transparent 32%),
+        linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+}
+
+body.dark-mode #account-modal .modal-header,
+body.dark-mode #account-modal .modal-actions {
+    background: rgba(15, 23, 42, 0.76);
+    border-color: rgba(71, 85, 105, 0.95);
+}
+
+body.dark-mode .account-modal-heading p,
+body.dark-mode .account-hero-copy p,
+body.dark-mode .account-hero-stat-meta,
+body.dark-mode .account-metric-helper,
+body.dark-mode .account-section-btn-helper,
+body.dark-mode .account-section-card-header p,
+body.dark-mode .account-empty-copy,
+body.dark-mode .account-placeholder-card p,
+body.dark-mode .account-inline-note,
+body.dark-mode .account-inline-muted,
+body.dark-mode .account-current-plan-detail,
+body.dark-mode .account-current-plan-recommendation,
+body.dark-mode .account-inline-stack p,
+body.dark-mode .account-action-card p,
+body.dark-mode .account-profile-photo-card p,
+body.dark-mode .account-timeline-item .label,
+body.dark-mode .account-metric-label,
+body.dark-mode .account-hero-stat-label,
+body.dark-mode .account-current-plan-label,
+body.dark-mode .account-plan-compare-title,
+body.dark-mode .account-billing-footnote {
+    color: #94a3b8;
+}
+
+body.dark-mode .account-sidebar {
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.86) 100%);
+    border-color: rgba(71, 85, 105, 0.95);
+}
+
+body.dark-mode .account-content {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(15, 23, 42, 0.98) 100%);
+}
+
+body.dark-mode .account-hero-card,
+body.dark-mode .account-section-card,
+body.dark-mode .account-section-btn,
+body.dark-mode .account-action-card,
+body.dark-mode .account-profile-photo-card,
+body.dark-mode .account-metric-card,
+body.dark-mode .account-timeline-item,
+body.dark-mode .account-placeholder-card,
+body.dark-mode .account-plan-card,
+body.dark-mode .account-table-wrapper {
+    border-color: rgba(71, 85, 105, 0.95);
+    box-shadow: 0 16px 32px rgba(2, 6, 23, 0.22);
+}
+
+body.dark-mode .account-hero-card {
+    background:
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 36%),
+        linear-gradient(135deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+}
+
+body.dark-mode .account-section-card,
+body.dark-mode .account-section-btn,
+body.dark-mode .account-hero-side,
+body.dark-mode .account-current-plan-strip,
+body.dark-mode .account-metric-card,
+body.dark-mode .account-timeline-item,
+body.dark-mode .account-action-card,
+body.dark-mode .account-profile-photo-card,
+body.dark-mode .account-placeholder-card,
+body.dark-mode .account-plan-card,
+body.dark-mode .account-plan-compare-card,
+body.dark-mode .account-table-wrapper,
+body.dark-mode .account-inline-note {
+    background: rgba(30, 41, 59, 0.92);
+}
+
+body.dark-mode .account-plan-card.is-current {
+    background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 38%),
+        linear-gradient(180deg, rgba(30, 41, 59, 0.96) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border-color: rgba(96, 165, 250, 0.92);
+}
+
+body.dark-mode .account-plan-card.is-recommended,
+body.dark-mode .account-plan-card.is-busy,
+body.dark-mode .account-action-card.is-busy {
+    box-shadow: 0 20px 38px rgba(2, 6, 23, 0.32);
+}
+
+body.dark-mode .account-section-btn.is-active {
+    background: linear-gradient(135deg, rgba(30, 64, 175, 0.42) 0%, rgba(30, 41, 59, 0.96) 100%);
+    border-color: rgba(96, 165, 250, 0.98);
+}
+
+body.dark-mode .account-badge {
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.35);
+    border-color: rgba(96, 165, 250, 0.6);
+}
+
+body.dark-mode .account-badge.is-muted {
+    color: #cbd5e1;
+    background: rgba(51, 65, 85, 0.92);
+    border-color: rgba(100, 116, 139, 0.8);
+}
+
+body.dark-mode .account-badge.is-accent {
+    color: #a7f3d0;
+    background: rgba(6, 95, 70, 0.36);
+    border-color: rgba(52, 211, 153, 0.52);
+}
+
+body.dark-mode .account-avatar-preview {
+    color: #eff6ff;
+    background: linear-gradient(135deg, rgba(30, 64, 175, 0.86) 0%, rgba(59, 130, 246, 0.9) 100%);
+    border-color: rgba(96, 165, 250, 0.65);
+}
+
+body.dark-mode .account-avatar-preview.has-image {
+    background: rgba(15, 23, 42, 0.78);
+}
+
+body.dark-mode .account-hero-copy h4,
+body.dark-mode .account-hero-stat-value,
+body.dark-mode .account-metric-value,
+body.dark-mode .account-current-plan-value,
+body.dark-mode .account-section-btn-label,
+body.dark-mode .account-section-card-header h4,
+body.dark-mode .account-action-card h5,
+body.dark-mode .account-profile-photo-card h5,
+body.dark-mode .account-plan-card h5,
+body.dark-mode .account-plan-price,
+body.dark-mode .account-plan-compare-table thead th,
+body.dark-mode .account-form-grid input[readonly] {
+    color: #f8fafc;
+}
+
+body.dark-mode .account-form-grid input[readonly] {
+    background: rgba(15, 23, 42, 0.82);
+    border-color: rgba(71, 85, 105, 0.95);
+}
+
+body.dark-mode .account-section-card .form-group p,
+body.dark-mode .account-plan-card-summary,
+body.dark-mode .account-plan-helper,
+body.dark-mode .account-plan-price-suffix,
+body.dark-mode .account-plan-compare-table tbody th,
+body.dark-mode .account-reactivation-list {
+    color: #94a3b8;
+}
+
+body.dark-mode .account-action-status {
+    background: linear-gradient(135deg, rgba(30, 64, 175, 0.24) 0%, rgba(30, 41, 59, 0.92) 100%);
+    border-color: rgba(96, 165, 250, 0.5);
+    color: #bfdbfe;
+}
+
+body.dark-mode .account-plan-pill {
+    color: #cbd5e1;
+    background: rgba(51, 65, 85, 0.96);
+    border-color: rgba(100, 116, 139, 0.84);
+}
+
+body.dark-mode .account-plan-pill.is-current {
+    color: #bfdbfe;
+    background: rgba(30, 64, 175, 0.34);
+    border-color: rgba(96, 165, 250, 0.74);
+}
+
+body.dark-mode .account-plan-pill.is-recommended {
+    color: #a7f3d0;
+    background: rgba(6, 95, 70, 0.36);
+    border-color: rgba(52, 211, 153, 0.56);
+}
+
+body.dark-mode .account-plan-pill.is-suspended {
+    color: #fde68a;
+    background: rgba(146, 64, 14, 0.36);
+    border-color: rgba(251, 191, 36, 0.52);
+}
+
+body.dark-mode .account-plan-feature-list li {
+    color: #cbd5e1;
+}
+
+body.dark-mode .account-plan-feature-list li::before {
+    color: #93c5fd;
+}
+
+body.dark-mode .account-plan-compare-table th,
+body.dark-mode .account-plan-compare-table td {
+    border-color: rgba(71, 85, 105, 0.9);
+}
+
+body.dark-mode .account-current-plan-recommendation {
+    color: #93c5fd;
+}

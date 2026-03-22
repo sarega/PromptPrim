@@ -9,34 +9,19 @@ let selectedModelIdSet = new Set();
 let lastCheckedIndex = -1;
 
 export function getFilteredModelsForDisplay() {
-    const allModels = stateManager.getState().allProviderModels || [];
     const user = UserService.getCurrentUserProfile();
     if (!user) return [];
 
     // On the admin page, always show all models.
     if (document.body.classList.contains('admin-page')) {
-        return allModels;
+        return stateManager.getState().allProviderModels || [];
     }
 
-    // --- [DEBUGGING STEP] ---
-    // We are temporarily disabling the plan-based filtering.
-    // Any user that is not blocked will see ALL available models.
-    
-    // Check if user is blocked or expired.
-    const isBlocked = (user.plan === 'free' && user.credits.current <= 0) || 
-                      (user.plan === 'pro' && user.planStatus === 'expired');
-
-    if (isBlocked) {
-        // Blocked users see an empty list.
-        return [];
-    } else {
-        // For debugging, all other users (Free, Pro, Master) see the full list.
-        return allModels;
-    }
+    return UserService.getAllowedModelsForCurrentUser();
 }
 
 function renderUserAllowedModelList() {
-    const container = document.getElementById('model-master-list');
+    const container = document.getElementById('model-plan-list');
     const searchInput = document.getElementById('model-search-input');
     const filterToggle = document.getElementById('filter-selected-toggle');
     if (!container || !searchInput || !filterToggle) return;
@@ -126,8 +111,8 @@ function renderIncludedList() {
     });
 }
 
-function renderMasterList() {
-    const container = document.getElementById('model-master-list');
+function renderPlanList() {
+    const container = document.getElementById('model-plan-list');
     const searchInput = document.getElementById('model-search-input');
     const filterToggle = document.getElementById('filter-selected-toggle');
     if (!container || !searchInput || !filterToggle) return;
@@ -205,7 +190,7 @@ export function initModelManagerUI() {
     const deselectAllBtn = document.getElementById('deselect-all-btn');
     const savePresetBtn = document.getElementById('save-preset-btn');
     const deletePresetBtn = document.getElementById('delete-preset-btn');
-    const modelListContainer = document.getElementById('model-master-list');
+    const modelListContainer = document.getElementById('model-plan-list');
     const infoBarCloseBtn = document.getElementById('info-bar-close-btn');
 
     // Attach main listeners

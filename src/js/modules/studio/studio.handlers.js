@@ -2,6 +2,7 @@
 
 import { stateManager } from '../../core/core.state.js';
 import { showCustomAlert } from '../../core/core.ui.js';
+import * as UserService from '../user/user.service.js';
 
 const DEFAULT_STUDIO_SECTION_VISIBILITY = Object.freeze({
     search: true,
@@ -13,6 +14,37 @@ const DEFAULT_STUDIO_SECTION_VISIBILITY = Object.freeze({
 });
 
 const STUDIO_SECTION_KEYS = Object.keys(DEFAULT_STUDIO_SECTION_VISIBILITY);
+let activeStudioSearchQuery = '';
+
+function normalizeStudioSearchQuery(rawValue = '') {
+    return String(rawValue || '').trim();
+}
+
+function isMediaStudioAgentName(agentName = '') {
+    const normalizedName = String(agentName || '').trim();
+    return normalizedName === 'Media Studio'
+        || normalizedName === 'Visual Studio'
+        || normalizedName.includes('KieAI')
+        || normalizedName.includes('Veo')
+        || normalizedName.includes('Flux')
+        || normalizedName.includes('Wan')
+        || normalizedName.includes('Seedance');
+}
+
+export function getStudioSearchQuery() {
+    return activeStudioSearchQuery;
+}
+
+export function setStudioSearchQuery(rawValue = '') {
+    activeStudioSearchQuery = normalizeStudioSearchQuery(rawValue);
+
+    const searchInput = document.getElementById('asset-search-input');
+    if (searchInput && document.activeElement !== searchInput && searchInput.value !== activeStudioSearchQuery) {
+        searchInput.value = activeStudioSearchQuery;
+    }
+
+    return activeStudioSearchQuery;
+}
 
 function normalizeStudioSectionVisibility(rawValue = {}) {
     return {
@@ -48,8 +80,7 @@ export function toggleStudioSectionVisibility({ sectionKey } = {}) {
     project.globalSettings.studioSectionVisibility = nextVisibility;
 
     if (normalizedKey === 'search' && !nextVisibility.search) {
-        const searchInput = document.getElementById('asset-search-input');
-        if (searchInput) searchInput.value = '';
+        setStudioSearchQuery('');
     }
 
     stateManager.setProject(project);
@@ -80,8 +111,7 @@ export function setAllStudioSectionVisibility({ visibilityMode } = {}) {
     project.globalSettings.studioSectionVisibility = nextVisibility;
 
     if (!visibleValue) {
-        const searchInput = document.getElementById('asset-search-input');
-        if (searchInput) searchInput.value = '';
+        setStudioSearchQuery('');
     }
 
     stateManager.setProject(project);
@@ -97,8 +127,8 @@ export function getFilteredAndSortedAgents() {
     const project = stateManager.getProject();
     if (!project || !project.agentPresets) return [];
 
-    // ดึงค่าจาก UI
-    const searchTerm = document.getElementById('asset-search-input')?.value.toLowerCase() || '';
+    // ดึงค่าจาก state ที่ควบคุมโดย PromptPrim เท่านั้น
+    const searchTerm = normalizeStudioSearchQuery(activeStudioSearchQuery).toLowerCase();
     const sortBy = document.getElementById('asset-sort-select')?.value || 'modified-desc';
 
     // 1. แปลง Object เป็น Array เพื่อให้จัดเรียงได้
@@ -106,6 +136,10 @@ export function getFilteredAndSortedAgents() {
         name,
         ...data
     }));
+
+    if (!UserService.canUseMediaStudio()) {
+        agentsArray = agentsArray.filter((agent) => !isMediaStudioAgentName(agent.name));
+    }
 
     // 2. ค้นหา (Search)
     if (searchTerm) {

@@ -65,7 +65,8 @@ body.admin-page {
     min-height: 0;
 }
 
-#model-master-list.item-list-scrollable {
+#model-plan-list.item-list-scrollable,
+#admin-model-plan-list.item-list-scrollable {
     max-height: 450px;
     flex-grow: 1;
     overflow-y: auto;
@@ -187,8 +188,29 @@ body.dark-mode .admin-divider, body.dark-mode .admin-header {
 }
 .refill-presets {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     margin-top: 5px;
+}
+.admin-test-controls {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+.admin-test-controls > label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #334155;
+}
+.admin-quick-action-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.admin-quick-action-grid .btn {
+    width: 100%;
 }
 .user-logs {
     margin-top: 15px;
@@ -251,6 +273,24 @@ body.dark-mode .admin-divider, body.dark-mode .admin-header {
     color: #15803d; /* Dark green text */
 }
 
+.admin-inline-note {
+    font-size: 0.9rem;
+    color: #475569;
+    transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-inline-note.is-success {
+    color: #15803d;
+}
+
+.admin-inline-note.is-error {
+    color: #b91c1c;
+}
+
+.admin-inline-note.is-loading {
+    color: #92400e;
+}
+
 body.dark-mode .user-list-item.active {
     background-color: #3b3d5c; /* A more distinct purple/blue highlight */
     border-left: 3px solid #818cf8;
@@ -301,4 +341,14 @@ body.dark-mode .activity-log-table tbody tr:hover {
     font-weight: bold;
     cursor: help;
     margin-left: 4px;
+}
+
+@media (max-width: 960px) {
+    .user-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-quick-action-grid {
+        grid-template-columns: 1fr;
+    }
 }

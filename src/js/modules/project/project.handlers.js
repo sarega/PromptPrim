@@ -29,11 +29,26 @@ import {
     ensureProjectBooks,
     normalizeChapterSessionMetadata
 } from '../world/world.schema-utils.js';
+import * as AuthService from '../auth/auth.service.js';
+import * as ModelAccessService from '../models/model-access.service.js';
 import * as UserService from '../user/user.service.js'; // <-- เพิ่ม Import นี้เข้ามา
+import bundledDefaultProjectTemplate from './default-project.template.json';
 
 const STAGED_ENTITY_TIMEOUT_MS = 10000;
 let stagedEntityTimeoutHandle = null;
 let stagedEntityDeadlineAt = null;
+const DEFAULT_LEGACY_SESSION_SUMMARY_STATE = Object.freeze({
+    activeSummaryId: null,
+    summarizedUntilIndex: -1
+});
+const DEFAULT_LEGACY_GROUP_CHAT_STATE = Object.freeze({
+    isRunning: false,
+    awaitsUserInput: false,
+    turnQueue: [],
+    currentJob: null,
+    jobQueue: [],
+    error: null
+});
 
 function clearStagedEntityTimeout() {
     if (stagedEntityTimeoutHandle) {
@@ -66,6 +81,202 @@ function stageEntitySelection(entity) {
 export function getStagedEntityRemainingSeconds() {
     if (!stagedEntityDeadlineAt) return 0;
     return Math.max(0, Math.ceil((stagedEntityDeadlineAt - Date.now()) / 1000));
+}
+
+function normalizeProjectTimestamp(value, fallback = Date.now()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
+}
+
+function createLegacyFallbackId(prefix = 'legacy', index = 0) {
+    return `${prefix}_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeLegacyMessageContent(rawContent, role = 'system') {
+    if (Array.isArray(rawContent)) {
+        const normalizedParts = rawContent.flatMap((part) => {
+            if (!part || typeof part !== 'object' || Array.isArray(part)) return [];
+
+            if (part.type === 'text') {
+                return [{
+                    type: 'text',
+                    text: typeof part.text === 'string' ? part.text : ''
+                }];
+            }
+
+            if (part.type === 'image_url') {
+                const imageUrl = typeof part.url === 'string'
+                    ? part.url
+                    : (typeof part.image_url === 'string'
+                        ? part.image_url
+                        : (typeof part.image_url?.url === 'string' ? part.image_url.url : ''));
+                if (!imageUrl.trim()) return [];
+                return [{
+                    type: 'image_url',
+                    url: imageUrl
+                }];
+            }
+
+            return [];
+        });
+
+        if (normalizedParts.length > 0) {
+            return normalizedParts;
+        }
+
+        return role === 'user' ? '' : '[Legacy multimodal content unavailable]';
+    }
+
+    if (typeof rawContent === 'string') {
+        return rawContent;
+    }
+
+    if (typeof rawContent === 'number' || typeof rawContent === 'boolean') {
+        return String(rawContent);
+    }
+
+    if (rawContent && typeof rawContent === 'object') {
+        if (typeof rawContent.text === 'string') {
+            return rawContent.text;
+        }
+        if (Array.isArray(rawContent.parts)) {
+            return normalizeLegacyMessageContent(rawContent.parts, role);
+        }
+        return '';
+    }
+
+    return '';
+}
+
+function normalizeLegacyChatMessage(message, index = 0, sessionId = '') {
+    if (!message || typeof message !== 'object' || Array.isArray(message)) {
+        return null;
+    }
+
+    const normalizedRole = ['user', 'assistant', 'system', 'tool'].includes(String(message.role || '').trim().toLowerCase())
+        ? String(message.role).trim().toLowerCase()
+        : 'system';
+    const fallbackTimestamp = normalizeProjectTimestamp(message?.createdAt, Date.now());
+
+    return {
+        ...message,
+        id: String(message.id || '').trim() || createLegacyFallbackId(`msg_${sessionId || 'session'}`, index),
+        role: normalizedRole,
+        content: normalizeLegacyMessageContent(message.content, normalizedRole),
+        speaker: typeof message.speaker === 'string' ? message.speaker : '',
+        timestamp: normalizeProjectTimestamp(message.timestamp, fallbackTimestamp),
+        isLoading: message.isLoading === true,
+        isError: message.isError === true,
+        isSummary: message.isSummary === true,
+        isSummaryMarker: message.isSummaryMarker === true,
+        summaryLogId: typeof message.summaryLogId === 'string' && message.summaryLogId.trim()
+            ? message.summaryLogId
+            : null,
+        rag: message.rag && typeof message.rag === 'object' && !Array.isArray(message.rag)
+            ? message.rag
+            : null,
+        folderContext: message.folderContext && typeof message.folderContext === 'object' && !Array.isArray(message.folderContext)
+            ? message.folderContext
+            : null
+    };
+}
+
+function normalizeLegacySummaryState(rawSummaryState, historyLength = 0) {
+    const source = rawSummaryState && typeof rawSummaryState === 'object' && !Array.isArray(rawSummaryState)
+        ? rawSummaryState
+        : {};
+    const parsedIndex = Number(source.summarizedUntilIndex);
+
+    return {
+        activeSummaryId: typeof source.activeSummaryId === 'string' && source.activeSummaryId.trim()
+            ? source.activeSummaryId
+            : null,
+        summarizedUntilIndex: Number.isFinite(parsedIndex)
+            ? Math.max(-1, Math.min(Math.round(parsedIndex), historyLength))
+            : DEFAULT_LEGACY_SESSION_SUMMARY_STATE.summarizedUntilIndex
+    };
+}
+
+function normalizeLegacyGroupChatState(rawGroupChatState) {
+    const source = rawGroupChatState && typeof rawGroupChatState === 'object' && !Array.isArray(rawGroupChatState)
+        ? rawGroupChatState
+        : {};
+
+    return {
+        isRunning: source.isRunning === true,
+        awaitsUserInput: source.awaitsUserInput === true,
+        turnQueue: Array.isArray(source.turnQueue) ? source.turnQueue.filter(Boolean) : [],
+        currentJob: source.currentJob && typeof source.currentJob === 'object' && !Array.isArray(source.currentJob)
+            ? source.currentJob
+            : null,
+        jobQueue: Array.isArray(source.jobQueue) ? source.jobQueue.filter(Boolean) : [],
+        error: typeof source.error === 'string' ? source.error : null
+    };
+}
+
+function normalizeLegacyChatSession(session, index = 0) {
+    const source = session && typeof session === 'object' && !Array.isArray(session) ? session : {};
+    const createdAt = normalizeProjectTimestamp(source.createdAt, Date.now());
+    const sessionId = String(source.id || '').trim() || createLegacyFallbackId('sid', index);
+    const historySource = Array.isArray(source.history)
+        ? source.history
+        : (Array.isArray(source.messages) ? source.messages : []);
+    const history = historySource
+        .map((message, messageIndex) => normalizeLegacyChatMessage(message, messageIndex, sessionId))
+        .filter(Boolean);
+
+    return {
+        ...source,
+        id: sessionId,
+        name: String(source.name || source.title || '').trim() || `Chat ${index + 1}`,
+        history,
+        composerContent: typeof source.composerContent === 'string' ? source.composerContent : '',
+        createdAt,
+        updatedAt: normalizeProjectTimestamp(source.updatedAt, createdAt),
+        pinned: source.pinned !== undefined ? Boolean(source.pinned) : Boolean(source.isPinned),
+        archived: Boolean(source.archived),
+        summaryState: normalizeLegacySummaryState(source.summaryState, history.length),
+        groupChatState: normalizeLegacyGroupChatState(source.groupChatState)
+    };
+}
+
+function getPublicAssetUrlCandidates(assetName = '') {
+    const safeAssetName = String(assetName || '').replace(/^\/+/, '');
+    if (!safeAssetName) return [];
+
+    const rawBase = typeof import.meta.env.BASE_URL === 'string' ? import.meta.env.BASE_URL : '/';
+    const normalizedBase = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+    const currentPageUrl = window.location.href;
+    const candidates = [
+        new URL(safeAssetName, `${window.location.origin}${normalizedBase}`).toString(),
+        new URL(safeAssetName, currentPageUrl).toString(),
+        new URL(safeAssetName, `${window.location.origin}/`).toString()
+    ];
+
+    return [...new Set(candidates)];
+}
+
+async function fetchPublicJsonAsset(assetName) {
+    let lastError = null;
+
+    for (const candidateUrl of getPublicAssetUrlCandidates(assetName)) {
+        try {
+            const response = await fetch(candidateUrl, { cache: 'no-store' });
+            if (!response.ok) {
+                lastError = new Error(`Could not fetch ${assetName}. Status: ${response.status}`);
+                continue;
+            }
+            return await response.json();
+        } catch (error) {
+            lastError = error;
+        }
+    }
+
+    if (assetName === 'default-project.prim') {
+        return JSON.parse(JSON.stringify(bundledDefaultProjectTemplate));
+    }
+
+    throw lastError || new Error(`Could not fetch ${assetName}.`);
 }
 
 
@@ -152,16 +363,7 @@ export function openProject() {
 
 async function initializeFirstProject() {
     try {
-        // [DEFINITIVE FIX] ใช้ import.meta.env.BASE_URL เพื่อสร้าง Path ที่ถูกต้อง
-        // บน localhost: จะเป็น '/default-project.prim'
-        // บน GitHub: จะเป็น '/PromptPrimAi/default-project.prim'
-        const response = await fetch(`${import.meta.env.BASE_URL}default-project.prim`);
-
-        if (!response.ok) {
-            throw new Error(`Could not fetch default project file. Status: ${response.status}`);
-        }
-        
-        const defaultProjectData = await response.json();
+        const defaultProjectData = await fetchPublicJsonAsset('default-project.prim');
         
         // กำหนด ID ใหม่ที่เป็น Unique ให้กับโปรเจกต์
         defaultProjectData.id = `proj_${Date.now()}`;
@@ -184,12 +386,7 @@ export async function proceedWithCreatingNewProject() {
             localStorage.removeItem('lastActiveProjectId');
         }
 
-        const response = await fetch(`${import.meta.env.BASE_URL}default-project.prim`);
-        if (!response.ok) {
-            throw new Error(`Could not fetch default project file. Status: ${response.status}`);
-        }
-        
-        const projectTemplate = await response.json();
+        const projectTemplate = await fetchPublicJsonAsset('default-project.prim');
         
         // --- [DEFINITIVE FIX] ---
         // 1. ดึง User Settings ที่สมบูรณ์ออกมา
@@ -430,13 +627,24 @@ export async function loadProjectData(projectData, isFromFile = false) {
     await loadGlobalSettings();
 
     // 3. โหลดรายชื่อ Model (ซึ่งอาจจะไปแก้ไข project state ใน memory)
-    if (projectToLoad.globalSettings.apiKey || (import.meta.env.DEV && projectToLoad.globalSettings.ollamaBaseUrl)) {
+    const currentUser = UserService.getCurrentUserProfile();
+    const isSupabaseMode = AuthService.isSupabaseEnabled() && UserService.isBackendManagedProfile(currentUser);
+    const usesPersonalKeys = UserService.usesPersonalApiKeys(currentUser);
+
+    if (isSupabaseMode && !usesPersonalKeys) {
+        try {
+            await ModelAccessService.loadManagedPlanPresets();
+            await ModelAccessService.loadBackendModelCatalog({ hydrateState: true });
+        } catch (error) {
+            console.error('Could not reload backend model access while opening the project.', error);
+        }
+    } else if (projectToLoad.globalSettings.apiKey || (import.meta.env.DEV && projectToLoad.globalSettings.ollamaBaseUrl)) {
         await loadAllProviderModels({ apiKey: projectToLoad.globalSettings.apiKey });
     }
 
     // 4. สร้าง Chat Session แรก (ถ้ายังไม่มี)
     projectToLoad = stateManager.getProject(); // ดึง state ล่าสุดที่อาจถูกแก้ไขโดย loadAllProviderModels
-    const existingSessions = (projectToLoad.chatSessions || []).filter(s => !s.archived);
+    const existingSessions = (projectToLoad.chatSessions || []).filter(s => s && !s.archived);
     if (existingSessions.length === 0) {
         createNewChatSession(); // ฟังก์ชันนี้จะไม่อัปเดต dirty flag แล้ว
     }
@@ -447,10 +655,15 @@ export async function loadProjectData(projectData, isFromFile = false) {
     await rewriteDatabaseWithProjectData(finalInitializedProject);
 
     // 6. โหลด Session ที่ถูกต้องเข้า UI
-    const sessionToLoad = finalInitializedProject.chatSessions.find(s => s.id === finalInitializedProject.activeSessionId) ||
-                          [...finalInitializedProject.chatSessions].filter(s => !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    const sessionToLoad = finalInitializedProject.chatSessions.find(s => s?.id === finalInitializedProject.activeSessionId) ||
+                          [...finalInitializedProject.chatSessions].filter(s => s && !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
     if (sessionToLoad) {
-        loadChatSession(sessionToLoad.id);
+        try {
+            loadChatSession(sessionToLoad.id);
+        } catch (error) {
+            console.error('Failed to load migrated session. Falling back to a new chat session.', error);
+            createNewChatSession();
+        }
     }
 
     // 7. ประกาศว่าโหลดโปรเจกต์เสร็จสมบูรณ์แล้ว
@@ -544,18 +757,62 @@ export function saveSystemUtilityAgentSettings() {
 export function migrateProjectData(projectData) {
     const currentUser = UserService.getCurrentUserProfile();
     const currentUserName = currentUser?.userName || 'Unknown User';
+    const safeProjectData = (projectData && typeof projectData === 'object') ? projectData : {};
+
+    if (!safeProjectData.globalSettings || typeof safeProjectData.globalSettings !== 'object') {
+        safeProjectData.globalSettings = {};
+    }
+    if (!safeProjectData.agentPresets || typeof safeProjectData.agentPresets !== 'object' || Array.isArray(safeProjectData.agentPresets)) {
+        safeProjectData.agentPresets = {};
+    }
+    if (!safeProjectData.agentGroups || typeof safeProjectData.agentGroups !== 'object' || Array.isArray(safeProjectData.agentGroups)) {
+        safeProjectData.agentGroups = {};
+    }
+    if (!Array.isArray(safeProjectData.chatSessions)) {
+        safeProjectData.chatSessions = [];
+    }
+    if (!Array.isArray(safeProjectData.memories)) {
+        safeProjectData.memories = defaultMemories.map((memory) => ({ ...memory }));
+    } else {
+        safeProjectData.memories = safeProjectData.memories
+            .map((memory, index) => {
+                if (!memory || typeof memory !== 'object' || Array.isArray(memory)) return null;
+                return {
+                    name: String(memory.name || '').trim() || `Memory ${index + 1}`,
+                    content: typeof memory.content === 'string' ? memory.content : ''
+                };
+            })
+            .filter(Boolean);
+    }
+    if (!Array.isArray(safeProjectData.summaryLogs)) {
+        safeProjectData.summaryLogs = [];
+    } else {
+        safeProjectData.summaryLogs = safeProjectData.summaryLogs
+            .map((log, index) => {
+                if (!log || typeof log !== 'object' || Array.isArray(log)) return null;
+                return {
+                    ...log,
+                    id: String(log.id || '').trim() || createLegacyFallbackId('sum', index),
+                    summary: String(log.summary || log.title || '').trim() || `Summary ${index + 1}`,
+                    content: typeof log.content === 'string' ? log.content : '',
+                    timestamp: normalizeProjectTimestamp(log.timestamp, Date.now()),
+                    sourceSessionId: typeof log.sourceSessionId === 'string' ? log.sourceSessionId : null
+                };
+            })
+            .filter(Boolean);
+    }
 
     // 1. ซ่อม System Utility Agent (เหมือนเดิม)
-    projectData.globalSettings.systemUtilityAgent = Object.assign(
+    safeProjectData.globalSettings.systemUtilityAgent = Object.assign(
         {},
         defaultSystemUtilityAgent,
-        projectData.globalSettings.systemUtilityAgent
+        safeProjectData.globalSettings.systemUtilityAgent
     );
 
     // 2. [CRITICAL FIX] ซ่อม Agent แต่ละตัวใน agentPresets
-    if (projectData.agentPresets) {
-        for (const agentName in projectData.agentPresets) {
-            const agent = projectData.agentPresets[agentName];
+    if (safeProjectData.agentPresets) {
+        for (const agentName in safeProjectData.agentPresets) {
+            const agent = safeProjectData.agentPresets[agentName];
             
             // ใช้ Object.assign เพื่อนำค่า default ทั้งหมดมาเป็นพื้น
             const migratedAgent = Object.assign({}, defaultAgentSettings, agent);
@@ -572,37 +829,37 @@ export function migrateProjectData(projectData) {
                 migratedAgent.modifiedAt = migratedAgent.createdAt;
             }
 
-            projectData.agentPresets[agentName] = migratedAgent;
+            safeProjectData.agentPresets[agentName] = migratedAgent;
         }
     }
 
     // 3. ตรวจสอบ properties อื่นๆ ที่อาจจะเพิ่มมาในอนาคต (เหมือนเดิม)
-    if (projectData.isDirtyForUser === undefined) {
-        projectData.isDirtyForUser = true;
+    if (safeProjectData.isDirtyForUser === undefined) {
+        safeProjectData.isDirtyForUser = true;
     }
-    if (projectData.agentGroups) {
-        for (const groupName in projectData.agentGroups) {
-            const group = projectData.agentGroups[groupName];
+    if (safeProjectData.agentGroups) {
+        for (const groupName in safeProjectData.agentGroups) {
+            const group = safeProjectData.agentGroups[groupName];
             if (group && !Array.isArray(group.agents)) {
                 group.agents = [];
             }
         }
     }
 
-    ensureProjectWorlds(projectData);
-    ensureProjectWorldChanges(projectData);
-    ensureProjectBooks(projectData);
+    ensureProjectWorlds(safeProjectData);
+    ensureProjectWorldChanges(safeProjectData);
+    ensureProjectBooks(safeProjectData);
 
-    if (Array.isArray(projectData.chatSessions)) {
-        const firstAgentName = Object.keys(projectData.agentPresets || {})[0] || null;
-        const firstGroupName = Object.keys(projectData.agentGroups || {})[0] || null;
-        const validBookIds = new Set((projectData.books || []).map(book => book.id));
+    if (Array.isArray(safeProjectData.chatSessions)) {
+        const firstAgentName = Object.keys(safeProjectData.agentPresets || {})[0] || null;
+        const firstGroupName = Object.keys(safeProjectData.agentGroups || {})[0] || null;
+        const validBookIds = new Set((safeProjectData.books || []).map(book => book.id));
 
         const normalizeLinkedEntity = (entity) => {
-            if (entity?.type === 'agent' && entity?.name && projectData.agentPresets?.[entity.name]) {
+            if (entity?.type === 'agent' && entity?.name && safeProjectData.agentPresets?.[entity.name]) {
                 return { type: 'agent', name: entity.name };
             }
-            if (entity?.type === 'group' && entity?.name && projectData.agentGroups?.[entity.name]) {
+            if (entity?.type === 'group' && entity?.name && safeProjectData.agentGroups?.[entity.name]) {
                 return { type: 'group', name: entity.name };
             }
             if (firstAgentName) return { type: 'agent', name: firstAgentName };
@@ -620,40 +877,60 @@ export function migrateProjectData(projectData) {
             return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
         };
 
-        projectData.chatSessions = projectData.chatSessions.map(session => {
-            const rawSettings = session?.ragSettings || {};
-            const normalizedLinkedEntity = normalizeLinkedEntity(session?.linkedEntity);
-            const normalizedChapterMetadata = normalizeChapterSessionMetadata(session, { validBookIds });
-            return {
-                ...session,
-                workspaceView: normalizeWorkspaceView(session?.workspaceView),
-                composerViewMode: normalizeComposerViewMode(session?.composerViewMode),
-                composerHeight: normalizeComposerHeight(session?.composerHeight),
-                linkedEntity: normalizedLinkedEntity,
-                folderId: typeof session?.folderId === 'string' && session.folderId.trim()
-                    ? session.folderId
-                    : null,
-                contextMode: normalizeSessionContextMode(session?.contextMode),
-                ragSettings: normalizeSessionRagSettings(rawSettings),
-                ...normalizedChapterMetadata
-            };
-        });
+        safeProjectData.chatSessions = safeProjectData.chatSessions
+            .map((session, sessionIndex) => {
+                const normalizedSession = normalizeLegacyChatSession(session, sessionIndex);
+                const rawSettings = normalizedSession?.ragSettings || {};
+                const normalizedLinkedEntity = normalizeLinkedEntity(normalizedSession?.linkedEntity);
+                const normalizedChapterMetadata = normalizeChapterSessionMetadata(normalizedSession, { validBookIds });
+                return {
+                    ...normalizedSession,
+                    workspaceView: normalizeWorkspaceView(normalizedSession?.workspaceView),
+                    composerViewMode: normalizeComposerViewMode(normalizedSession?.composerViewMode),
+                    composerHeight: normalizeComposerHeight(normalizedSession?.composerHeight),
+                    linkedEntity: normalizedLinkedEntity,
+                    folderId: typeof normalizedSession?.folderId === 'string' && normalizedSession.folderId.trim()
+                        ? normalizedSession.folderId
+                        : null,
+                    contextMode: normalizeSessionContextMode(normalizedSession?.contextMode),
+                    ragSettings: normalizeSessionRagSettings(rawSettings),
+                    summaryState: normalizeLegacySummaryState(
+                        normalizedSession.summaryState,
+                        Array.isArray(normalizedSession.history) ? normalizedSession.history.length : 0
+                    ),
+                    groupChatState: normalizeLegacyGroupChatState(normalizedSession.groupChatState),
+                    ...normalizedChapterMetadata
+                };
+            })
+            .filter(Boolean);
 
-        if (projectData.chatSessions.length > 0) {
-            const activeSession = projectData.chatSessions.find(session => session.id === projectData.activeSessionId)
-                || projectData.chatSessions[0];
-            if (activeSession?.linkedEntity) {
-                projectData.activeEntity = { ...activeSession.linkedEntity };
-            }
+        if (safeProjectData.chatSessions.length > 0) {
+            const activeSession = safeProjectData.chatSessions.find(session => session.id === safeProjectData.activeSessionId)
+                || safeProjectData.chatSessions[0];
+            safeProjectData.activeSessionId = activeSession?.id || null;
+            safeProjectData.activeEntity = activeSession?.linkedEntity
+                ? { ...activeSession.linkedEntity }
+                : normalizeLinkedEntity(safeProjectData.activeEntity);
+        } else {
+            safeProjectData.activeSessionId = null;
+            safeProjectData.activeEntity = normalizeLinkedEntity(safeProjectData.activeEntity);
         }
     }
 
-    ensureProjectFolders(projectData);
+    ensureProjectFolders(safeProjectData);
 
-    if (!Array.isArray(projectData.knowledgeFiles)) {
-        projectData.knowledgeFiles = [];
+    if (!safeProjectData.activeEntity || typeof safeProjectData.activeEntity !== 'object') {
+        const fallbackAgentName = Object.keys(safeProjectData.agentPresets || {})[0] || null;
+        const fallbackGroupName = Object.keys(safeProjectData.agentGroups || {})[0] || null;
+        safeProjectData.activeEntity = fallbackAgentName
+            ? { type: 'agent', name: fallbackAgentName }
+            : (fallbackGroupName ? { type: 'group', name: fallbackGroupName } : null);
+    }
+
+    if (!Array.isArray(safeProjectData.knowledgeFiles)) {
+        safeProjectData.knowledgeFiles = [];
     } else {
-        projectData.knowledgeFiles = projectData.knowledgeFiles.map(file => ({
+        safeProjectData.knowledgeFiles = safeProjectData.knowledgeFiles.map(file => ({
             id: file.id || `kf_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
             name: file.name || 'Untitled',
             type: file.type || 'application/octet-stream',
@@ -671,9 +948,9 @@ export function migrateProjectData(projectData) {
         }));
     }
 
-    const knowledgeFileIdSet = new Set(projectData.knowledgeFiles.map(file => file.id));
-    if (Array.isArray(projectData.chatSessions)) {
-        projectData.chatSessions = projectData.chatSessions.map(session => ({
+    const knowledgeFileIdSet = new Set(safeProjectData.knowledgeFiles.map(file => file.id));
+    if (Array.isArray(safeProjectData.chatSessions)) {
+        safeProjectData.chatSessions = safeProjectData.chatSessions.map(session => ({
             ...session,
             ragSettings: {
                 ...session.ragSettings,
@@ -681,8 +958,8 @@ export function migrateProjectData(projectData) {
             }
         }));
     }
-    if (Array.isArray(projectData.chatFolders)) {
-        projectData.chatFolders = projectData.chatFolders.map(folder => ({
+    if (Array.isArray(safeProjectData.chatFolders)) {
+        safeProjectData.chatFolders = safeProjectData.chatFolders.map(folder => ({
             ...folder,
             ragSettings: {
                 ...folder.ragSettings,
@@ -745,7 +1022,7 @@ export function migrateProjectData(projectData) {
     });
     
     // [FIX END]
-    return projectData;
+    return safeProjectData;
 }
 
 
@@ -766,6 +1043,14 @@ export async function selectEntity(type, name) {
         name.includes('Wan') ||
         name.includes('Seedance')
     );
+
+    if (isKieAIAgent && !UserService.canUseMediaStudio()) {
+        showCustomAlert(
+            'Media Studio is available only in Studio Plan / BYOK mode. Pro is for hosted text workflow, and Free is trial-only.',
+            'Studio Plan Required'
+        );
+        return;
+    }
 
     const entityExists = (
         (type === 'agent' && Boolean(project.agentPresets?.[name])) ||

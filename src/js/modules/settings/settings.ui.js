@@ -20,20 +20,20 @@ function getProviderEnabledMap(user) {
     };
 }
 
-function applyApiProviderVisibility({ isMaster, providerEnabled }) {
+function applyApiProviderVisibility({ usesPersonalKeys, providerEnabled }) {
     const switchesWrapper = document.getElementById('api-provider-switches');
     const apiKeyGroup = document.getElementById('api-key-group');
     const ollamaGroup = document.getElementById('ollama-url-group');
     const kieAiGroup = document.getElementById('kieai-key-group');
     const loadModelsBtn = document.getElementById('load-models-btn');
 
-    if (switchesWrapper) switchesWrapper.style.display = isMaster ? 'block' : 'none';
-    if (apiKeyGroup) apiKeyGroup.style.display = (isMaster && providerEnabled.openrouter) ? 'block' : 'none';
-    if (ollamaGroup) ollamaGroup.style.display = (isMaster && providerEnabled.ollama) ? 'block' : 'none';
-    if (kieAiGroup) kieAiGroup.style.display = (isMaster && providerEnabled.kieai) ? 'block' : 'none';
+    if (switchesWrapper) switchesWrapper.style.display = usesPersonalKeys ? 'block' : 'none';
+    if (apiKeyGroup) apiKeyGroup.style.display = (usesPersonalKeys && providerEnabled.openrouter) ? 'block' : 'none';
+    if (ollamaGroup) ollamaGroup.style.display = (usesPersonalKeys && providerEnabled.ollama) ? 'block' : 'none';
+    if (kieAiGroup) kieAiGroup.style.display = (usesPersonalKeys && providerEnabled.kieai) ? 'block' : 'none';
 
     if (loadModelsBtn) {
-        const canLoad = isMaster && (providerEnabled.openrouter || providerEnabled.ollama);
+        const canLoad = usesPersonalKeys && (providerEnabled.openrouter || providerEnabled.ollama);
         loadModelsBtn.style.display = canLoad ? 'inline-block' : 'none';
         loadModelsBtn.disabled = !canLoad;
     }
@@ -203,13 +203,13 @@ function renderSettingsPanel() {
     if (!project || !project.globalSettings) return;
     if (!user) {
         applyApiProviderVisibility({
-            isMaster: false,
+            usesPersonalKeys: false,
             providerEnabled: { openrouter: false, ollama: false, kieai: false }
         });
         return;
     }
 
-    const isMaster = UserService.isMasterProfile(user);
+    const usesPersonalApiKeys = UserService.usesPersonalApiKeys(user);
     const providerEnabled = getProviderEnabledMap(user);
     const kieAiInput = document.getElementById('kieAiApiKey');
     const openrouterToggle = document.getElementById('openrouter-enabled-toggle');
@@ -221,22 +221,22 @@ function renderSettingsPanel() {
     }
     if (openrouterToggle) {
         openrouterToggle.checked = providerEnabled.openrouter;
-        openrouterToggle.disabled = !isMaster;
+        openrouterToggle.disabled = !usesPersonalApiKeys;
     }
     if (ollamaToggle) {
         ollamaToggle.checked = providerEnabled.ollama;
-        ollamaToggle.disabled = !isMaster;
+        ollamaToggle.disabled = !usesPersonalApiKeys;
     }
     if (kieAiToggle) {
         kieAiToggle.checked = providerEnabled.kieai;
-        kieAiToggle.disabled = !isMaster;
+        kieAiToggle.disabled = !usesPersonalApiKeys;
     }
 
-    if (isMaster) {
+    if (usesPersonalApiKeys) {
         document.getElementById('apiKey').value = user.apiSettings?.openrouterKey || '';
         document.getElementById('ollamaBaseUrl').value = user.apiSettings?.ollamaBaseUrl || '';
     }
-    applyApiProviderVisibility({ isMaster, providerEnabled });
+    applyApiProviderVisibility({ usesPersonalKeys: usesPersonalApiKeys, providerEnabled });
 
     const sysAgent = project.globalSettings.systemUtilityAgent || {};
     document.getElementById('system-utility-prompt').value = sysAgent.systemPrompt || '';
@@ -271,7 +271,7 @@ export function initSettingsUI() {
             showCustomAlert('User profile is not ready yet. Please reload the app and try again.', 'Settings');
             return;
         }
-        if (!UserService.isMasterProfile(user)) {
+        if (!UserService.usesPersonalApiKeys(user)) {
             return;
         }
 
@@ -294,19 +294,19 @@ export function initSettingsUI() {
     providerToggleConfig.forEach(({ inputId, key }) => {
         document.getElementById(inputId)?.addEventListener('change', (event) => {
             const user = UserService.getCurrentUserProfile();
-            if (!user || !UserService.isMasterProfile(user)) return;
+            if (!user || !UserService.usesPersonalApiKeys(user)) return;
 
             UserService.updateApiSettings({ providerEnabled: { [key]: event.target.checked } });
             const updatedUser = UserService.getCurrentUserProfile();
             const updatedProviderEnabled = getProviderEnabledMap(updatedUser);
             pruneDisabledUserModels(updatedProviderEnabled);
-            applyApiProviderVisibility({ isMaster: true, providerEnabled: updatedProviderEnabled });
+            applyApiProviderVisibility({ usesPersonalKeys: true, providerEnabled: updatedProviderEnabled });
         });
     });
     
     document.getElementById('apiKey')?.addEventListener('input', debounce((e) => {
         const user = UserService.getCurrentUserProfile();
-        if (user && UserService.isMasterProfile(user)) {
+        if (user && UserService.usesPersonalApiKeys(user)) {
             UserService.updateApiSettings({ openrouterKey: e.target.value });
         }
     }, 500));
@@ -337,6 +337,13 @@ export function initSettingsUI() {
     });
     
     stateManager.bus.subscribe('models:loaded', () => {
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal && settingsModal.style.display === 'flex') {
+            renderSettingsPanel();
+        }
+    });
+    
+    stateManager.bus.subscribe('user:settingsUpdated', () => {
         const settingsModal = document.getElementById('settings-modal');
         if (settingsModal && settingsModal.style.display === 'flex') {
             renderSettingsPanel();

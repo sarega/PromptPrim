@@ -176,6 +176,49 @@ function resolveEntityForSession(project, session) {
     return { entity: normalized, changed };
 }
 
+function normalizeLoadedSessionInPlace(session) {
+    if (!session || typeof session !== 'object' || Array.isArray(session)) return null;
+
+    if (!Array.isArray(session.history)) {
+        session.history = [];
+    } else {
+        session.history = session.history.filter((message) => message && typeof message === 'object' && !Array.isArray(message));
+    }
+
+    if (typeof session.composerContent !== 'string') {
+        session.composerContent = '';
+    }
+
+    const summaryState = session.summaryState && typeof session.summaryState === 'object' && !Array.isArray(session.summaryState)
+        ? session.summaryState
+        : {};
+    const parsedSummarizedUntil = Number(summaryState.summarizedUntilIndex);
+    session.summaryState = {
+        activeSummaryId: typeof summaryState.activeSummaryId === 'string' && summaryState.activeSummaryId.trim()
+            ? summaryState.activeSummaryId
+            : null,
+        summarizedUntilIndex: Number.isFinite(parsedSummarizedUntil)
+            ? Math.max(-1, Math.min(Math.round(parsedSummarizedUntil), session.history.length))
+            : -1
+    };
+
+    const groupChatState = session.groupChatState && typeof session.groupChatState === 'object' && !Array.isArray(session.groupChatState)
+        ? session.groupChatState
+        : {};
+    session.groupChatState = {
+        isRunning: groupChatState.isRunning === true,
+        awaitsUserInput: groupChatState.awaitsUserInput === true,
+        turnQueue: Array.isArray(groupChatState.turnQueue) ? groupChatState.turnQueue.filter(Boolean) : [],
+        currentJob: groupChatState.currentJob && typeof groupChatState.currentJob === 'object' && !Array.isArray(groupChatState.currentJob)
+            ? groupChatState.currentJob
+            : null,
+        jobQueue: Array.isArray(groupChatState.jobQueue) ? groupChatState.jobQueue.filter(Boolean) : [],
+        error: typeof groupChatState.error === 'string' ? groupChatState.error : null
+    };
+
+    return session;
+}
+
 function getSessionSortIndex(session, fallback = 0) {
     const parsed = Number(session?.sortIndex);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -309,6 +352,9 @@ export function loadChatSession(sessionId) {
     if (!project) return;
     ensureProjectFolders(project);
     ensureProjectBooks(project);
+    if (!Array.isArray(project.chatSessions)) {
+        project.chatSessions = [];
+    }
 
     // --- กรณีไม่มี sessionId, ทำการเคลียร์หน้าจอ ---
     if (!sessionId) {
@@ -319,18 +365,20 @@ export function loadChatSession(sessionId) {
         return;
     }
     
-    const session = project.chatSessions.find(s => s.id === sessionId);
+    const session = project.chatSessions.find(s => s?.id === sessionId);
 
     // --- กรณีหา session ไม่เจอ, โหลดอันล่าสุดแทน ---
     if (!session) {
         console.warn(`Session with ID ${sessionId} not found. Loading most recent as fallback.`);
         const fallbackSession = [...project.chatSessions]
-            .filter(s => !s.archived)
+            .filter(s => s && !s.archived)
             .sort((a, b) => b.updatedAt - a.updatedAt)[0];
         // เรียกตัวเองซ้ำด้วย ID ที่ถูกต้อง (ถ้ามี)
         loadChatSession(fallbackSession ? fallbackSession.id : null);
         return;
     }
+
+    normalizeLoadedSessionInPlace(session);
 
     // --- ขั้นตอนหลัก: อัปเดต State และประกาศ Event ---
     const { entity: resolvedEntity } = resolveEntityForSession(project, session);
@@ -783,7 +831,7 @@ export async function deleteChatSession({ sessionId }) {
 
     // 3. จัดการ Session ที่กำลัง Active อยู่ (ถ้าถูกลบ)
     if (project.activeSessionId === sessionId) {
-        const nextSession = [...project.chatSessions].filter(s => !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        const nextSession = [...project.chatSessions].filter(s => s && !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
         project.activeSessionId = nextSession ? nextSession.id : null;
         project.activeFolderId = nextSession?.folderId || null;
         // โหลด session ใหม่ (ซึ่งจะไปเรียก renderUI เอง)

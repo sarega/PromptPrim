@@ -24,6 +24,7 @@ export default defineConfig({
       input: {
         // หน้าหลัก (/) จะเป็น Landing Page
         main: resolve(__dirname, 'index.html'), 
+        auth: resolve(__dirname, 'auth.html'),
         // หน้าแอป (/app.html) คือแอปตัวเดิม
         app: resolve(__dirname, 'app.html'), 
         // หน้าแอดมินยังคงเหมือนเดิม

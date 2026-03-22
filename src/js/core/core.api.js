@@ -5,8 +5,11 @@
 
 import { stateManager } from './core.state.js';
 import * as UserService from '../modules/user/user.service.js';
+import * as AuthService from '../modules/auth/auth.service.js';
+import * as ModelAccessService from '../modules/models/model-access.service.js';
 import { estimateTokens } from '../modules/chat/chat.handlers.js';
 import { showCustomAlert } from './core.ui.js';
+import { getSupabasePublishableKey, getSupabaseUrl } from '../integrations/supabase/client.js';
 import {
     ensureProjectFolders,
     getFolderById,
@@ -703,6 +706,56 @@ async function safeReadErrorText(response) {
     }
 }
 
+function shouldUseSupabaseOpenRouterProxy(provider, isSystemAgentCall = false) {
+    if (provider !== 'openrouter') return false;
+    if (!AuthService.isSupabaseEnabled()) return false;
+    if (!getSupabaseUrl() || !getSupabasePublishableKey()) return false;
+
+    const currentUser = UserService.getCurrentUserProfile();
+    if (!currentUser) return false;
+    if (UserService.usesPersonalApiKeys(currentUser)) return false;
+
+    return isSystemAgentCall ? true : UserService.isBackendManagedProfile(currentUser);
+}
+
+async function enrichSupabaseProxyHeaders(headers = {}) {
+    const { data, error } = await AuthService.refreshSession();
+    if (error) {
+        throw new Error(error.message || 'Could not refresh the current Supabase session.');
+    }
+
+    const accessToken = String(data?.session?.access_token || '').trim();
+    if (!accessToken) {
+        throw new Error('The current Supabase session is missing or expired. Please sign in again.');
+    }
+
+    return {
+        ...headers,
+        apikey: getSupabasePublishableKey(),
+        Authorization: `Bearer ${accessToken}`
+    };
+}
+
+function normalizeSupabaseProxyNetworkError(error, provider, billedServerSide = false) {
+    if (!billedServerSide || provider !== 'openrouter' || !isNetworkLikeError(error)) {
+        return error;
+    }
+
+    return new Error(
+        'Could not reach the PromptPrim Supabase chat proxy. Refresh your sign-in and make sure the openrouter-chat function is deployed and reachable.'
+    );
+}
+
+async function refreshSupabaseUsageStateIfNeeded(billedServerSide = false) {
+    if (!billedServerSide || !AuthService.isSupabaseEnabled()) return;
+
+    try {
+        await UserService.refreshCurrentUserFromBackend(null, { publish: true });
+    } catch (error) {
+        console.error('Could not refresh the user wallet after server-side billing.', error);
+    }
+}
+
 function buildApiErrorMessage(provider, status, statusText = '', rawDetails = '') {
     const compactDetails = rawDetails.replace(/\s+/g, ' ').trim().slice(0, 240);
     const detailsSuffix = compactDetails ? ` Details: ${compactDetails}` : '';
@@ -715,6 +768,13 @@ function buildApiErrorMessage(provider, status, statusText = '', rawDetails = ''
             return `API Error: 401 Unauthorized from Ollama endpoint. Check Ollama URL and reverse-proxy auth configuration.${detailsSuffix}`;
         }
         return `API Error: 401 Unauthorized.${detailsSuffix}`;
+    }
+
+    if (status === 429) {
+        if (provider === 'openrouter') {
+            return `API Error: 429 Rate limited by the selected model provider. Retry shortly or switch this Agent to another allowed model.${detailsSuffix}`;
+        }
+        return `API Error: 429 Rate limited.${detailsSuffix}`;
     }
 
     const statusPart = statusText ? ` ${statusText}` : '';
@@ -785,15 +845,21 @@ export async function loadAllProviderModels({ apiKey, ollamaBaseUrl, isUserKey =
     const loadPromise = (async () => {
         stateManager.bus.publish('status:update', { message: 'Loading models...', state: 'loading' });
         const resolved = resolveModelLoadSettings({ apiKey, ollamaBaseUrl, isUserKey });
+        const currentUser = UserService.getCurrentUserProfile();
+        const useBackendOpenRouterCatalog = !isUserKey
+            && AuthService.isSupabaseEnabled()
+            && UserService.isBackendManagedProfile(currentUser);
         let allModels = [];
         let attemptedProviders = 0;
         let successfulProviders = 0;
         const providerErrors = [];
 
-        if (resolved.providerEnabled.openrouter && resolved.apiKey) {
+        if (resolved.providerEnabled.openrouter && (resolved.apiKey || useBackendOpenRouterCatalog)) {
             attemptedProviders += 1;
             try {
-                const openRouterModels = await fetchOpenRouterModels(resolved.apiKey);
+                const openRouterModels = useBackendOpenRouterCatalog
+                    ? await ModelAccessService.loadBackendModelCatalog({ hydrateState: false })
+                    : await fetchOpenRouterModels(resolved.apiKey);
                 allModels.push(...openRouterModels);
                 successfulProviders += 1;
             } catch (error) {
@@ -871,6 +937,9 @@ export async function loadAllSystemModels() {
     stateManager.bus.publish('status:update', { message: 'Loading all system models...', state: 'loading' });
     
     const settings = UserService.getSystemApiSettings();
+    const currentUser = UserService.getCurrentUserProfile();
+    const useBackendOpenRouterCatalog = AuthService.isSupabaseEnabled()
+        && UserService.isBackendManagedProfile(currentUser);
     const providerEnabled = settings.providerEnabled || {};
     let allModels = [];
     let attemptedProviders = 0;
@@ -878,10 +947,12 @@ export async function loadAllSystemModels() {
     const providerErrors = [];
 
     // 1. พยายามดึงโมเดลจาก OpenRouter (ถ้ามี Key)
-    if (providerEnabled.openrouter !== false && settings.openrouterKey) {
+    if (providerEnabled.openrouter !== false && (settings.openrouterKey || useBackendOpenRouterCatalog)) {
         attemptedProviders += 1;
         try {
-            const openRouterModels = await fetchOpenRouterModels(settings.openrouterKey);
+            const openRouterModels = useBackendOpenRouterCatalog
+                ? (await ModelAccessService.syncBackendOpenRouterModelCatalog({ hydrateState: false })).models
+                : await fetchOpenRouterModels(settings.openrouterKey);
             allModels.push(...openRouterModels);
             successfulProviders += 1;
         } catch (error) {
@@ -1192,21 +1263,31 @@ function constructApiCall(agent, messages, stream = false, forceSystemAgentCall 
         if (!UserService.isApiProviderEnabled('openrouter', { useSystemSettings: isSystemAgentCall })) {
             throw new Error("OpenRouter API is disabled in Settings for this scope.");
         }
-        const apiKey = isSystemAgentCall 
-            ? UserService.getSystemApiSettings().openrouterKey 
-            : UserService.getApiKey();
-        if (!apiKey) {
-            throw new Error("Required OpenRouter API Key is missing for this operation.");
-        }
+        const useSupabaseProxy = shouldUseSupabaseOpenRouterProxy(provider, isSystemAgentCall);
 
-        url = 'https://openrouter.ai/api/v1/chat/completions';
-        headers = { 
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
-            'X-Title': 'PromptPrim' 
-        };
+        if (useSupabaseProxy) {
+            url = `${getSupabaseUrl()}/functions/v1/openrouter-chat`;
+            headers = {
+                'Content-Type': 'application/json',
+                'Accept': stream ? 'text/event-stream, application/json' : 'application/json'
+            };
+        } else {
+            const apiKey = isSystemAgentCall 
+                ? UserService.getSystemApiSettings().openrouterKey 
+                : UserService.getApiKey();
+            if (!apiKey) {
+                throw new Error("Required OpenRouter API Key is missing for this operation.");
+            }
+
+            url = 'https://openrouter.ai/api/v1/chat/completions';
+            headers = { 
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
+                'X-Title': 'PromptPrim' 
+            };
+        }
         body = { model: agent.model, messages, stream, ...safeParams };
         
         if (agent.enableWebSearch) {
@@ -1233,7 +1314,13 @@ function constructApiCall(agent, messages, stream = false, forceSystemAgentCall 
         throw new Error(`Unsupported model provider '${provider}' for model '${agent.model}'.`);
     }
 
-    return { url, headers, body, provider };
+    return {
+        url,
+        headers,
+        body,
+        provider,
+        billedServerSide: provider === 'openrouter' && shouldUseSupabaseOpenRouterProxy(provider, isSystemAgentCall)
+    };
 }
 
 // =========================================================================
@@ -1241,12 +1328,15 @@ function constructApiCall(agent, messages, stream = false, forceSystemAgentCall 
 // =========================================================================
 
 export async function streamLLMResponse(agent, messages, onChunk) {
-    const { url, headers, body, provider } = constructApiCall(agent, messages, true, false);
+    const { url, headers, body, provider, billedServerSide } = constructApiCall(agent, messages, true, false);
     try {
         stateManager.bus.publish('status:update', { message: `Responding with ${agent.model}...`, state: 'loading' });
         
         const startTime = performance.now();
-        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body), signal: stateManager.getState().abortController?.signal });
+        const resolvedHeaders = billedServerSide
+            ? await enrichSupabaseProxyHeaders(headers)
+            : headers;
+        const response = await fetchWithTimeout(url, { method: 'POST', headers: resolvedHeaders, body: JSON.stringify(body), signal: stateManager.getState().abortController?.signal });
         
         if (!response.ok) {
             const errorText = await safeReadErrorText(response);
@@ -1257,6 +1347,7 @@ export async function streamLLMResponse(agent, messages, onChunk) {
         const decoder = new TextDecoder("utf-8");
         let buffer = '';
         let fullResponseText = '';
+        let usageFromStream = null;
         while (true) {
             const { value, done } = await reader.read();
             if (done) break;
@@ -1273,6 +1364,14 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                             if (jsonStr === '[DONE]') continue; // Use continue instead of break
                             const data = JSON.parse(jsonStr);
                             token = data.choices?.[0]?.delta?.content || '';
+                            if (data?.usage && typeof data.usage === 'object') {
+                                usageFromStream = {
+                                    prompt_tokens: Number(data.usage.prompt_tokens) || 0,
+                                    completion_tokens: Number(data.usage.completion_tokens) || 0,
+                                    total_tokens: Number(data.usage.total_tokens) || 0,
+                                    cost: Number(data.usage.cost) || 0
+                                };
+                            }
                         }
                     } else { // ollama
                         const data = JSON.parse(line);
@@ -1297,6 +1396,14 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                         if (jsonStr !== '[DONE]') {
                              const data = JSON.parse(jsonStr);
                              token = data.choices?.[0]?.delta?.content || '';
+                             if (data?.usage && typeof data.usage === 'object') {
+                                usageFromStream = {
+                                    prompt_tokens: Number(data.usage.prompt_tokens) || 0,
+                                    completion_tokens: Number(data.usage.completion_tokens) || 0,
+                                    total_tokens: Number(data.usage.total_tokens) || 0,
+                                    cost: Number(data.usage.cost) || 0
+                                };
+                             }
                         }
                     }
                 } else { // ollama
@@ -1328,30 +1435,46 @@ export async function streamLLMResponse(agent, messages, onChunk) {
                 usageIsEstimated = false;
             } catch(e) { console.error("Could not parse usage header:", e); }
         }
+
+        if (usageIsEstimated && usageFromStream) {
+            usage = {
+                prompt_tokens: Number(usageFromStream.prompt_tokens) || 0,
+                completion_tokens: Number(usageFromStream.completion_tokens) || 0,
+                total_tokens: Number(usageFromStream.total_tokens) || 0
+            };
+            cost = Number(usageFromStream.cost) || cost;
+            usageIsEstimated = false;
+        }
         
         if (usageIsEstimated) {
             usage.prompt_tokens = estimateTokens(JSON.stringify(messages));
             usage.completion_tokens = estimateTokens(fullResponseText);
         }
+
+        await refreshSupabaseUsageStateIfNeeded(billedServerSide);
         
-        return { content: fullResponseText, usage, duration, cost, usageIsEstimated };
+        return { content: fullResponseText, usage, duration, cost, usageIsEstimated, billedServerSide };
 
     } catch (error) {
+        const normalizedError = normalizeSupabaseProxyNetworkError(error, provider, billedServerSide);
         if (error.name !== 'AbortError') {
-             console.error("Streaming failed:", error);
-             stateManager.bus.publish('status:update', { message: `Error: ${error.message}`, state: 'error' });
+             console.error("Streaming failed:", normalizedError);
+             stateManager.bus.publish('status:update', { message: `Error: ${normalizedError.message}`, state: 'error' });
         }
-        throw error;
+        throw normalizedError;
     }
 }
 
 export async function callLLM(agent, messages, options = {}) {
     console.log("📡 [callLLM] received:", { agent, messages });
     const forceSystemAgentCall = options?.forceSystemAgentCall === true;
-    const { url, headers, body, provider } = constructApiCall(agent, messages, false, forceSystemAgentCall);
+    const { url, headers, body, provider, billedServerSide } = constructApiCall(agent, messages, false, forceSystemAgentCall);
 
     try {
-        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
+        const resolvedHeaders = billedServerSide
+            ? await enrichSupabaseProxyHeaders(headers)
+            : headers;
+        const response = await fetchWithTimeout(url, { method: 'POST', headers: resolvedHeaders, body: JSON.stringify(body) });
         if (!response.ok) { 
             const errorText = await safeReadErrorText(response);
             throw new Error(buildApiErrorMessage(provider, response.status, response.statusText, errorText));
@@ -1381,12 +1504,15 @@ export async function callLLM(agent, messages, options = {}) {
              } catch(e) { console.error("Could not parse usage header in callLLM:", e); }
         }
 
+        await refreshSupabaseUsageStateIfNeeded(billedServerSide);
+
         // Return the new flag
-        return { content, usage, cost, usageIsEstimated };
+        return { content, usage, cost, usageIsEstimated, billedServerSide };
 
     } catch (error) {
-        console.error("callLLM failed:", error);
-        throw error;
+        const normalizedError = normalizeSupabaseProxyNetworkError(error, provider, billedServerSide);
+        console.error("callLLM failed:", normalizedError);
+        throw normalizedError;
     }
 }
 
@@ -1422,38 +1548,5 @@ export function calculateCost(modelId, usage) {
 }
 
 export async function callSystemLLM(agent, messages) {
-    // [CRITICAL] บังคับให้ใช้ System API Settings เท่านั้น
-    const systemSettings = UserService.getSystemApiSettings();
-    const systemApiKey = systemSettings.openrouterKey;
-    const ollamaUrl = systemSettings.ollamaBaseUrl;
-
-    if (!systemApiKey && !ollamaUrl) {
-        throw new Error("System API or Ollama URL is not configured by the admin.");
-    }
-    
-    // สร้าง Payload โดยใช้ System Key
-    const { url, headers, body, provider } = constructApiCall(agent, messages, false, true);
-    
-    try {
-        const response = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
-        if (!response.ok) { 
-            const errorText = await safeReadErrorText(response);
-            throw new Error(buildApiErrorMessage(provider, response.status, response.statusText, errorText));
-        }
-        
-        // ... โค้ดส่วนที่เหลือในการประมวลผล response เหมือนกับ callLLM เดิม ...
-        const data = await response.json();
-        const content = (provider === 'openrouter' && data.choices?.length > 0) 
-            ? data.choices[0].message.content 
-            : data.message?.content;
-
-        if (content === undefined) {
-            throw new Error("Invalid API response structure.");
-        }
-        return { content, usage: data.usage || {} };
-
-    } catch (error) {
-        console.error("callSystemLLM failed:", error);
-        throw error;
-    }
+    return callLLM(agent, messages, { forceSystemAgentCall: true });
 }

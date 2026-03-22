@@ -35,6 +35,7 @@
 @import './features/_chat.css';
 @import './features/_chat-actions.css';
 @import './features/_settings-panel.css';
+@import './features/_account-panel.css';
 @import './features/_editors.css';
 
 /* 6. Responsive - Media queries. Must be last. */

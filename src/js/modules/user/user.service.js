@@ -2,79 +2,572 @@
 
 import { stateManager } from "../../core/core.state.js";
 import { showCustomAlert } from "../../core/core.ui.js";
+import * as AuthService from "../auth/auth.service.js";
+import { getCurrentAccountSnapshot } from "../auth/auth-account.service.js";
+import { getBackendAllowedModelIdsForPlan, isBackendModelAccessReady } from "../models/model-access.service.js";
 
 const USER_DB_KEY = 'promptPrimUserDatabase_v1';
 const BILLING_DB_KEY = 'promptPrimAdminBilling_v1';
-const MASTER_PRESETS_DB_KEY = 'promptPrimMasterPresets_v1'; // <-- NEW: Dedicated key for admin presets
+const PLAN_PRESETS_DB_KEY = 'promptPrimPlanPresets_v1';
 const ACTIVE_USER_STORAGE_KEY = 'promptPrimActiveUserId';
 const PENDING_ACTIVE_USER_STORAGE_KEY = 'promptPrimPendingActiveUserId';
-export const ADMIN_USER_ID = 'user_master'; 
+export const ADMIN_USER_ID = 'user_admin';
+const LEGACY_ADMIN_USER_ID = 'user_master';
+export const FREE_TRIAL_DAYS = 7;
+export const FREE_TRIAL_MICROCREDITS = 500000;
+export const PRO_INCLUDED_MICROCREDITS = 7500000;
+export const ACCESS_PASS_COST_MICROCREDITS = 7000000;
 const DEFAULT_PROVIDER_ENABLED = Object.freeze({ openrouter: true, ollama: true, kieai: true });
+const PREFERRED_DEFAULT_MODEL_IDS = Object.freeze([
+    'openai/gpt-4o-mini',
+    'google/gemini-2.0-flash-001',
+    'google/gemini-2.0-flash-lite-001',
+    'anthropic/claude-3.5-haiku',
+    'meta-llama/llama-3.1-8b-instruct',
+    'meta-llama/llama-3.1-70b-instruct'
+]);
+const DEPRIORITIZED_DEFAULT_MODEL_IDS = new Set([
+    'google/gemma-3-27b-it'
+]);
 
 let userDatabase = [];
-let masterPresets = {}; // <-- NEW: In-memory variable for admin presets
+let planPresets = {};
 let activeUserId = null;
 
 function normalizeStoredUserId(rawValue) {
     if (typeof rawValue !== 'string') return '';
     const trimmed = rawValue.trim();
     if (!trimmed) return '';
-    return trimmed.replace(/^"+|"+$/g, '');
+    const normalized = trimmed.replace(/^"+|"+$/g, '');
+    return normalized === LEGACY_ADMIN_USER_ID ? ADMIN_USER_ID : normalized;
 }
 
-async function loadMasterPresets() {
-    const storedPresets = localStorage.getItem(MASTER_PRESETS_DB_KEY);
+function normalizePlanCode(planCode = 'free') {
+    const normalizedPlanCode = String(planCode || 'free').trim().toLowerCase();
+    if (!normalizedPlanCode || normalizedPlanCode === 'master') return 'studio';
+    return ['free', 'pro', 'studio'].includes(normalizedPlanCode)
+        ? normalizedPlanCode
+        : 'free';
+}
+
+export function normalizeCompatiblePlanCode(planCode = 'free') {
+    return normalizePlanCode(planCode);
+}
+
+function cloneUserRecord(user) {
+    return JSON.parse(JSON.stringify(user));
+}
+
+function mergeUserCollections(baseUsers = [], incomingUsers = []) {
+    const mergedById = new Map();
+
+    const appendUsers = (users) => {
+        (Array.isArray(users) ? users : []).forEach((user) => {
+            const userId = String(user?.userId || '').trim();
+            if (!userId) return;
+            mergedById.set(userId, cloneUserRecord(user));
+        });
+    };
+
+    appendUsers(baseUsers);
+    appendUsers(incomingUsers);
+
+    return Array.from(mergedById.values());
+}
+
+async function loadPlanPresets() {
+    const storedPresets = localStorage.getItem(PLAN_PRESETS_DB_KEY) || localStorage.getItem('promptPrimMasterPresets_v1');
     if (storedPresets) {
-        masterPresets = JSON.parse(storedPresets);
-        console.log("Loaded master presets from localStorage.");
+        planPresets = JSON.parse(storedPresets);
+        if (planPresets.master_tier && !planPresets.studio_tier) {
+            planPresets.studio_tier = {
+                ...planPresets.master_tier,
+                name: 'Studio Tier'
+            };
+            delete planPresets.master_tier;
+            savePlanModelPresets(planPresets);
+        }
+        console.log("Loaded plan presets from localStorage.");
     } else {
         // Fallback to loading from the public JSON file for the very first run
         try {
-            const filePath = `${import.meta.env.BASE_URL}master-presets.json`;
+            const filePath = `${import.meta.env.BASE_URL}studio-presets.json`;
             const response = await fetch(filePath);
             if (!response.ok) throw new Error(`Status: ${response.status}`);
             const presetsFromFile = await response.json();
-            masterPresets = presetsFromFile;
-            saveMasterModelPresets(masterPresets); // Save them to their new home
-            console.log("Loaded default master presets from file.");
+            planPresets = presetsFromFile;
+            savePlanModelPresets(planPresets); // Save them to their new home
+            console.log("Loaded default plan presets from file.");
         } catch (error) {
-            console.error("Failed to load default master presets:", error);
-            masterPresets = {};
+            console.error("Failed to load default plan presets:", error);
+            planPresets = {};
         }
     }
 }
 
-export function isMasterProfile(profile = null) {
+export function isAdminProfile(profile = null) {
     const target = profile || getCurrentUserProfile();
     if (!target) return false;
-    return target.userId === ADMIN_USER_ID || target.plan === 'master';
+    return String(target.role || '').trim().toLowerCase() === 'admin'
+        || target.userId === ADMIN_USER_ID
+        || target.userId === LEGACY_ADMIN_USER_ID
+        || String(target.backendAccount?.role || '').trim().toLowerCase() === 'admin';
+}
+
+export function isStudioProfile(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return false;
+    return isAdminProfile(target) || getEffectiveAccountStatus(target) === 'studio_active';
+}
+
+export function getEffectiveAccountStatus(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return 'free';
+    if (isAdminProfile(target)) return 'studio_active';
+
+    const backendAccountStatus = String(target.backendAccount?.accountStatus || '').trim().toLowerCase();
+    const accessPassExpiresAt = target.backendAccount?.accessPassExpiresAt || target.accessPassExpiresAt || null;
+    const accessPassExpiresAtMillis = accessPassExpiresAt ? new Date(accessPassExpiresAt).getTime() : NaN;
+    if (['free', 'studio_active', 'pro_active', 'paid_suspended'].includes(backendAccountStatus)) {
+        if (
+            backendAccountStatus === 'studio_active'
+            && accessPassExpiresAt
+            && Number.isFinite(accessPassExpiresAtMillis)
+            && accessPassExpiresAtMillis <= Date.now()
+        ) {
+            return 'paid_suspended';
+        }
+        return backendAccountStatus;
+    }
+
+    const normalizedPlan = normalizePlanCode(target.backendAccount?.planCode || target.plan || 'free');
+    const normalizedPlanStatus = String(target.planStatus || target.backendAccount?.status || 'active').trim().toLowerCase();
+    if (normalizedPlan === 'studio') {
+        return normalizedPlanStatus === 'active' ? 'studio_active' : 'paid_suspended';
+    }
+    if (normalizedPlan === 'pro') {
+        return normalizedPlanStatus === 'active' ? 'pro_active' : 'paid_suspended';
+    }
+    return 'free';
+}
+
+export function isPaidSuspendedProfile(profile = null) {
+    return getEffectiveAccountStatus(profile) === 'paid_suspended';
+}
+
+export function getCreditBucketSummary(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) {
+        return {
+            monthlyMicrocredits: 0,
+            topupMicrocredits: 0,
+            totalMicrocredits: 0,
+            monthlyExpiresAt: null
+        };
+    }
+
+    const backendAccount = target.backendAccount || {};
+    const monthlyMicrocredits = normalizeNumericValue(
+        backendAccount.monthlyCreditBalanceMicrocredits,
+        normalizeNumericValue(
+            target.credits?.monthly,
+            normalizePlanCode(target.plan || 'free') === 'free'
+                ? normalizeNumericValue(target.credits?.current, 0)
+                : 0
+        )
+    );
+    const totalMicrocredits = normalizeNumericValue(
+        backendAccount.balanceMicrocredits,
+        normalizeNumericValue(target.credits?.current, 0)
+    );
+    const topupMicrocredits = normalizeNumericValue(
+        backendAccount.topupCreditBalanceMicrocredits,
+        normalizeNumericValue(
+            target.credits?.topup,
+            Math.max(totalMicrocredits - monthlyMicrocredits, 0)
+        )
+    );
+
+    return {
+        monthlyMicrocredits,
+        topupMicrocredits,
+        totalMicrocredits: totalMicrocredits || (monthlyMicrocredits + topupMicrocredits),
+        monthlyExpiresAt: backendAccount.monthlyCreditExpiresAt || target.credits?.monthlyExpiresAt || null
+    };
+}
+
+export function usesPersonalApiKeys(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return false;
+    return isAdminProfile(target) || getEffectiveAccountStatus(target) === 'studio_active';
+}
+
+export function getEffectivePlanCode(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return 'free';
+    if (isAdminProfile(target)) return 'studio';
+    return normalizePlanCode(target.backendAccount?.planCode || target.plan || 'free');
+}
+
+export function canUseStudioTools(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return false;
+    return usesPersonalApiKeys(target);
+}
+
+export function canUseMediaStudio(profile = null) {
+    return canUseStudioTools(profile);
+}
+
+export function canUseLocalOllama(profile = null) {
+    return canUseStudioTools(profile);
+}
+
+export function canPurchaseTopupCredits(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target || isAdminProfile(target)) return false;
+    return getEffectiveAccountStatus(target) === 'pro_active';
+}
+
+export function canUseHostedTextWorkflow(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target || usesPersonalApiKeys(target)) return false;
+
+    const effectiveAccountStatus = getEffectiveAccountStatus(target);
+    const currentCredits = getCreditBucketSummary(target).totalMicrocredits;
+
+    if (effectiveAccountStatus === 'paid_suspended') return false;
+    if (effectiveAccountStatus === 'pro_active') return currentCredits > 0;
+    if (effectiveAccountStatus === 'free') {
+        return !isFreeTrialExpired(target) && currentCredits > 0;
+    }
+    return false;
+}
+
+export function isFreeTrialExpired(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return false;
+    if (normalizePlanCode(target.backendAccount?.planCode || target.plan || 'free') !== 'free') return false;
+
+    const trialEndsAt = target.trialEndsAt || target.backendAccount?.trialEndsAt || null;
+    if (!trialEndsAt) return false;
+
+    const parsedTrialEnd = new Date(trialEndsAt).getTime();
+    return Number.isFinite(parsedTrialEnd) && parsedTrialEnd <= Date.now();
+}
+
+function normalizePlanTier(planCode = 'free') {
+    const normalizedPlanCode = normalizePlanCode(planCode);
+    if (normalizedPlanCode === 'studio') return 'studio';
+    return normalizedPlanCode === 'pro' ? 'pro' : 'free';
+}
+
+function getLocalTierModelIds(planCode = 'free') {
+    const normalizedTier = normalizePlanTier(planCode);
+    const presetKey = normalizedTier === 'pro' ? 'pro_tier' : 'free_tier';
+    return Array.isArray(planPresets?.[presetKey]?.modelIds)
+        ? [...planPresets[presetKey].modelIds]
+        : [];
+}
+
+function getTierModelIdsForProfile(profile = null, options = {}) {
+    const target = profile || getCurrentUserProfile();
+    if (!target || usesPersonalApiKeys(target)) {
+        return (stateManager.getState().userProviderModels || []).map(model => model.id);
+    }
+
+    const effectivePlanCode = normalizePlanCode(
+        options.planCode
+        || target.backendAccount?.planCode
+        || target.plan
+        || 'free'
+    );
+
+    if (isBackendManagedProfile(target) && AuthService.isSupabaseEnabled() && isBackendModelAccessReady()) {
+        return Array.from(getBackendAllowedModelIdsForPlan(effectivePlanCode));
+    }
+
+    return getLocalTierModelIds(effectivePlanCode);
+}
+
+function getVisibleAllowedModelIdsForProfile(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return [];
+    if (usesPersonalApiKeys(target)) {
+        return (stateManager.getState().userProviderModels || []).map(model => model.id);
+    }
+
+    const currentCredits = normalizeNumericValue(target.credits?.current, 0);
+    const effectiveAccountStatus = getEffectiveAccountStatus(target);
+
+    if (isBackendManagedProfile(target)) {
+        if (effectiveAccountStatus === 'paid_suspended') {
+            return [];
+        }
+        if (effectiveAccountStatus === 'free' && (isFreeTrialExpired(target) || currentCredits <= 0)) {
+            return [];
+        }
+        if (effectiveAccountStatus === 'pro_active' && currentCredits <= 0) {
+            return [];
+        }
+
+        if (AuthService.isSupabaseEnabled() && isBackendModelAccessReady()) {
+            return getTierModelIdsForProfile(target);
+        }
+    }
+
+    if (isFreeTrialExpired(target)) {
+        return [];
+    }
+
+    if (target.plan === 'pro' && target.planStatus === 'active' && normalizeNumericValue(target.credits?.current, 0) > 0) {
+        return getTierModelIdsForProfile(target, { planCode: 'pro' });
+    }
+
+    if ((target.plan === 'free' && normalizeNumericValue(target.credits?.current, 0) > 0) || target.planStatus === 'grace_period') {
+        return getTierModelIdsForProfile(target, { planCode: 'free' });
+    }
+
+    return [];
+}
+
+function getAllowedModelsForProfile(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return [];
+
+    const allowedModelIdSet = new Set(getVisibleAllowedModelIdsForProfile(target));
+    const sourceModels = usesPersonalApiKeys(target)
+        ? (stateManager.getState().userProviderModels || [])
+        : (stateManager.getState().systemProviderModels || []);
+
+    return sourceModels.filter(model => allowedModelIdSet.has(model.id));
+}
+
+function getPreferredTierModelIdForProfile(profile = null, options = {}) {
+    const target = profile || getCurrentUserProfile();
+    if (!target) return '';
+
+    const visibleAllowedModels = getAllowedModelsForProfile(target);
+    if (visibleAllowedModels.length === 0) return '';
+
+    const visibleAllowedModelIdSet = new Set(visibleAllowedModels.map(model => model.id));
+    const currentTierModelIds = getTierModelIdsForProfile(target, {
+        planCode: options.planCode
+            || target.backendAccount?.planCode
+            || target.plan
+            || 'free'
+    });
+
+    const previousTierModelIds = options.previousPlanCode
+        ? new Set(getTierModelIdsForProfile(target, { planCode: options.previousPlanCode }))
+        : null;
+
+    if (options.preferTierPromotion && previousTierModelIds) {
+        const promotedModelId = currentTierModelIds.find(modelId => (
+            visibleAllowedModelIdSet.has(modelId) && !previousTierModelIds.has(modelId)
+        ));
+        if (promotedModelId) {
+            return promotedModelId;
+        }
+    }
+
+    const preferredStableModelId = PREFERRED_DEFAULT_MODEL_IDS.find(modelId => (
+        visibleAllowedModelIdSet.has(modelId)
+    ));
+    if (preferredStableModelId) {
+        return preferredStableModelId;
+    }
+
+    const firstTierNonDeprioritizedModelId = currentTierModelIds.find(modelId => (
+        visibleAllowedModelIdSet.has(modelId) && !DEPRIORITIZED_DEFAULT_MODEL_IDS.has(modelId)
+    ));
+    if (firstTierNonDeprioritizedModelId) {
+        return firstTierNonDeprioritizedModelId;
+    }
+
+    return currentTierModelIds.find(modelId => visibleAllowedModelIdSet.has(modelId))
+        || visibleAllowedModels[0]?.id
+        || '';
+}
+
+function reconcileUserStarterPresetForProfile(profile, options = {}) {
+    if (!profile || !profile.modelPresets || typeof profile.modelPresets !== 'object') return false;
+
+    const starterPreset = profile.modelPresets.my_first_preset;
+    if (!starterPreset || typeof starterPreset !== 'object') return false;
+
+    const preferredModelId = getPreferredTierModelIdForProfile(profile, options);
+    const allowedModelIdSet = new Set(getVisibleAllowedModelIdsForProfile(profile));
+    const currentModelIds = Array.isArray(starterPreset.modelIds) ? starterPreset.modelIds.filter(Boolean) : [];
+    const nextModelIds = currentModelIds.filter(modelId => allowedModelIdSet.has(modelId));
+
+    const shouldPromoteStarterPreset = Boolean(
+        options.preferTierPromotion
+        && preferredModelId
+        && (
+            currentModelIds.length === 0
+            || currentModelIds.every(modelId => getTierModelIdsForProfile(profile, { planCode: options.previousPlanCode }).includes(modelId))
+        )
+    );
+
+    if (shouldPromoteStarterPreset) {
+        starterPreset.modelIds = [preferredModelId];
+        return true;
+    }
+
+    if (nextModelIds.length === 0 && preferredModelId) {
+        starterPreset.modelIds = [preferredModelId];
+        return true;
+    }
+
+    if (JSON.stringify(nextModelIds) !== JSON.stringify(currentModelIds)) {
+        starterPreset.modelIds = nextModelIds;
+        return true;
+    }
+
+    return false;
+}
+
+function reconcileCurrentProjectModelsForProfile(profile, options = {}) {
+    const target = profile || getCurrentUserProfile();
+    if (!target || target.userId !== activeUserId || usesPersonalApiKeys(target)) return false;
+
+    const project = stateManager.getProject();
+    if (!project?.globalSettings?.systemUtilityAgent) return false;
+
+    const allowedModels = getAllowedModelsForProfile(target);
+    if (allowedModels.length === 0) return false;
+
+    const preferredModelId = getPreferredTierModelIdForProfile(target, options);
+    if (!preferredModelId) return false;
+
+    const allowedModelIdSet = new Set(allowedModels.map(model => model.id));
+    let changed = false;
+
+    const systemUtilityAgent = project.globalSettings.systemUtilityAgent;
+    const currentSystemModelId = String(systemUtilityAgent.model || '').trim();
+    const previousTierModelIds = options.previousPlanCode
+        ? new Set(getTierModelIdsForProfile(target, { planCode: options.previousPlanCode }))
+        : null;
+    const shouldPromoteSystemModel = Boolean(
+        options.preferTierPromotion
+        && previousTierModelIds
+        && currentSystemModelId
+        && previousTierModelIds.has(currentSystemModelId)
+        && currentSystemModelId !== preferredModelId
+    );
+    const shouldReplaceDeprioritizedSystemModel = Boolean(
+        currentSystemModelId
+        && DEPRIORITIZED_DEFAULT_MODEL_IDS.has(currentSystemModelId)
+        && currentSystemModelId !== preferredModelId
+        && allowedModelIdSet.has(preferredModelId)
+    );
+
+    if (!currentSystemModelId || !allowedModelIdSet.has(currentSystemModelId) || shouldPromoteSystemModel || shouldReplaceDeprioritizedSystemModel) {
+        systemUtilityAgent.model = preferredModelId;
+        changed = true;
+    }
+
+    const agentPresets = project.agentPresets || {};
+    Object.values(agentPresets).forEach((agentPreset) => {
+        if (!agentPreset || typeof agentPreset !== 'object') return;
+        const currentModelId = String(agentPreset.model || '').trim();
+        const shouldReplaceDeprioritizedAgentModel = Boolean(
+            currentModelId
+            && DEPRIORITIZED_DEFAULT_MODEL_IDS.has(currentModelId)
+            && currentModelId !== preferredModelId
+            && allowedModelIdSet.has(preferredModelId)
+        );
+        if (!currentModelId || !allowedModelIdSet.has(currentModelId) || shouldReplaceDeprioritizedAgentModel) {
+            agentPreset.model = preferredModelId;
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        stateManager.setProject(project);
+        stateManager.updateAndPersistState();
+        stateManager.bus.publish('app:settingsChanged');
+    }
+
+    return changed;
+}
+
+function applyPlanModelAccessTransition(profile, options = {}) {
+    if (!profile || profile.userId !== activeUserId) return;
+
+    const starterPresetChanged = reconcileUserStarterPresetForProfile(profile, options);
+    const projectChanged = reconcileCurrentProjectModelsForProfile(profile, options);
+
+    if (starterPresetChanged && !projectChanged) {
+        stateManager.bus.publish('user:settingsUpdated', profile);
+    }
 }
 
 export function getAllowedModelsForCurrentUser() {
-    const user = getCurrentUserProfile();
-    if (!user) return [];
-
-    if (isMasterProfile(user)) {
-        // [FIX] Master user reads from their own personal model list in the state
-        return stateManager.getState().userProviderModels || [];
-    }
-    
-    // Pro/Free users filter from the system-wide model list
-    const systemModels = stateManager.getState().systemProviderModels || [];
-    const masterPresets = getMasterModelPresets();
-
-    if (user.plan === 'pro' && user.planStatus === 'active' && user.credits.current > 0) {
-        const proModelIds = new Set(masterPresets['pro_tier']?.modelIds || []);
-        return systemModels.filter(m => proModelIds.has(m.id));
-    }
-
-    if ((user.plan === 'free' && user.credits.current > 0) || user.planStatus === 'grace_period') {
-        const freeModelIds = new Set(masterPresets['free_tier']?.modelIds || []);
-        return systemModels.filter(m => freeModelIds.has(m.id));
-    }
-    
-    return []; // Blocked users see no models
+    return getAllowedModelsForProfile(getCurrentUserProfile());
 }
+
+export function getPreferredModelIdForCurrentUser(options = {}) {
+    return getPreferredTierModelIdForProfile(getCurrentUserProfile(), options);
+}
+
+function getDefaultFreeTrialEndsAt(baseTimestamp = Date.now()) {
+    return baseTimestamp + (FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+function createEmptyBillingProfile(overrides = {}) {
+    return {
+        avatarUrl: '',
+        billingName: '',
+        billingCompany: '',
+        billingPhone: '',
+        billingAddressLine1: '',
+        billingAddressLine2: '',
+        billingCity: '',
+        billingState: '',
+        billingPostalCode: '',
+        billingCountry: '',
+        ...overrides
+    };
+}
+
+function getNormalizedStoredBillingProfile(user) {
+    const billingProfile = (user?.billingProfile && typeof user.billingProfile === 'object')
+        ? user.billingProfile
+        : {};
+
+    return createEmptyBillingProfile({
+        avatarUrl: String(user?.avatarUrl ?? billingProfile.avatarUrl ?? '').trim(),
+        billingName: String(billingProfile.billingName ?? user?.userName ?? '').trim(),
+        billingCompany: String(billingProfile.billingCompany ?? '').trim(),
+        billingPhone: String(billingProfile.billingPhone ?? '').trim(),
+        billingAddressLine1: String(billingProfile.billingAddressLine1 ?? '').trim(),
+        billingAddressLine2: String(billingProfile.billingAddressLine2 ?? '').trim(),
+        billingCity: String(billingProfile.billingCity ?? '').trim(),
+        billingState: String(billingProfile.billingState ?? '').trim(),
+        billingPostalCode: String(billingProfile.billingPostalCode ?? '').trim(),
+        billingCountry: String(billingProfile.billingCountry ?? '').trim()
+    });
+}
+
+function ensureBillingProfileShape(user) {
+    if (!user || typeof user !== 'object') return false;
+
+    let changed = false;
+    const normalizedBillingProfile = getNormalizedStoredBillingProfile(user);
+    if (user.avatarUrl !== normalizedBillingProfile.avatarUrl) {
+        user.avatarUrl = normalizedBillingProfile.avatarUrl;
+        changed = true;
+    }
+    if (JSON.stringify(user.billingProfile) !== JSON.stringify(normalizedBillingProfile)) {
+        user.billingProfile = normalizedBillingProfile;
+        changed = true;
+    }
+
+    return changed;
+}
+
 /**
  * Reloads the in-memory database from localStorage and notifies the app.
  * This is a lightweight refresh for cross-tab syncing.
@@ -83,7 +576,12 @@ export function reloadDatabaseFromStorage() {
     const storedDb = localStorage.getItem(USER_DB_KEY);
     if (storedDb) {
         let needsSave = false;
-        userDatabase = JSON.parse(storedDb)
+        const parsedDatabase = JSON.parse(storedDb);
+        const mergedDatabase = AuthService.isSupabaseEnabled()
+            ? mergeUserCollections(userDatabase, parsedDatabase)
+            : parsedDatabase;
+
+        userDatabase = mergedDatabase
             .map(user => JSON.parse(JSON.stringify(user)))
             .map(user => {
                 const migrated = migrateUserObject(user);
@@ -92,6 +590,9 @@ export function reloadDatabaseFromStorage() {
             });
 
         if (ensureAdminUserExists()) {
+            needsSave = true;
+        }
+        if (pruneDefaultDemoUsersForSupabase()) {
             needsSave = true;
         }
 
@@ -105,17 +606,37 @@ export function reloadDatabaseFromStorage() {
 }
 
 // --- Helper function to create a default user object ---
-function createDefaultUser(userId, userName, email, plan, initialCredits = 0) {
+function createDefaultUser(userId, userName, email, plan, initialCredits = 0, options = {}) {
+    const normalizedPlan = normalizePlanCode(plan);
+    const normalizedRole = String(options.role || 'user').trim().toLowerCase() === 'admin' ? 'admin' : 'user';
+    const initialMonthlyCredits = (normalizedPlan === 'free' || normalizedPlan === 'pro') ? initialCredits : 0;
+    const initialTopupCredits = normalizedPlan === 'studio' ? initialCredits : 0;
     const user = {
-        userId: userId,
+        userId: normalizeStoredUserId(userId),
         userName: userName,
         email: email,
-        plan: plan,
+        role: normalizedRole,
+        plan: normalizedPlan,
         planStatus: "active",
         gracePeriodStartDate: null,
-        credits: { current: initialCredits, totalUsage: 0, totalRefilledUSD: 0, tokenUsage: { prompt: 0, completion: 0 }, totalUsedUSD: 0 },
+        trialEndsAt: normalizedPlan === 'free' ? getDefaultFreeTrialEndsAt() : null,
+        accessPassExpiresAt: null,
+        credits: {
+            current: initialCredits,
+            monthly: initialMonthlyCredits,
+            topup: initialTopupCredits,
+            monthlyExpiresAt: normalizedPlan === 'free' ? new Date(getDefaultFreeTrialEndsAt()).toISOString() : null,
+            totalUsage: 0,
+            totalRefilledUSD: 0,
+            tokenUsage: { prompt: 0, completion: 0 },
+            totalUsedUSD: 0
+        },
         subscriptionEndDate: null, // เพิ่ม property นี้
-        logs: [{ timestamp: Date.now(), action: `Account created with ${plan} plan.` }],
+        avatarUrl: '',
+        billingProfile: createEmptyBillingProfile({
+            billingName: userName
+        }),
+        logs: [{ timestamp: Date.now(), action: `Account created with ${normalizedRole === 'admin' ? 'Admin' : normalizedPlan} plan.` }],
         activityLog: [],
         apiSettings: {
             openrouterKey: "",
@@ -125,10 +646,316 @@ function createDefaultUser(userId, userName, email, plan, initialCredits = 0) {
         },
         appSettings: { activeModelPreset: 'my_first_preset' }
     };
-    if (plan !== 'master') {
+    if (normalizedRole !== 'admin') {
         user.modelPresets = { 'my_first_preset': { name: 'My First Preset', modelIds: [] } };
     }
     return user;
+}
+
+function getRoleFromExternalAuthUser(authUser) {
+    const explicitRole = String(authUser?.role || '').trim().toLowerCase();
+    if (explicitRole) return explicitRole;
+
+    const appRole = String(authUser?.app_metadata?.role || '').trim().toLowerCase();
+    if (appRole) return appRole;
+
+    const userRole = String(authUser?.user_metadata?.role || '').trim().toLowerCase();
+    if (userRole) return userRole;
+
+    return 'user';
+}
+
+function getDisplayNameFromExternalAuthUser(authUser) {
+    const explicitName = String(
+        authUser?.display_name
+        || authUser?.full_name
+        || authUser?.name
+        || authUser?.user_metadata?.display_name
+        || authUser?.user_metadata?.full_name
+        || authUser?.user_metadata?.name
+        || ''
+    ).trim();
+    if (explicitName) return explicitName;
+
+    const email = String(authUser?.email || '').trim();
+    if (email) return email.split('@')[0];
+
+    return 'User';
+}
+
+function getShadowUserIdFromExternalAuthUser(authUser) {
+    const authUserId = String(authUser?.id || '').trim();
+    if (!authUserId) return '';
+    return `sb_${authUserId}`;
+}
+
+function getShadowUserIdFromBackendUserId(backendUserId) {
+    const normalizedBackendUserId = String(backendUserId || '').trim();
+    if (!normalizedBackendUserId) return '';
+    return `sb_${normalizedBackendUserId}`;
+}
+
+function removeDuplicateSupabaseShadowUsersForExternalAccount(backendUserId, keepUserId = '') {
+    const normalizedBackendUserId = String(backendUserId || '').trim();
+    if (!normalizedBackendUserId) return false;
+
+    const derivedShadowUserId = getShadowUserIdFromBackendUserId(normalizedBackendUserId);
+    const normalizedKeepUserId = String(keepUserId || '').trim();
+    const nextDatabase = userDatabase.filter((user) => {
+        const userId = String(user?.userId || '').trim();
+        if (userId && userId === normalizedKeepUserId) {
+            return true;
+        }
+
+        const linkedBackendUserId = String(
+            user?.externalAuthUserId
+            || user?.backendAccount?.userId
+            || ''
+        ).trim();
+
+        if (linkedBackendUserId && linkedBackendUserId === normalizedBackendUserId) {
+            return false;
+        }
+
+        if (derivedShadowUserId && userId === derivedShadowUserId && userId !== normalizedKeepUserId) {
+            return false;
+        }
+
+        return true;
+    });
+
+    if (nextDatabase.length === userDatabase.length) {
+        return false;
+    }
+
+    userDatabase = nextDatabase;
+    return true;
+}
+
+function normalizeNumericValue(rawValue, fallback = 0) {
+    const parsedValue = Number(rawValue);
+    return Number.isFinite(parsedValue) ? parsedValue : fallback;
+}
+
+function convertMicrocreditsToUSDValue(microcredits) {
+    const billingInfo = getSystemBillingInfo();
+    const markupRate = Number(billingInfo?.markupRate) || 0;
+    if (!markupRate) return 0;
+    return normalizeNumericValue(microcredits, 0) / (markupRate * 1000000);
+}
+
+function mapBackendStatusToLocalPlanStatus(accountStatus, status) {
+    const normalizedAccountStatus = String(accountStatus || '').trim().toLowerCase();
+    const normalizedStatus = String(status || 'active').trim().toLowerCase();
+    if (normalizedAccountStatus === 'paid_suspended') return 'expired';
+    if (normalizedStatus === 'grace') return 'grace_period';
+    if (normalizedStatus === 'suspended') return 'expired';
+    return 'active';
+}
+
+function mapBackendPlanCodeToLocalPlan(planCode, role = 'user') {
+    return normalizePlanCode(planCode);
+}
+
+function buildBackendAccountMetadata(snapshot) {
+    const authUser = snapshot?.authUser || null;
+    const profileRow = snapshot?.profile || null;
+    const walletRow = snapshot?.wallet || null;
+    const planRow = snapshot?.plan || null;
+    const role = getRoleFromExternalAuthUser(authUser || profileRow);
+    const planCode = String(profileRow?.plan_code || 'free').trim().toLowerCase() || 'free';
+    const trialEndsAt = profileRow?.trial_expires_at
+        || (planCode === 'free' && profileRow?.created_at
+            ? new Date(new Date(profileRow.created_at).getTime() + (FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000)).toISOString()
+            : null);
+    let accountStatus = String(profileRow?.account_status || '').trim().toLowerCase() || (planCode === 'pro' ? 'pro_active' : (planCode === 'studio' ? 'studio_active' : 'free'));
+    if (
+        accountStatus === 'studio_active'
+        && profileRow?.access_pass_expires_at
+        && Number.isFinite(new Date(profileRow.access_pass_expires_at).getTime())
+        && new Date(profileRow.access_pass_expires_at).getTime() <= Date.now()
+    ) {
+        accountStatus = 'paid_suspended';
+    }
+
+    return {
+        provider: 'supabase',
+        userId: String(authUser?.id || profileRow?.id || '').trim(),
+        role,
+        status: String(profileRow?.status || 'active').trim().toLowerCase() || 'active',
+        accountStatus,
+        planCode,
+        planName: role === 'admin' ? 'Admin' : String(planRow?.name || planCode || 'Free'),
+        trialEndsAt,
+        accessPassExpiresAt: profileRow?.access_pass_expires_at || null,
+        balanceMicrocredits: normalizeNumericValue(walletRow?.balance_microcredits, 0),
+        monthlyCreditBalanceMicrocredits: normalizeNumericValue(walletRow?.monthly_credit_balance_microcredits, 0),
+        topupCreditBalanceMicrocredits: normalizeNumericValue(walletRow?.topup_credit_balance_microcredits, 0),
+        monthlyCreditExpiresAt: walletRow?.monthly_credit_expires_at || null,
+        profileUpdatedAt: profileRow?.updated_at || null,
+        walletUpdatedAt: walletRow?.updated_at || null,
+        syncedAt: new Date().toISOString()
+    };
+}
+
+function assignIfChanged(target, key, nextValue) {
+    const currentValue = target?.[key];
+    if (JSON.stringify(currentValue) === JSON.stringify(nextValue)) {
+        return false;
+    }
+    target[key] = nextValue;
+    return true;
+}
+
+function syncSupabaseSnapshotIntoLocalUser(localUserId, snapshot) {
+    const localUser = userDatabase.find(user => user?.userId === localUserId) || null;
+    if (!localUser) return null;
+
+    const previousPlanCode = String(localUser.backendAccount?.planCode || localUser.plan || 'free').trim().toLowerCase() || 'free';
+    const authUser = snapshot?.authUser || null;
+    const profileRow = snapshot?.profile || null;
+    const walletRow = snapshot?.wallet || null;
+    const planRow = snapshot?.plan || null;
+    const role = getRoleFromExternalAuthUser(authUser || profileRow);
+    const nextBackendMetadata = buildBackendAccountMetadata({ authUser, profile: profileRow, wallet: walletRow, plan: planRow });
+    const existingCredits = (localUser.credits && typeof localUser.credits === 'object') ? localUser.credits : {};
+    const existingBillingProfile = getNormalizedStoredBillingProfile(localUser);
+    const nextDisplayName = String(
+        profileRow?.display_name
+        || getDisplayNameFromExternalAuthUser(authUser)
+        || localUser.userName
+        || 'User'
+    ).trim();
+    const nextEmail = String(
+        profileRow?.email
+        || authUser?.email
+        || localUser.email
+        || ''
+    ).trim();
+    const nextAvatarUrl = String(
+        profileRow?.avatar_url
+        || authUser?.user_metadata?.avatar_url
+        || existingBillingProfile.avatarUrl
+        || ''
+    ).trim();
+    const nextBillingProfile = createEmptyBillingProfile({
+        avatarUrl: nextAvatarUrl,
+        billingName: String(profileRow?.billing_name || existingBillingProfile.billingName || nextDisplayName || '').trim(),
+        billingCompany: String(profileRow?.billing_company || existingBillingProfile.billingCompany || '').trim(),
+        billingPhone: String(profileRow?.billing_phone || existingBillingProfile.billingPhone || '').trim(),
+        billingAddressLine1: String(profileRow?.billing_address_line1 || existingBillingProfile.billingAddressLine1 || '').trim(),
+        billingAddressLine2: String(profileRow?.billing_address_line2 || existingBillingProfile.billingAddressLine2 || '').trim(),
+        billingCity: String(profileRow?.billing_city || existingBillingProfile.billingCity || '').trim(),
+        billingState: String(profileRow?.billing_state || existingBillingProfile.billingState || '').trim(),
+        billingPostalCode: String(profileRow?.billing_postal_code || existingBillingProfile.billingPostalCode || '').trim(),
+        billingCountry: String(profileRow?.billing_country || existingBillingProfile.billingCountry || '').trim()
+    });
+    const nextCredits = {
+        current: normalizeNumericValue(walletRow?.balance_microcredits, normalizeNumericValue(existingCredits.current, 0)),
+        totalUsage: normalizeNumericValue(walletRow?.lifetime_consumed_microcredits, normalizeNumericValue(existingCredits.totalUsage, 0)),
+        totalRefilledUSD: convertMicrocreditsToUSDValue(walletRow?.lifetime_purchased_microcredits),
+        monthly: normalizeNumericValue(walletRow?.monthly_credit_balance_microcredits, normalizeNumericValue(existingCredits.monthly, 0)),
+        topup: normalizeNumericValue(walletRow?.topup_credit_balance_microcredits, normalizeNumericValue(existingCredits.topup, 0)),
+        monthlyExpiresAt: walletRow?.monthly_credit_expires_at || existingCredits.monthlyExpiresAt || null,
+        tokenUsage: (existingCredits.tokenUsage && typeof existingCredits.tokenUsage === 'object')
+            ? existingCredits.tokenUsage
+            : { prompt: 0, completion: 0 },
+        totalUsedUSD: convertMicrocreditsToUSDValue(walletRow?.lifetime_consumed_microcredits)
+    };
+
+    let changed = false;
+    changed = assignIfChanged(localUser, 'authSource', 'supabase') || changed;
+    changed = assignIfChanged(localUser, 'externalAuthUserId', String(authUser?.id || '').trim()) || changed;
+    changed = assignIfChanged(localUser, 'userName', nextDisplayName) || changed;
+    changed = assignIfChanged(localUser, 'email', nextEmail) || changed;
+    changed = assignIfChanged(localUser, 'avatarUrl', nextAvatarUrl) || changed;
+    changed = assignIfChanged(localUser, 'billingProfile', nextBillingProfile) || changed;
+    changed = assignIfChanged(localUser, 'plan', mapBackendPlanCodeToLocalPlan(profileRow?.plan_code, role)) || changed;
+    changed = assignIfChanged(localUser, 'planStatus', role === 'admin' ? 'active' : mapBackendStatusToLocalPlanStatus(profileRow?.account_status, profileRow?.status)) || changed;
+    changed = assignIfChanged(
+        localUser,
+        'trialEndsAt',
+        normalizePlanCode(profileRow?.plan_code || 'free') === 'free'
+            ? nextBackendMetadata.trialEndsAt
+            : null
+    ) || changed;
+    changed = assignIfChanged(localUser, 'accessPassExpiresAt', nextBackendMetadata.accessPassExpiresAt) || changed;
+    changed = assignIfChanged(localUser, 'subscriptionEndDate', nextBackendMetadata.accessPassExpiresAt || localUser.subscriptionEndDate || null) || changed;
+    changed = assignIfChanged(localUser, 'credits', nextCredits) || changed;
+    changed = assignIfChanged(localUser, 'backendAccount', nextBackendMetadata) || changed;
+
+    if (ensureUserApiSettingsShape(localUser)) {
+        changed = true;
+    }
+    if (ensureBillingProfileShape(localUser)) {
+        changed = true;
+    }
+
+    if (changed) {
+        saveUserDatabase({ publish: false });
+    }
+
+    const nextPlanCode = String(localUser.backendAccount?.planCode || localUser.plan || 'free').trim().toLowerCase() || 'free';
+    const planChanged = normalizePlanTier(previousPlanCode) !== normalizePlanTier(nextPlanCode);
+    if (localUser.userId === activeUserId) {
+        applyPlanModelAccessTransition(localUser, {
+            previousPlanCode,
+            preferTierPromotion: planChanged && normalizePlanTier(nextPlanCode) === 'pro'
+        });
+    }
+
+    return localUser;
+}
+
+function ensureLocalUserForBackendSnapshot(snapshot) {
+    const authUser = snapshot?.authUser || null;
+    const profileRow = snapshot?.profile || null;
+    const walletRow = snapshot?.wallet || null;
+    const backendUserId = String(authUser?.id || profileRow?.id || '').trim();
+    const role = getRoleFromExternalAuthUser(authUser || profileRow);
+
+    if (!backendUserId) return '';
+
+    if (role === 'admin') {
+        ensureAdminUserExists();
+        removeDuplicateSupabaseShadowUsersForExternalAccount(backendUserId, ADMIN_USER_ID);
+        return ADMIN_USER_ID;
+    }
+
+    const existingUser = userDatabase.find(user => (
+        String(user?.externalAuthUserId || user?.backendAccount?.userId || '').trim() === backendUserId
+        || user?.userId === getShadowUserIdFromBackendUserId(backendUserId)
+    ));
+    if (existingUser?.userId) {
+        return existingUser.userId;
+    }
+
+    const displayName = String(
+        profileRow?.display_name
+        || getDisplayNameFromExternalAuthUser(authUser)
+        || profileRow?.email
+        || authUser?.email
+        || 'User'
+    ).trim();
+    const email = String(profileRow?.email || authUser?.email || '').trim() || 'unknown@example.com';
+    const localUserId = getShadowUserIdFromBackendUserId(backendUserId);
+    if (!localUserId) return '';
+
+    const localUser = createDefaultUser(
+        localUserId,
+        displayName,
+        email,
+        mapBackendPlanCodeToLocalPlan(profileRow?.plan_code, role),
+        normalizeNumericValue(walletRow?.balance_microcredits, 0)
+    );
+    localUser.authSource = 'supabase';
+    localUser.externalAuthUserId = backendUserId;
+    localUser.logs.push({
+        timestamp: Date.now(),
+        action: 'Shadow profile synced from Supabase admin directory.'
+    });
+    userDatabase.push(localUser);
+    return localUserId;
 }
 
 
@@ -244,8 +1071,43 @@ function migrateUserObject(user) {
         return { user, needsSave };
     }
 
+    if (user.userId === LEGACY_ADMIN_USER_ID) {
+        user.userId = ADMIN_USER_ID;
+        needsSave = true;
+    }
+
+    if (!user.role) {
+        user.role = user.userId === ADMIN_USER_ID ? 'admin' : 'user';
+        needsSave = true;
+    }
+
+    const normalizedPlan = normalizePlanCode(user.plan || 'free');
+    if (user.plan !== normalizedPlan) {
+        user.plan = normalizedPlan;
+        needsSave = true;
+    }
+
+    if (user.role === 'admin' && user.plan !== 'studio') {
+        user.plan = 'studio';
+        needsSave = true;
+    }
+
     if (!user.credits || typeof user.credits !== 'object') {
         user.credits = { current: 0, totalUsage: 0, totalRefilledUSD: 0, tokenUsage: { prompt: 0, completion: 0 }, totalUsedUSD: 0 };
+        needsSave = true;
+    }
+    if (!Number.isFinite(Number(user.credits.monthly))) {
+        user.credits.monthly = ['free', 'pro'].includes(user.plan) ? Number(user.credits.current || 0) : 0;
+        needsSave = true;
+    }
+    if (!Number.isFinite(Number(user.credits.topup))) {
+        user.credits.topup = user.plan === 'studio' ? Number(user.credits.current || 0) : 0;
+        needsSave = true;
+    }
+    if (!Object.prototype.hasOwnProperty.call(user.credits, 'monthlyExpiresAt')) {
+        user.credits.monthlyExpiresAt = user.plan === 'free' && user.trialEndsAt
+            ? new Date(user.trialEndsAt).toISOString()
+            : null;
         needsSave = true;
     }
     if (!user.credits.tokenUsage || typeof user.credits.tokenUsage !== 'object') {
@@ -256,6 +1118,9 @@ function migrateUserObject(user) {
         user.activityLog = [];
         needsSave = true;
     }
+    if (ensureBillingProfileShape(user)) {
+        needsSave = true;
+    }
 
     // Backward compatibility for legacy saved profiles.
     if ((!user.apiSettings || typeof user.apiSettings !== 'object') && (user.apiKey || user.openrouterKey || user.ollamaBaseUrl || user.kieAiApiKey)) {
@@ -264,6 +1129,24 @@ function migrateUserObject(user) {
     }
 
     if (ensureUserApiSettingsShape(user)) {
+        needsSave = true;
+    }
+
+    if (user.plan === 'free') {
+        if (!user.trialEndsAt) {
+            const firstLogTimestamp = Number(user.logs?.[0]?.timestamp);
+            user.trialEndsAt = getDefaultFreeTrialEndsAt(
+                Number.isFinite(firstLogTimestamp) ? firstLogTimestamp : Date.now()
+            );
+            needsSave = true;
+        }
+    } else if (user.trialEndsAt) {
+        user.trialEndsAt = null;
+        needsSave = true;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(user, 'accessPassExpiresAt')) {
+        user.accessPassExpiresAt = null;
         needsSave = true;
     }
 
@@ -279,24 +1162,44 @@ function migrateUserObject(user) {
 }
 
 function bootstrapDefaultUsers() {
-    userDatabase = [
-        createDefaultUser('user_pro', 'Kaiwan (Pro)', 'kai@example.com', 'pro', 1000000),
-        createDefaultUser('user_free', 'Demo User (Free)', 'demo@example.com', 'free', 50000),
-        createDefaultUser(ADMIN_USER_ID, 'Admin (Master)', 'admin@example.com', 'master', 0)
-    ];
+    userDatabase = AuthService.isSupabaseEnabled()
+        ? [
+            createDefaultUser(ADMIN_USER_ID, 'Admin', 'admin@example.com', 'studio', 0, { role: 'admin' })
+        ]
+        : [
+            createDefaultUser('user_pro', 'Kaiwan (Pro)', 'kai@example.com', 'pro', PRO_INCLUDED_MICROCREDITS),
+            createDefaultUser('user_free', 'Demo User (Free)', 'demo@example.com', 'free', FREE_TRIAL_MICROCREDITS),
+            createDefaultUser(ADMIN_USER_ID, 'Admin', 'admin@example.com', 'studio', 0, { role: 'admin' })
+        ];
     localStorage.setItem(USER_DB_KEY, JSON.stringify(userDatabase));
+}
+
+function pruneDefaultDemoUsersForSupabase() {
+    if (!AuthService.isSupabaseEnabled()) return false;
+
+    const nextDatabase = userDatabase.filter(user => !['user_pro', 'user_free'].includes(user?.userId));
+    if (nextDatabase.length === userDatabase.length) {
+        return false;
+    }
+
+    userDatabase = nextDatabase;
+    return true;
 }
 
 function ensureAdminUserExists() {
     const adminUser = userDatabase.find(user => user?.userId === ADMIN_USER_ID);
     if (!adminUser) {
-        userDatabase.push(createDefaultUser(ADMIN_USER_ID, 'Admin (Master)', 'admin@example.com', 'master', 0));
+        userDatabase.push(createDefaultUser(ADMIN_USER_ID, 'Admin', 'admin@example.com', 'studio', 0, { role: 'admin' }));
         return true;
     }
 
     let changed = false;
-    if (adminUser.plan !== 'master') {
-        adminUser.plan = 'master';
+    if (adminUser.role !== 'admin') {
+        adminUser.role = 'admin';
+        changed = true;
+    }
+    if (adminUser.plan !== 'studio') {
+        adminUser.plan = 'studio';
         changed = true;
     }
     if (adminUser.planStatus !== 'active') {
@@ -304,7 +1207,7 @@ function ensureAdminUserExists() {
         changed = true;
     }
     if (!adminUser.userName) {
-        adminUser.userName = 'Admin (Master)';
+        adminUser.userName = 'Admin';
         changed = true;
     }
     if (!adminUser.email) {
@@ -344,6 +1247,9 @@ function loadUserDatabase() {
         if (ensureAdminUserExists()) {
             needsSave = true;
         }
+        if (pruneDefaultDemoUsersForSupabase()) {
+            needsSave = true;
+        }
 
         if (needsSave) {
             localStorage.setItem(USER_DB_KEY, JSON.stringify(userDatabase));
@@ -354,9 +1260,25 @@ function loadUserDatabase() {
     }
 }
 
-function saveUserDatabase() {
-    localStorage.setItem(USER_DB_KEY, JSON.stringify(userDatabase));
-    stateManager.bus.publish('user:settingsUpdated', getCurrentUserProfile());
+function saveUserDatabase(options = {}) {
+    let databaseToPersist = userDatabase;
+
+    if (AuthService.isSupabaseEnabled() && options.mergeStoredDb !== false) {
+        try {
+            const storedDb = localStorage.getItem(USER_DB_KEY);
+            if (storedDb) {
+                databaseToPersist = mergeUserCollections(JSON.parse(storedDb), userDatabase);
+                userDatabase = databaseToPersist;
+            }
+        } catch (error) {
+            console.error('Failed to merge the Supabase shadow user database before saving.', error);
+        }
+    }
+
+    localStorage.setItem(USER_DB_KEY, JSON.stringify(databaseToPersist));
+    if (options.publish !== false) {
+        stateManager.bus.publish('user:settingsUpdated', getCurrentUserProfile());
+    }
 }
 
 
@@ -442,8 +1364,181 @@ export function getCurrentUserProfile() {
     return profile;
 }
 
+export function isBackendManagedProfile(profile = null) {
+    const target = profile || getCurrentUserProfile();
+    return String(target?.authSource || '').trim().toLowerCase() === 'supabase';
+}
+
+export function syncShadowUserFromExternalAuth(authUser, options = {}) {
+    if (!authUser || typeof authUser !== 'object') return null;
+
+    if (userDatabase.length === 0) {
+        loadUserDatabase();
+    }
+
+    const role = getRoleFromExternalAuthUser(authUser);
+    const displayName = getDisplayNameFromExternalAuthUser(authUser);
+    const email = String(authUser.email || '').trim() || 'unknown@example.com';
+    const shouldPublish = options.publish !== false;
+    const initialCredits = Number.isFinite(Number(options.defaultCredits))
+        ? Number(options.defaultCredits)
+        : FREE_TRIAL_MICROCREDITS;
+
+    if (role === 'admin') {
+        ensureAdminUserExists();
+        const adminUser = userDatabase.find(user => user?.userId === ADMIN_USER_ID);
+        if (!adminUser) return null;
+
+        let changed = false;
+        changed = removeDuplicateSupabaseShadowUsersForExternalAccount(String(authUser?.id || '').trim(), ADMIN_USER_ID) || changed;
+        changed = assignIfChanged(adminUser, 'authSource', 'supabase') || changed;
+        changed = assignIfChanged(adminUser, 'externalAuthUserId', String(authUser?.id || '').trim()) || changed;
+        if (displayName && adminUser.userName !== displayName) {
+            adminUser.userName = displayName;
+            changed = true;
+        }
+        if (email && adminUser.email !== email) {
+            adminUser.email = email;
+            changed = true;
+        }
+        if (changed) {
+            saveUserDatabase({ publish: shouldPublish });
+        }
+        return ADMIN_USER_ID;
+    }
+
+    const shadowUserId = getShadowUserIdFromExternalAuthUser(authUser);
+    if (!shadowUserId) return null;
+
+    let shadowUser = userDatabase.find(user => user?.userId === shadowUserId) || null;
+    if (!shadowUser) {
+        shadowUser = createDefaultUser(shadowUserId, displayName, email, 'free', initialCredits);
+        shadowUser.logs.push({
+            timestamp: Date.now(),
+            action: 'Shadow profile bootstrapped from Supabase auth session.'
+        });
+        userDatabase.push(shadowUser);
+        saveUserDatabase({ publish: shouldPublish });
+        return shadowUserId;
+    }
+
+    let changed = false;
+    if (displayName && shadowUser.userName !== displayName) {
+        shadowUser.userName = displayName;
+        changed = true;
+    }
+    if (email && shadowUser.email !== email) {
+        shadowUser.email = email;
+        changed = true;
+    }
+
+    if (changed) {
+        saveUserDatabase({ publish: shouldPublish });
+    }
+
+    return shadowUserId;
+}
+
+export async function refreshCurrentUserFromBackend(authUser = null, options = {}) {
+    if (!AuthService.isSupabaseEnabled()) {
+        return getCurrentUserProfile();
+    }
+
+    let currentAuthUser = authUser;
+    if (!currentAuthUser) {
+        const { data, error } = await AuthService.getCurrentUser();
+        if (error) {
+            console.error('Failed to resolve the current Supabase user.', error);
+            return getCurrentUserProfile();
+        }
+        currentAuthUser = data.user;
+    }
+
+    if (!currentAuthUser) {
+        return getCurrentUserProfile();
+    }
+
+    const localUserId = options.localUserId || syncShadowUserFromExternalAuth(currentAuthUser, { publish: false });
+    if (!localUserId) {
+        return getCurrentUserProfile();
+    }
+
+    const { data, error } = await getCurrentAccountSnapshot(currentAuthUser);
+    if (error) {
+        console.error('Failed to load the Supabase account snapshot.', error);
+        return getCurrentUserProfile();
+    }
+
+    if (!data) {
+        return getCurrentUserProfile();
+    }
+
+    const syncedProfile = syncSupabaseSnapshotIntoLocalUser(localUserId, data) || getCurrentUserProfile();
+    if (options.publish !== false && syncedProfile) {
+        stateManager.bus.publish('user:settingsLoaded', syncedProfile);
+        stateManager.bus.publish('user:settingsUpdated', syncedProfile);
+    }
+
+    return syncedProfile;
+}
+
+export function syncBackendUserDirectoryFromSnapshots(snapshots, options = {}) {
+    if (userDatabase.length === 0) {
+        loadUserDatabase();
+    }
+
+    const syncedLocalUserIds = [];
+
+    (Array.isArray(snapshots) ? snapshots : []).forEach((snapshot) => {
+        const localUserId = ensureLocalUserForBackendSnapshot(snapshot);
+        if (!localUserId) return;
+
+        const syncedProfile = syncSupabaseSnapshotIntoLocalUser(localUserId, snapshot);
+        if (syncedProfile?.userId) {
+            syncedLocalUserIds.push(syncedProfile.userId);
+        }
+    });
+
+    if (options.publish !== false) {
+        stateManager.bus.publish('user:settingsUpdated', getCurrentUserProfile());
+    }
+
+    return Array.from(new Set(syncedLocalUserIds));
+}
+
+export async function activateExternalAuthUser(authUser) {
+    if (!authUser || typeof authUser !== 'object') return null;
+    if (userDatabase.length === 0) {
+        loadUserDatabase();
+    }
+
+    const localUserId = syncShadowUserFromExternalAuth(authUser, { publish: false });
+    if (!localUserId) return null;
+
+    activeUserId = localUserId;
+    try {
+        localStorage.setItem(ACTIVE_USER_STORAGE_KEY, localUserId);
+        localStorage.setItem(PENDING_ACTIVE_USER_STORAGE_KEY, localUserId);
+    } catch (error) {
+        console.error('Failed to persist external auth user selection:', error);
+    }
+
+    const syncedProfile = await refreshCurrentUserFromBackend(authUser, {
+        localUserId,
+        publish: false
+    });
+    const currentProfile = syncedProfile || getCurrentUserProfile();
+
+    if (currentProfile) {
+        stateManager.bus.publish('user:settingsLoaded', currentProfile);
+        stateManager.bus.publish('user:settingsUpdated', currentProfile);
+    }
+
+    return currentProfile;
+}
+
 export async function initUserSettings() {
-    await loadMasterPresets();
+    await loadPlanPresets();
     loadUserDatabase();
     
     const pendingUserId = normalizeStoredUserId(localStorage.getItem(PENDING_ACTIVE_USER_STORAGE_KEY));
@@ -501,7 +1596,7 @@ export function convertCreditsToUSD(credits) {
 
 export function burnCreditsForUsage(usage, modelId, costUSDFromHeader = 0) {
     const user = getCurrentUserProfile();
-    if (!user || user.plan === 'master') return;
+    if (!user || usesPersonalApiKeys(user)) return;
 
     const billingInfo = getSystemBillingInfo();
     const markupRate = billingInfo.markupRate || 1.0;
@@ -525,10 +1620,14 @@ export function burnCreditsForUsage(usage, modelId, costUSDFromHeader = 0) {
 
     // หักเครดิตตาม Cost จริง x Markup Rate
     const creditsToBurn = actualCostUSD * markupRate * 1000000;
+    const currentBuckets = getCreditBucketSummary(user);
+    const monthlyCharge = Math.min(currentBuckets.monthlyMicrocredits, creditsToBurn);
+    const topupCharge = Math.min(currentBuckets.topupMicrocredits, Math.max(creditsToBurn - monthlyCharge, 0));
 
-    user.credits.current -= creditsToBurn;
-    user.credits.totalUsage += creditsToBurn;
-    if (user.credits.current < 0) user.credits.current = 0;
+    user.credits.monthly = Math.max(currentBuckets.monthlyMicrocredits - monthlyCharge, 0);
+    user.credits.topup = Math.max(currentBuckets.topupMicrocredits - topupCharge, 0);
+    user.credits.current = user.credits.monthly + user.credits.topup;
+    user.credits.totalUsage += (monthlyCharge + topupCharge);
 
     // บันทึกการใช้จ่ายเป็น USD จริง
     if (!user.credits.totalUsedUSD) user.credits.totalUsedUSD = 0;
@@ -543,7 +1642,7 @@ export function burnCreditsForUsage(usage, modelId, costUSDFromHeader = 0) {
     user.logs.push({
         timestamp: Date.now(),
         event: 'Usage',
-        details: `API Usage on model: ${modelId}`,
+        details: `API Usage on model: ${modelId} (monthly: ${monthlyCharge}, top-up: ${topupCharge})`,
         amountUSD: -actualCostUSD,
         balanceAfterUSD: balanceAfterUSD
     });
@@ -589,7 +1688,7 @@ function resolveProviderEnabledForCurrentUser(provider) {
     const profileSettings = getNormalizedApiSettings(profile);
     const adminSettings = getNormalizedApiSettings(adminUser);
 
-    if (isMasterProfile(profile)) {
+    if (usesPersonalApiKeys(profile)) {
         return profileSettings.providerEnabled[provider];
     }
     return adminSettings.providerEnabled[provider];
@@ -618,7 +1717,7 @@ export function getKieAiApiKey() {
     const profileSettings = getNormalizedApiSettings(profile);
     const adminSettings = getNormalizedApiSettings(adminUser);
 
-    if (isMasterProfile(profile)) {
+    if (usesPersonalApiKeys(profile)) {
         return profileSettings.kieAiApiKey;
     }
     // Fallback to own profile key if admin key is not configured.
@@ -634,7 +1733,7 @@ export function getApiKey() {
     const profileSettings = getNormalizedApiSettings(profile);
     const adminSettings = getNormalizedApiSettings(adminUser);
 
-    if (isMasterProfile(profile)) {
+    if (usesPersonalApiKeys(profile)) {
         return profileSettings.openrouterKey;
     }
 
@@ -650,7 +1749,7 @@ export function getOllamaUrl() {
     const profileSettings = getNormalizedApiSettings(profile);
     const adminSettings = getNormalizedApiSettings(adminUser);
 
-    if (isMasterProfile(profile)) {
+    if (usesPersonalApiKeys(profile)) {
         return profileSettings.ollamaBaseUrl;
     }
     return adminSettings.ollamaBaseUrl || profileSettings.ollamaBaseUrl || '';
@@ -713,30 +1812,30 @@ export function updateApiSettings({ openrouterKey, ollamaBaseUrl, kieAiApiKey, p
     saveFullUserProfile(profile);
 }
 
-export function getMasterModelPresets() {
-    return masterPresets;
+export function getPlanModelPresets() {
+    return planPresets;
 }
 
 
-export function saveMasterModelPresets(presets) {
-    masterPresets = presets;
-    localStorage.setItem(MASTER_PRESETS_DB_KEY, JSON.stringify(masterPresets));
+export function savePlanModelPresets(presets) {
+    planPresets = presets;
+    localStorage.setItem(PLAN_PRESETS_DB_KEY, JSON.stringify(planPresets));
 }
 
 // Add this new async function to load the default presets
-async function loadDefaultMasterPresets() {
+async function loadDefaultPlanPresets() {
     try {
-        const filePath = `${import.meta.env.BASE_URL}master-presets.json`;
+        const filePath = `${import.meta.env.BASE_URL}studio-presets.json`;
         console.log(`Attempting to fetch presets from: ${filePath}`);
         const response = await fetch(filePath);
         if (!response.ok) {
-            throw new Error(`Could not fetch master-presets.json (status: ${response.status})`);
+            throw new Error(`Could not fetch studio-presets.json (status: ${response.status})`);
         }
         const defaultPresets = await response.json();
-        console.log("Loaded master presets from /public/master-presets.json", defaultPresets);
+        console.log("Loaded plan presets from /public/studio-presets.json", defaultPresets);
         return defaultPresets;
     } catch (error) {
-        console.error("Failed to load default master presets:", error);
+        console.error("Failed to load default plan presets:", error);
         return null;
     }
 }
@@ -744,7 +1843,7 @@ async function loadDefaultMasterPresets() {
 
 export function getUserModelPresets() {
     const profile = getCurrentUserProfile();
-    // Return personal presets, or an empty object if it's the master user (who doesn't have them)
+    // Return personal presets, or an empty object for the admin profile (who doesn't have them)
     return profile?.modelPresets || {};
 }
 
@@ -781,52 +1880,53 @@ export function logSystemApiCost(costInUSD) {
     localStorage.setItem(BILLING_DB_KEY, JSON.stringify(currentInfo));
 }
 
-export function refillCredits(userId, amountUSD) {
-    // 1. Get a safe, deep copy of the user.
+export function refillCredits(userId, amountUSD, options = {}) {
     const userToUpdate = getUserById(userId);
-    if (!userToUpdate) return;
-    
-    // [NEW LOGIC] เพิ่มส่วนนี้เข้าไป
-    // ตรวจสอบถ้าเป็น Free plan ให้ทำการอัปเกรด
-    if (userToUpdate.plan === 'free') {
-        userToUpdate.plan = 'pro';
-        userToUpdate.planStatus = 'active'; // ตั้งสถานะเป็น active ทันที
-        userToUpdate.logs.push({
-            timestamp: Date.now(),
-            action: `Upgraded to Pro plan via first refill of $${amountUSD.toFixed(2)}.`
-        });
-        console.log(`User ${userId} automatically upgraded to Pro.`);
+    if (!userToUpdate) return false;
+
+    const normalizedAmountUSD = Number(amountUSD);
+    if (!Number.isFinite(normalizedAmountUSD) || normalizedAmountUSD <= 0) {
+        return false;
     }
-    // สิ้นสุดส่วนที่เพิ่มใหม่
+
+    const bypassPolicy = options?.bypassPolicy === true;
+    if (!bypassPolicy && !canPurchaseTopupCredits(userToUpdate)) {
+        console.warn(`Attempted to purchase Top-up Credits without Pro access for user ${userId}.`);
+        return false;
+    }
+
+    const previousPlanCode = String(userToUpdate.backendAccount?.planCode || userToUpdate.plan || 'free').trim().toLowerCase() || 'free';
     const billingInfo = getSystemBillingInfo();
-    const creditsToAdd = amountUSD * billingInfo.markupRate * 1000000;
+    const markupRate = Number(billingInfo?.markupRate) || 1;
+    const creditsToAdd = normalizedAmountUSD * markupRate * 1000000;
 
-    // 2. Modify the copy.
-    userToUpdate.credits.current += creditsToAdd;
-    userToUpdate.credits.totalRefilledUSD += amountUSD;
-
-    // [FIX] เปลี่ยนจากการบันทึก Log แบบ String เป็นแบบ Object
+    userToUpdate.credits.topup = normalizeNumericValue(userToUpdate.credits.topup, 0) + creditsToAdd;
+    userToUpdate.credits.current = normalizeNumericValue(userToUpdate.credits.monthly, 0) + userToUpdate.credits.topup;
+    userToUpdate.credits.totalRefilledUSD = normalizeNumericValue(userToUpdate.credits.totalRefilledUSD, 0) + normalizedAmountUSD;
     const balanceAfterUSD = convertCreditsToUSD(userToUpdate.credits.current);
     userToUpdate.logs.push({
         timestamp: Date.now(),
         event: 'Refill',
-        details: `Credit Refill`,
-        amountUSD: amountUSD,
+        details: bypassPolicy ? 'Admin/Test Credit Refill' : 'Top-up Credit Purchase',
+        amountUSD: normalizedAmountUSD,
         balanceAfterUSD: balanceAfterUSD
     });
 
-        if (userToUpdate.plan === 'master') {
-        console.warn(`Attempted to refill credits for a Master plan user (${userId}). Operation blocked.`);
-        return; // ออกจากฟังก์ชันทันที
-    }
-
-    if (userToUpdate.plan === 'pro' && userToUpdate.planStatus !== 'active') {
+    if (!bypassPolicy && userToUpdate.plan === 'pro' && userToUpdate.planStatus !== 'active') {
         userToUpdate.planStatus = 'active';
         userToUpdate.logs.push({ timestamp: Date.now(), action: 'Account status reactivated.' });
     }
 
-    // 3. Save the modified copy back to the database.
+    if (userToUpdate.userId === activeUserId) {
+        applyPlanModelAccessTransition(userToUpdate, {
+            previousPlanCode,
+            preferTierPromotion: normalizePlanTier(previousPlanCode) !== normalizePlanTier(userToUpdate.plan)
+                && normalizePlanTier(userToUpdate.plan) === 'pro'
+        });
+    }
+
     saveFullUserProfile(userToUpdate);
+    return true;
 }
 
 
@@ -869,17 +1969,96 @@ function saveUserUpdates(userId) {
 }
 
 export function saveFullUserProfile(updatedUser) {
+    if (updatedUser && typeof updatedUser === 'object') {
+        updatedUser.userId = normalizeStoredUserId(updatedUser.userId);
+        updatedUser.plan = normalizePlanCode(updatedUser.plan || 'free');
+        updatedUser.role = String(updatedUser.role || (updatedUser.userId === ADMIN_USER_ID ? 'admin' : 'user')).trim().toLowerCase() === 'admin'
+            ? 'admin'
+            : 'user';
+        ensureBillingProfileShape(updatedUser);
+        ensureUserApiSettingsShape(updatedUser);
+    }
     const userIndex = userDatabase.findIndex(u => u.userId === updatedUser.userId);
     if (userIndex !== -1) {
         // Replace the old object with the new one.
         userDatabase[userIndex] = updatedUser;
-        saveUserDatabase();
+    } else {
+        userDatabase.push(updatedUser);
     }
+    saveUserDatabase();
 }
 
-export function extendMasterSubscription(userId) {
+export function deleteUserProfile(userId, options = {}) {
+    if (userDatabase.length === 0) {
+        loadUserDatabase();
+    }
+
+    const normalizedUserId = normalizeStoredUserId(userId);
+    if (!normalizedUserId) return false;
+
+    const targetUser = userDatabase.find(user => user?.userId === normalizedUserId) || null;
+    if (!targetUser) return false;
+
+    if (isAdminProfile(targetUser)) {
+        console.warn('Blocked deletion of admin profile.');
+        return false;
+    }
+
+    const linkedBackendUserId = String(
+        targetUser.externalAuthUserId
+        || targetUser.backendAccount?.userId
+        || ''
+    ).trim();
+
+    userDatabase = userDatabase.filter((user) => {
+        const candidateUserId = String(user?.userId || '').trim();
+        if (!candidateUserId) return false;
+        if (candidateUserId === normalizedUserId) return false;
+
+        if (options.removeLinkedBackendShadows !== false && linkedBackendUserId) {
+            const candidateBackendUserId = String(
+                user?.externalAuthUserId
+                || user?.backendAccount?.userId
+                || ''
+            ).trim();
+            if (candidateBackendUserId && candidateBackendUserId === linkedBackendUserId) {
+                return false;
+            }
+
+            if (candidateUserId === `sb_${linkedBackendUserId}`) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    if (!userDatabase.some(user => user?.userId === activeUserId)) {
+        const fallbackUser = userDatabase.find(user => isAdminProfile(user)) || userDatabase[0] || null;
+        activeUserId = fallbackUser?.userId || null;
+        try {
+            if (activeUserId) {
+                localStorage.setItem(ACTIVE_USER_STORAGE_KEY, activeUserId);
+                localStorage.setItem(PENDING_ACTIVE_USER_STORAGE_KEY, activeUserId);
+            } else {
+                localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+                localStorage.removeItem(PENDING_ACTIVE_USER_STORAGE_KEY);
+            }
+        } catch (error) {
+            console.error('Failed to persist fallback active user after deletion:', error);
+        }
+    }
+
+    saveUserDatabase({
+        publish: options.publish !== false,
+        mergeStoredDb: false
+    });
+    return true;
+}
+
+export function extendStudioSubscription(userId) {
     const user = getUserById(userId);
-    if (!user || user.plan !== 'master') return;
+    if (!user || user.plan !== 'studio') return;
 
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
     const now = Date.now();
@@ -918,8 +2097,7 @@ export function addNewUser(userName, email) {
         return null;
     }
     const newId = generateUniqueId();
-    // [FIX] New users start as 'free' with 50,000 credits
-    const newUser = createDefaultUser(newId, userName, email, 'free', 50000); 
+    const newUser = createDefaultUser(newId, userName, email, 'free', FREE_TRIAL_MICROCREDITS); 
     userDatabase.push(newUser);
     saveUserDatabase();
     return newUser;
@@ -928,40 +2106,49 @@ export function addNewUser(userName, email) {
 /**
  * Changes a user's plan and resets their status to active.
  * @param {string} userId The ID of the user.
- * @param {string} newPlan The new plan ('free', 'pro', 'master').
+ * @param {string} newPlan The new plan ('free', 'pro', 'studio').
  */
 export function changeUserPlan(userId, newPlan) {
     const user = getUserById(userId);
     if (!user) return;
-    if (user.userId === ADMIN_USER_ID && newPlan !== 'master') {
-        console.warn('Blocked plan change for master profile.');
+    if (isAdminProfile(user) && normalizePlanCode(newPlan) !== 'studio') {
+        console.warn('Blocked plan change for admin profile.');
         return;
     }
 
     const oldPlan = user.plan;
-    if (oldPlan === newPlan) return; // No change needed
+    const normalizedNewPlan = normalizePlanCode(newPlan);
+    if (oldPlan === normalizedNewPlan) return; // No change needed
 
-    user.plan = newPlan;
+    user.plan = normalizedNewPlan;
+    user.trialEndsAt = normalizedNewPlan === 'free' ? getDefaultFreeTrialEndsAt() : null;
     user.planStatus = 'active'; // Always become active on a manual plan change
     user.gracePeriodStartDate = null; // Clear grace period
 
     // Add a log entry for the change
     user.logs.push({
         timestamp: Date.now(),
-        action: `Plan changed from ${oldPlan} to ${newPlan}.`
+        action: `Plan changed from ${oldPlan} to ${normalizedNewPlan}.`
     });
 
-    saveUserDatabase();
+    if (user.userId === activeUserId) {
+        applyPlanModelAccessTransition(user, {
+            previousPlanCode: oldPlan,
+            preferTierPromotion: normalizePlanTier(oldPlan) !== normalizePlanTier(normalizedNewPlan)
+                && normalizePlanTier(normalizedNewPlan) === 'pro'
+        });
+    }
+
+    saveFullUserProfile(user);
 }
 
 /**
- * Calculates the sum of all current credits held by Free and Pro users.
+ * Calculates the sum of all current credits held by all tracked users.
  * @returns {number} The total number of credits issued.
  */
 export function getTotalCreditsIssued() {
     return userDatabase
-        .filter(user => user.plan === 'pro' || user.plan === 'free')
-        .reduce((total, user) => total + (user.credits?.current || 0), 0);
+        .reduce((total, user) => total + (Number(user?.credits?.current) || 0), 0);
 }
 
 /**
@@ -986,7 +2173,7 @@ export function logUserActivity(userId, logEntry) {
  */
 export function getFinancialSummary() {
     const billingInfo = getSystemBillingInfo();
-    const allUsers = userDatabase.filter(u => u.plan !== 'master');
+    const allUsers = userDatabase.filter(u => !isAdminProfile(u));
 
     const totalRevenue = allUsers.reduce((sum, user) => sum + (user.credits.totalRefilledUSD || 0), 0);
     const totalApiCost = billingInfo.usedUSD || 0;
@@ -1009,7 +2196,7 @@ export function getFinancialSummary() {
  */
 export function getPerUserFinancials() {
     return userDatabase
-        .filter(u => u.plan !== 'master')
+        .filter(u => !isAdminProfile(u))
         .map(user => {
             const totalRefilled = user.credits.totalRefilledUSD || 0;
             const totalUsageUSD = user.credits.totalUsedUSD || 0;

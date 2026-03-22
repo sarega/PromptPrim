@@ -2,10 +2,22 @@
 
 import * as UserService from '../user/user.service.js';
 import * as AdminModelManagerUI from './admin-model-manager.ui.js';
+import * as AdminUserDirectoryService from './admin-user-directory.service.js';
 import { showCustomAlert } from '../../core/core.ui.js';
 import { stateManager } from '../../core/core.state.js';
 import { loadAllProviderModels, loadAllSystemModels } from '../../core/core.api.js';
 import * as AdminBillingService from './admin-billing.service.js';
+import * as AdminProviderBalanceService from './admin-provider-balance.service.js';
+import * as BackendAccountDataService from '../billing/backend-account-data.service.js';
+import * as BackendBillingSettingsService from '../billing/backend-billing-settings.service.js';
+
+function setBillingSyncStatusTone(element, tone = 'info') {
+    if (!element) return;
+    element.classList.remove('is-success', 'is-error', 'is-loading');
+    if (tone === 'success') element.classList.add('is-success');
+    if (tone === 'error') element.classList.add('is-error');
+    if (tone === 'loading') element.classList.add('is-loading');
+}
 
 function renderUserEditor() {
     const profile = UserService.getCurrentUserProfile();
@@ -54,9 +66,46 @@ function populateSystemSettings() {
     if (ollamaUrlInput) ollamaUrlInput.value = systemSettings.ollamaBaseUrl || '';
 }
 
-export function renderBillingInfo() {
+function formatSyncTimestamp(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString();
+}
+
+async function resolveIssuedCreditPoolSummary() {
+    const localTotalIssuedMicrocredits = UserService.getTotalCreditsIssued();
+    const visibleUserTotalIssuedMicrocredits = AdminUserDirectoryService.getAdminVisibleUsers().reduce((sum, user) => {
+        return sum + (Number(user?.credits?.current) || 0);
+    }, 0);
+    const fallbackIssuedMicrocredits = Math.max(localTotalIssuedMicrocredits, visibleUserTotalIssuedMicrocredits);
+
+    if (!BackendAccountDataService.isBackendAccountDataAvailable()) {
+        return {
+            totalIssuedMicrocredits: fallbackIssuedMicrocredits,
+            source: 'local'
+        };
+    }
+
+    try {
+        const summary = await BackendAccountDataService.fetchBackendWalletPoolSummary();
+        const backendIssuedMicrocredits = Math.max(Number(summary?.totalIssuedMicrocredits) || 0, 0);
+        return {
+            totalIssuedMicrocredits: Math.max(backendIssuedMicrocredits, fallbackIssuedMicrocredits),
+            source: backendIssuedMicrocredits >= fallbackIssuedMicrocredits ? 'backend' : 'visible-users'
+        };
+    } catch (error) {
+        console.error('Failed to load backend wallet pool summary. Falling back to local user credits.', error);
+        return {
+            totalIssuedMicrocredits: fallbackIssuedMicrocredits,
+            source: 'local'
+        };
+    }
+}
+
+async function renderBillingInfoAsync() {
     const billingInfo = AdminBillingService.getBillingInfo();
-    const totalCreditsIssued = UserService.getTotalCreditsIssued();
+    const { totalIssuedMicrocredits, source: issuedCreditsSource } = await resolveIssuedCreditPoolSummary();
 
     const balanceInput = document.getElementById('billing-balance-usd');
     const usedInput = document.getElementById('billing-used-usd');
@@ -65,20 +114,60 @@ export function renderBillingInfo() {
     const poolInput = document.getElementById('billing-distributable-credits');
     const issuedInput = document.getElementById('billing-issued-credits');
     const warningMessageEl = document.getElementById('billing-warning-message');
+    const syncStatusEl = document.getElementById('billing-sync-status');
+    const syncBtn = document.getElementById('sync-openrouter-balance-btn');
     
     const remainingUSD = (billingInfo.balanceUSD || 0) - (billingInfo.usedUSD || 0);
     const markupRate = billingInfo.markupRate || 1;
     const creditPool = remainingUSD * markupRate * 1000000;
 
-    // [NEW] Convert the total issued credits back to its USD value for comparison
-    const issuedCreditsUSDValue = totalCreditsIssued / (markupRate * 1000000);
+    // Compare the live provider balance against the total balance currently sitting in user wallets.
+    const issuedCreditsUSDValue = totalIssuedMicrocredits / (markupRate * 1000000);
 
     if (balanceInput) balanceInput.value = (billingInfo.balanceUSD || 0).toFixed(2);
+    if (balanceInput) balanceInput.readOnly = billingInfo.providerSource === 'openrouter';
     if (markupInput) markupInput.value = markupRate;
     if (usedInput) usedInput.value = (billingInfo.usedUSD || 0).toFixed(6);
     if (remainingInput) remainingInput.value = remainingUSD.toFixed(8); // Show as currency
     if (poolInput) poolInput.value = creditPool.toLocaleString('en-US', { maximumFractionDigits: 0 });
     if (issuedInput) issuedInput.value = `$${issuedCreditsUSDValue.toFixed(2)}`; // Display as USD
+    if (issuedInput) {
+        issuedInput.title = issuedCreditsSource === 'backend'
+            ? 'Calculated from the live sum of all non-admin Supabase wallet balances.'
+            : issuedCreditsSource === 'visible-users'
+                ? 'Calculated from the highest visible non-admin wallet total to avoid understating issued credits.'
+            : 'Calculated from the local user credit cache.';
+    }
+
+    if (syncBtn) {
+        syncBtn.disabled = !AdminProviderBalanceService.isProviderBalanceSyncAvailable();
+    }
+
+    if (syncStatusEl) {
+        if (!AdminProviderBalanceService.isProviderBalanceSyncAvailable()) {
+            syncStatusEl.textContent = 'Provider sync requires Supabase auth and a deployed Edge Function.';
+            setBillingSyncStatusTone(syncStatusEl, 'info');
+        } else if (billingInfo.providerLastError && billingInfo.providerSource === 'openrouter') {
+            const syncedAtLabel = formatSyncTimestamp(billingInfo.providerSyncedAt);
+            syncStatusEl.textContent = syncedAtLabel
+                ? `Last OpenRouter sync was ${syncedAtLabel}. Latest sync failed: ${billingInfo.providerLastError}`
+                : `Latest provider sync failed: ${billingInfo.providerLastError}`;
+            setBillingSyncStatusTone(syncStatusEl, 'error');
+        } else if (billingInfo.providerLastError) {
+            syncStatusEl.textContent = `Provider sync unavailable: ${billingInfo.providerLastError}`;
+            setBillingSyncStatusTone(syncStatusEl, 'error');
+        } else if (billingInfo.providerSource === 'openrouter') {
+            const syncedAtLabel = formatSyncTimestamp(billingInfo.providerSyncedAt);
+            const keyLabel = billingInfo.providerKeyLabel ? ` Key: ${billingInfo.providerKeyLabel}.` : '';
+            syncStatusEl.textContent = syncedAtLabel
+                ? `Live OpenRouter balance synced at ${syncedAtLabel}.${keyLabel}`
+                : `Live OpenRouter balance is active.${keyLabel}`;
+            setBillingSyncStatusTone(syncStatusEl, 'success');
+        } else {
+            syncStatusEl.textContent = 'Using local billing values until provider sync succeeds.';
+            setBillingSyncStatusTone(syncStatusEl, 'info');
+        }
+    }
 
     if (warningMessageEl) {
         if (issuedCreditsUSDValue > remainingUSD) {
@@ -94,9 +183,66 @@ export function renderBillingInfo() {
     }
 }
 
-function saveBillingSettings() {
-    const balanceUSD = document.getElementById('billing-balance-usd').value;
+export function renderBillingInfo() {
+    renderBillingInfoAsync().catch((error) => {
+        console.error('Failed to render admin billing info.', error);
+    });
+}
+
+async function syncOpenRouterBalance() {
+    const syncBtn = document.getElementById('sync-openrouter-balance-btn');
+    const syncStatusEl = document.getElementById('billing-sync-status');
+
+    if (!AdminProviderBalanceService.isProviderBalanceSyncAvailable()) {
+        if (syncStatusEl) {
+            syncStatusEl.textContent = 'Provider sync requires Supabase auth plus a deployed Edge Function.';
+            setBillingSyncStatusTone(syncStatusEl, 'error');
+        }
+        return;
+    }
+
+    if (syncBtn) {
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing...';
+    }
+    if (syncStatusEl) {
+        syncStatusEl.textContent = 'Syncing live OpenRouter balance...';
+        setBillingSyncStatusTone(syncStatusEl, 'loading');
+    }
+
+    try {
+        const snapshot = await AdminProviderBalanceService.syncOpenRouterProviderBalance();
+        AdminBillingService.saveProviderBalanceSnapshot(snapshot);
+        renderBillingInfo();
+    } catch (error) {
+        console.error(error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown sync error.';
+        AdminBillingService.saveProviderSyncError(errorMessage);
+        renderBillingInfo();
+    } finally {
+        if (syncBtn) {
+            syncBtn.disabled = !AdminProviderBalanceService.isProviderBalanceSyncAvailable();
+            syncBtn.textContent = 'Sync OpenRouter Balance';
+        }
+    }
+}
+
+async function saveBillingSettings() {
+    const billingInfo = AdminBillingService.getBillingInfo();
+    const balanceUSD = billingInfo.providerSource === 'openrouter'
+        ? billingInfo.balanceUSD
+        : document.getElementById('billing-balance-usd').value;
     const markupRate = document.getElementById('billing-markup-rate').value;
+
+    if (BackendBillingSettingsService.isBackendBillingSettingsAvailable()) {
+        try {
+            await BackendBillingSettingsService.saveBackendMarkupRate(markupRate);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Could not save backend billing settings.';
+            showCustomAlert(errorMessage, 'Save Failed');
+            return;
+        }
+    }
 
     AdminBillingService.saveBillingInfo({ balanceUSD, markupRate });
     showCustomAlert('Billing settings saved!', 'Success');
@@ -122,6 +268,17 @@ export function initAdminUI() {
 
     // ... Event Listener และ Subscriptions อื่นๆ ยังคงเหมือนเดิม ...
     renderBillingInfo();
-    document.getElementById('save-billing-btn')?.addEventListener('click', saveBillingSettings);
+    document.getElementById('sync-openrouter-balance-btn')?.addEventListener('click', syncOpenRouterBalance);
+    document.getElementById('save-billing-btn')?.addEventListener('click', () => {
+        saveBillingSettings().catch((error) => {
+            console.error('Failed to save billing settings.', error);
+        });
+    });
     stateManager.bus.subscribe('user:settingsUpdated', renderBillingInfo);
+
+    if (AdminProviderBalanceService.isProviderBalanceSyncAvailable()) {
+        syncOpenRouterBalance().catch((error) => {
+            console.error('Initial provider balance sync failed.', error);
+        });
+    }
 }

@@ -1,6 +1,8 @@
 // Create new file: src/js/modules/admin/admin-activity-log.ui.js
 
 import * as UserService from '../user/user.service.js';
+import * as AdminUserDirectoryService from './admin-user-directory.service.js';
+import * as BackendAccountDataService from '../billing/backend-account-data.service.js';
 import * as ActivityLogHandlers from './admin-activity-log.handlers.js';
 import { formatTimestamp } from '../../core/core.utils.js';
 
@@ -12,13 +14,65 @@ let currentUserId = null;
 function showModal() { modal.style.display = 'flex'; }
 function hideModal() { modal.style.display = 'none'; }
 
-export function showActivityLogModal(userId) {
+export async function showActivityLogModal(userId) {
     currentUserId = userId;
-    const user = UserService.getUserById(userId);
+    const user = AdminUserDirectoryService.getAdminVisibleUserById(userId) || UserService.getUserById(userId);
     if (!user || !modalBody || !modalTitle) return;
 
     modalTitle.textContent = `Activity Log for ${user.userName}`;
-    
+
+    if (BackendAccountDataService.isBackendAccountDataAvailable(user)) {
+        try {
+            const usageEvents = await BackendAccountDataService.fetchBackendUsageEvents(user, { limit: 100 });
+            if (usageEvents.length === 0) {
+                modalBody.innerHTML = "<p>No backend activity recorded for this user.</p>";
+                showModal();
+                return;
+            }
+
+            const tableRows = usageEvents.map((log) => `
+                <tr>
+                    <td>${formatTimestamp(log.timestamp)}</td>
+                    <td>${log.model}</td>
+                    <td>${log.promptTokens}</td>
+                    <td>${log.completionTokens}</td>
+                    <td>${log.totalTokens}</td>
+                    <td style="text-align: right;">$${log.providerCostUSD.toFixed(6)}</td>
+                    <td style="text-align: right;">$${log.chargedUSD.toFixed(6)}</td>
+                    <td>${log.status}</td>
+                </tr>
+            `).join('');
+
+            modalBody.innerHTML = `
+                <div class="item-list-scrollable" style="padding: 0; max-height: 60vh;">
+                    <table class="activity-log-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Model</th>
+                                <th>Prompt Tokens</th>
+                                <th>Completion Tokens</th>
+                                <th>Total Tokens</th>
+                                <th style="text-align: right;">Provider Cost</th>
+                                <th style="text-align: right;">Charged</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            showModal();
+            return;
+        } catch (error) {
+            modalBody.innerHTML = `<p>${error instanceof Error ? error.message : 'Could not load backend activity.'}</p>`;
+            showModal();
+            return;
+        }
+    }
+
     if (!user.activityLog || user.activityLog.length === 0) {
         modalBody.innerHTML = "<p>No activity recorded for this user.</p>";
         showModal();
@@ -77,7 +131,9 @@ export function initActivityLogUI() {
         detailSection.addEventListener('click', (e) => {
             if (e.target.id === 'view-activity-log-btn') {
                 const userId = detailSection.dataset.userId;
-                showActivityLogModal(userId);
+                showActivityLogModal(userId).catch((error) => {
+                    console.error('Could not load the activity log modal.', error);
+                });
             }
         });
     }
@@ -89,7 +145,9 @@ export function initActivityLogUI() {
 
     modal?.querySelector('#export-activity-csv-btn')?.addEventListener('click', () => {
         if (currentUserId) {
-            ActivityLogHandlers.exportActivityLogToCSV(currentUserId);
+            ActivityLogHandlers.exportActivityLogToCSV(currentUserId).catch((error) => {
+                console.error('Could not export the activity log CSV.', error);
+            });
         }
     });
 }

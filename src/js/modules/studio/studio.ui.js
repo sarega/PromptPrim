@@ -129,23 +129,22 @@ function focusSelectedEntityInList(payload = {}) {
         StudioHandlers.toggleStudioSectionVisibility({ sectionKey: 'agentGroups' });
     }
 
-    const searchInput = document.getElementById('asset-search-input');
     let targetItem = findStudioEntityListItem(entity);
 
     // If the active agent is hidden by current search, narrow the search to that name.
-    if (!targetItem && entity.type === 'agent' && searchInput) {
+    if (!targetItem && entity.type === 'agent') {
         const desiredQuery = entity.name;
-        if ((searchInput.value || '').trim() !== desiredQuery) {
-            searchInput.value = desiredQuery;
+        if (String(StudioHandlers.getStudioSearchQuery() || '').trim().toLowerCase() !== String(desiredQuery || '').trim().toLowerCase()) {
+            StudioHandlers.setStudioSearchQuery(desiredQuery);
             renderStudioContent();
             targetItem = findStudioEntityListItem(entity);
         }
     }
 
     // Fallback: clear search and render full list.
-    if (!targetItem && entity.type === 'agent' && searchInput) {
-        if ((searchInput.value || '').trim() !== '') {
-            searchInput.value = '';
+    if (!targetItem && entity.type === 'agent') {
+        if (StudioHandlers.getStudioSearchQuery() !== '') {
+            StudioHandlers.setStudioSearchQuery('');
             renderStudioContent();
             targetItem = findStudioEntityListItem(entity);
         }
@@ -168,6 +167,17 @@ function focusSelectedEntityInList(payload = {}) {
 
 function updateStudioVisibilityMenuState(sectionVisibility) {
     const menu = document.getElementById('studio-visibility-menu');
+    const searchToggleButton = document.getElementById('asset-search-toggle-btn');
+    const isSearchVisible = Boolean(sectionVisibility?.search);
+
+    if (searchToggleButton) {
+        searchToggleButton.classList.toggle('is-active', isSearchVisible);
+        searchToggleButton.setAttribute('aria-pressed', isSearchVisible ? 'true' : 'false');
+        const label = isSearchVisible ? 'Hide search and sorting' : 'Show search and sorting';
+        searchToggleButton.title = label;
+        searchToggleButton.setAttribute('aria-label', label);
+    }
+
     if (!menu) return;
 
     const allSectionKeys = ['search', 'agentPresets', 'worldPeek', 'agentGroups', 'commandMemories', 'knowledgeFiles'];
@@ -390,8 +400,12 @@ function buildSelectedEntitySection(project) {
 function renderStudioContent() {
     const assetsContainer = document.querySelector('#studio-panel .studio-assets-container');
     const selectedEntitySlot = document.getElementById('studio-selected-entity-slot');
+    const searchInput = document.getElementById('asset-search-input');
     if (!assetsContainer) return;
     assetsContainer.innerHTML = ''; 
+    if (searchInput && document.activeElement !== searchInput && searchInput.value !== StudioHandlers.getStudioSearchQuery()) {
+        searchInput.value = StudioHandlers.getStudioSearchQuery();
+    }
 
     const project = stateManager.getProject();
     const sectionVisibility = StudioHandlers.getStudioSectionVisibility(project);
@@ -527,7 +541,16 @@ export function initStudioUI() {
     // --- Toolbar Listeners ---
     const searchInput = document.getElementById('asset-search-input');
     const sortSelect = document.getElementById('asset-sort-select');
-    searchInput?.addEventListener('input', renderStudioContent);
+    if (searchInput) {
+        searchInput.setAttribute('autocomplete', 'off');
+        searchInput.setAttribute('autocapitalize', 'off');
+        searchInput.setAttribute('spellcheck', 'false');
+        searchInput.value = StudioHandlers.getStudioSearchQuery();
+        searchInput.addEventListener('input', (event) => {
+            StudioHandlers.setStudioSearchQuery(event.target.value);
+            renderStudioContent();
+        });
+    }
     sortSelect?.addEventListener('change', renderStudioContent);
     
     // --- Import Input Listener ---
