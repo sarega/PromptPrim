@@ -20,6 +20,13 @@ function resolvePublicBasePath() {
   return '/';
 }
 
+const htmlEntryPoints = {
+  index: resolve(__dirname, 'index.html'),
+  app: resolve(__dirname, 'app.html'),
+  auth: resolve(__dirname, 'auth.html'),
+  admin: resolve(__dirname, 'admin.html'),
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()], 
@@ -37,15 +44,7 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      input: {
-        // หน้าหลัก (/) จะเป็น Landing Page
-        main: resolve(__dirname, 'index.html'), 
-        auth: resolve(__dirname, 'auth.html'),
-        // หน้าแอป (/app.html) คือแอปตัวเดิม
-        app: resolve(__dirname, 'app.html'), 
-        // หน้าแอดมินยังคงเหมือนเดิม
-        admin: resolve(__dirname, 'admin.html'),
-      }
+      input: htmlEntryPoints,
     },
   },
   base: resolvePublicBasePath(),
