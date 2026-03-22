@@ -43,6 +43,8 @@ Set these in Cloudflare Pages:
 Optional:
 
 - `VITE_PUBLIC_BASE_PATH=/`
+- `VITE_FORMSPREE_ENDPOINT=https://formspree.io/f/your-form-id`
+- `VITE_CONTACT_EMAIL=hello@your-domain.com`
 
 ## Supabase Auth URLs
 
@@ -84,3 +86,14 @@ After deploy:
 5. Confirm `admin.html` loads for admin users
 6. Test one account save and one admin action
 7. Test one Stripe checkout in test mode
+8. Submit the landing-page contact form and confirm the message reaches your Formspree inbox/email
+
+## Formspree Contact Setup
+
+To make the landing-page contact form work without building a custom backend first:
+
+1. Create a form in Formspree.
+2. Copy the endpoint that looks like `https://formspree.io/f/your-form-id`.
+3. Set `VITE_FORMSPREE_ENDPOINT` in Cloudflare Pages.
+4. Optionally set `VITE_CONTACT_EMAIL` so the landing page also shows a direct email fallback.
+5. Redeploy and test one submission from `index.html`.
