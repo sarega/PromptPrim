@@ -84,6 +84,15 @@ function isLocalhostUrl(baseUrl = '') {
     }
 }
 
+function getPublicAppReferer() {
+    const basePath = typeof import.meta.env.BASE_URL === 'string' ? import.meta.env.BASE_URL : '/';
+    try {
+        return new URL(basePath || '/', window.location.origin).toString();
+    } catch (_) {
+        return window.location.origin;
+    }
+}
+
 function isAppRunningLocally() {
     if (typeof window === 'undefined' || !window.location) return false;
     return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
@@ -1284,7 +1293,7 @@ function constructApiCall(agent, messages, stream = false, forceSystemAgentCall 
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'HTTP-Referer': 'https://sarega.github.io/PromptPrim/',
+                'HTTP-Referer': getPublicAppReferer(),
                 'X-Title': 'PromptPrim' 
             };
         }

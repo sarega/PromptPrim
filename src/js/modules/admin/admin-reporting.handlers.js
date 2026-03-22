@@ -5,6 +5,8 @@ import * as BackendAccountDataService from '../billing/backend-account-data.serv
 
 function convertToCSV(summary, perUserData) {
     let csv = "Metric,Value\n";
+    csv += `Subscription Revenue,$${summary.subscriptionRevenue.toFixed(2)}\n`;
+    csv += `Top-up Revenue,$${summary.topupRevenue.toFixed(2)}\n`;
     csv += `Gross Revenue,$${summary.grossRevenue.toFixed(2)}\n`;
     csv += `Total API Costs,$${summary.totalCosts.toFixed(6)}\n`;
     csv += `Net Profit/Loss,$${summary.netProfit.toFixed(2)}\n`;
@@ -12,9 +14,9 @@ function convertToCSV(summary, perUserData) {
     csv += `Total API Calls,${summary.totalApiCalls}\n`;
     csv += `Total Tokens Processed,${summary.totalTokensProcessed.toLocaleString()}\n\n`;
 
-    csv += "User,Plan,Total Refilled (USD),Total Usage (USD),Net Value (USD)\n";
+    csv += "User,Plan,Subscription Revenue (USD),Top-up Revenue (USD),Total Revenue (USD),Total Usage (USD),Net Value (USD)\n";
     perUserData.forEach(user => {
-        csv += `"${user.userName}",${user.plan},${user.totalRefilledUSD.toFixed(2)},${user.totalUsageUSD.toFixed(6)},${user.netValue.toFixed(2)}\n`;
+        csv += `"${user.userName}",${user.plan},${user.subscriptionRevenueUSD.toFixed(2)},${user.topupRevenueUSD.toFixed(2)},${user.totalRevenueUSD.toFixed(2)},${user.totalUsageUSD.toFixed(6)},${user.netValue.toFixed(2)}\n`;
     });
 
     return csv;

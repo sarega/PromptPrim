@@ -32,19 +32,11 @@ async function renderReport() {
     const summary = reportData.summary;
     const perUserData = reportData.perUser;
 
-    const perUserRows = perUserData.map(user => `
-        <tr>
-            <td>${user.userName}</td>
-            <td>${user.plan}</td>
-            <td>$${user.totalRefilledUSD.toFixed(2)}</td>
-            <td>$${user.totalUsageUSD.toFixed(6)}</td>
-            <td>$${user.netValue.toFixed(2)}</td>
-        </tr>
-    `).join('');
-
     modalBody.innerHTML = `
         <h4>Overall Financial Summary</h4>
         <div class="admin-billing-grid" style="margin-bottom: 20px;">
+            <div><strong>Subscription Revenue:</strong> $${summary.subscriptionRevenue.toFixed(2)}</div>
+            <div><strong>Top-up Revenue:</strong> $${summary.topupRevenue.toFixed(2)}</div>
             <div><strong>Gross Revenue:</strong> $${summary.grossRevenue.toFixed(2)}</div>
             <div><strong>Total Costs:</strong> $${summary.totalCosts.toFixed(6)}</div>
             <div><strong>Net Profit/Loss:</strong> $${summary.netProfit.toFixed(2)}</div>
@@ -60,12 +52,24 @@ async function renderReport() {
                     <tr>
                         <th>User</th>
                         <th>Plan</th>
-                        <th>Total Refilled</th>
+                        <th>Subscriptions</th>
+                        <th>Top-ups</th>
+                        <th>Total Revenue</th>
                         <th>Total Usage</th>
                         <th>Net Value</th>
                     </tr>
                 </thead>
-                <tbody>${perUserRows}</tbody>
+                <tbody>${perUserData.map(user => `
+                    <tr>
+                        <td>${user.userName}</td>
+                        <td>${user.plan}</td>
+                        <td>$${user.subscriptionRevenueUSD.toFixed(2)}</td>
+                        <td>$${user.topupRevenueUSD.toFixed(2)}</td>
+                        <td>$${user.totalRevenueUSD.toFixed(2)}</td>
+                        <td>$${user.totalUsageUSD.toFixed(6)}</td>
+                        <td>$${user.netValue.toFixed(2)}</td>
+                    </tr>
+                `).join('')}</tbody>
             </table>
         </div>
     `;

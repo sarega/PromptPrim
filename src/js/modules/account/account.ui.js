@@ -478,6 +478,52 @@ function renderBackendLedgerRows(walletLedger = []) {
     `;
 }
 
+function renderBackendBillingPurchaseRows(billingPurchases = []) {
+    if (!Array.isArray(billingPurchases) || billingPurchases.length === 0) {
+        return '<p class="account-empty-copy">No payment history is recorded yet.</p>';
+    }
+
+    const rows = billingPurchases.map((entry) => {
+        const reference = entry.stripeInvoiceId
+            || entry.stripeCheckoutSessionId
+            || entry.stripeSubscriptionId
+            || entry.providerReferenceId
+            || '-';
+        const creditLabel = entry.grantedMicrocredits > 0
+            ? `$${entry.grantedUSD.toFixed(2)}`
+            : '-';
+
+        return `
+            <tr>
+                <td>${formatTimestamp(entry.timestamp)}</td>
+                <td>${escapeHtml(entry.displayName)}</td>
+                <td>${escapeHtml(entry.status || '-')}</td>
+                <td style="text-align: right;">$${entry.amountUSD.toFixed(2)}</td>
+                <td style="text-align: right;">${creditLabel}</td>
+                <td>${escapeHtml(reference)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="item-list-scrollable account-table-wrapper">
+            <table class="activity-log-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Item</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Amount</th>
+                        <th style="text-align: right;">Credits</th>
+                        <th>Reference</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    `;
+}
+
 function formatCreditUSD(microcredits = 0, digits = 2) {
     return `$${convertCreditsToUSD(Number(microcredits) || 0).toFixed(digits)}`;
 }
@@ -1205,7 +1251,8 @@ function renderBillingSection(context) {
         accountProfile,
         billingSnapshot,
         currentPlanLabel,
-        backendStatusLabel
+        backendStatusLabel,
+        backendBillingPurchasesHTML
     } = context;
     const billingName = getDraftField('profile', 'billingName', accountProfile?.billingName || '');
     const billingCompany = getDraftField('profile', 'billingCompany', accountProfile?.billingCompany || '');
@@ -1317,6 +1364,7 @@ function renderBillingSection(context) {
                 </div>
             </div>
         `)}
+        ${renderSectionCard('Recent Payments', 'Stripe subscriptions and Top-up Credits recorded for this account.', backendBillingPurchasesHTML)}
     `;
 }
 
@@ -1337,13 +1385,12 @@ function renderUsageSection(context) {
 }
 
 function renderHistorySection(context) {
-    const { backendLedgerHTML, billingSnapshot } = context;
+    const { backendLedgerHTML, backendBillingPurchasesHTML, billingSnapshot } = context;
     return `
         ${renderSectionCard('Wallet & Credit History', 'Monthly grants, Top-up Credits, usage deductions, and access pass events.', backendLedgerHTML || '<p class="account-empty-copy">No wallet history available yet.</p>')}
-        ${renderPlaceholderCard('Bills & Invoices', billingSnapshot.hasStripeCustomer
-            ? 'Invoice history will appear here once we connect Stripe invoice listing into the account modal.'
-            : 'Bills and invoices will appear after the first live Stripe checkout and customer creation.'
-        )}
+        ${renderSectionCard('Bills & Payments', billingSnapshot.hasStripeCustomer
+            ? 'Recorded Stripe purchases, subscriptions, and invoice-linked events.'
+            : 'Billing records appear here after the first successful hosted purchase.', backendBillingPurchasesHTML)}
     `;
 }
 
@@ -1487,6 +1534,7 @@ export async function renderAccountModal() {
 
     let backendUsageHTML = '<p class="account-empty-copy">No backend usage recorded yet.</p>';
     let backendLedgerHTML = '<p class="account-empty-copy">No backend wallet events recorded yet.</p>';
+    let backendBillingPurchasesHTML = '<p class="account-empty-copy">No payment history is recorded yet.</p>';
     let backendUsageSummaryHTML = renderSectionCard('Recent Usage Snapshot', 'Latest hosted activity at a glance.', '<p class="account-empty-copy">No backend usage recorded yet.</p>');
 
     if (isBackendManaged && BackendAccountDataService.isBackendAccountDataAvailable(user)) {
@@ -1494,6 +1542,7 @@ export async function renderAccountModal() {
             const backendSnapshot = await BackendAccountDataService.fetchBackendAccountSnapshot(user, { limit: 10 });
             backendUsageHTML = renderBackendUsageRows(backendSnapshot.usageEvents);
             backendLedgerHTML = renderBackendLedgerRows(backendSnapshot.walletLedger);
+            backendBillingPurchasesHTML = renderBackendBillingPurchaseRows(backendSnapshot.billingPurchases);
             backendUsageSummaryHTML = renderSectionCard(
                 'Recent Usage Snapshot',
                 'Latest hosted model calls and charges.',
@@ -1503,6 +1552,7 @@ export async function renderAccountModal() {
             const errorMessage = error instanceof Error ? error.message : 'Could not load backend account history.';
             backendUsageHTML = `<p class="account-empty-copy">${errorMessage}</p>`;
             backendLedgerHTML = `<p class="account-empty-copy">${errorMessage}</p>`;
+            backendBillingPurchasesHTML = `<p class="account-empty-copy">${errorMessage}</p>`;
             backendUsageSummaryHTML = renderSectionCard('Recent Usage Snapshot', 'Latest hosted model calls and charges.', backendUsageHTML);
         }
     }
@@ -1532,6 +1582,7 @@ export async function renderAccountModal() {
         refillOfferings,
         backendUsageHTML,
         backendLedgerHTML,
+        backendBillingPurchasesHTML,
         backendUsageSummaryHTML
     };
 

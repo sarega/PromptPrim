@@ -3,6 +3,8 @@
 
 import { showActivityLogModal } from './admin-activity-log.ui.js';
 import { showAccountLogModal } from './admin-account-log.ui.js';
+import { showAdminAuditLogModal } from './admin-audit-log.ui.js';
+import * as AdminAuditLogService from './admin-audit-log.service.js';
 import { stateManager } from '../../core/core.state.js';
 import * as UserService from '../user/user.service.js';
 import * as AdminUserAccountService from './admin-user-account.service.js';
@@ -227,6 +229,18 @@ function applyBackendAccountSnapshotToLocalUser(updatedUser, snapshot) {
     return updatedUser;
 }
 
+function recordLocalUserAuditEntry(actionType, summary, targetUser, metadata = {}) {
+    if (!targetUser) return;
+    AdminAuditLogService.recordLocalAdminAuditLog({
+        actionType,
+        summary,
+        targetUserId: targetUser.userId,
+        targetEmail: targetUser.email || '',
+        targetDisplayName: targetUser.userName || '',
+        metadata
+    });
+}
+
 async function saveUserUpdates(userId, overrides = {}) {
     const originalUser = AdminUserDirectoryService.getAdminVisibleUserById(userId) || UserService.getUserById(userId);
     if (!originalUser) {
@@ -310,6 +324,17 @@ async function saveUserUpdates(userId, overrides = {}) {
             clearAccessPassExpiresAt,
             reason: saveReason
         });
+        recordLocalUserAuditEntry('user_account_updated', saveReason, updatedUser, {
+            source: 'local',
+            nextPlanCode: newPlan,
+            nextAccountStatus: newAccountStatus,
+            nextMonthlyCredits: newMonthlyCredits,
+            nextTopupCredits: newTopupCredits,
+            trialExpiresAt,
+            clearTrialExpiresAt,
+            accessPassExpiresAt,
+            clearAccessPassExpiresAt
+        });
     }
 
     // 4. Save the updated local shadow copy so the admin UI stays in sync.
@@ -342,6 +367,16 @@ async function refillUserCredits(userId, amountUSD) {
             showCustomAlert(`Could not add credits to ${originalUser.userName}.`, 'Refill Failed');
             return;
         }
+        const refreshedUser = AdminUserDirectoryService.getAdminVisibleUserById(userId) || UserService.getUserById(userId) || originalUser;
+        recordLocalUserAuditEntry(
+            'user_account_updated',
+            `Admin refill of $${amountUSD.toFixed(2)} for ${originalUser.userName}.`,
+            refreshedUser,
+            {
+                source: 'local',
+                refillAmountUSD: amountUSD
+            }
+        );
         renderUserList();
         renderUserDetail(userId);
         showCustomAlert(`Successfully added credits worth $${amountUSD.toFixed(2)} to ${originalUser.userName}.`, 'Success');
@@ -407,6 +442,17 @@ async function deleteUserAccount(userId) {
 
         UserService.deleteUserProfile(originalUser.userId, { removeLinkedBackendShadows: true });
         AdminUserDirectoryService.removeAdminVisibleUser(originalUser.userId, { linkedBackendUserId });
+        if (!UserService.isBackendManagedProfile(originalUser)) {
+            recordLocalUserAuditEntry(
+                'user_account_deleted',
+                `Deleted user account ${originalUser.email || originalUser.userName || originalUser.userId}.`,
+                originalUser,
+                {
+                    source: 'local',
+                    deletedUserId: originalUser.userId
+                }
+            );
+        }
         selectedUserId = null;
 
         const detailSection = document.getElementById('user-detail-section');
@@ -511,6 +557,15 @@ function handleAddNewUser() {
     const newUser = UserService.addNewUser(userName, email);
 
     if (newUser) {
+        recordLocalUserAuditEntry(
+            'user_account_created',
+            `Created local user account ${email}.`,
+            newUser,
+            {
+                source: 'local',
+                createdUserId: newUser.userId
+            }
+        );
         showCustomAlert(`Successfully created user: ${userName} (ID: ${newUser.userId})`, 'User Created');
         renderUserList();
     } else {
@@ -793,6 +848,7 @@ export function renderUserDetail(userId) {
                 </div>
                 <button id="view-activity-log-btn" class="btn btn-secondary">View Activity Log</button>
                 <button id="view-account-log-btn" class="btn btn-secondary">View Account Log</button>
+                <button id="view-admin-audit-log-btn" class="btn btn-secondary">View Admin Audit</button>
             </div>
         </div>
     `;
@@ -855,6 +911,13 @@ export async function initAdminUserManagerUI() {
             }
             if (target.id === 'view-account-log-btn') {
                 showAccountLogModal(currentUserId);
+            }
+            if (target.id === 'view-admin-audit-log-btn') {
+                const currentUser = AdminUserDirectoryService.getAdminVisibleUserById(currentUserId) || UserService.getUserById(currentUserId);
+                showAdminAuditLogModal({
+                    targetUserId: currentUserId,
+                    targetLabel: currentUser?.userName || currentUser?.email || currentUserId
+                });
             }
             
             if (target.dataset.action === 'extend-sub') {

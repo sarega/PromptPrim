@@ -291,6 +291,12 @@ body.dark-mode .admin-divider, body.dark-mode .admin-header {
     color: #92400e;
 }
 
+.admin-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
 body.dark-mode .user-list-item.active {
     background-color: #3b3d5c; /* A more distinct purple/blue highlight */
     border-left: 3px solid #818cf8;
@@ -319,6 +325,41 @@ body.dark-mode .user-list-item.active:hover {
 .activity-log-table tbody tr:hover {
     background-color: #f1f5f9;
 }
+
+.admin-audit-toolbar {
+    margin-bottom: 12px;
+}
+
+.admin-audit-table .audit-summary-cell {
+    min-width: 320px;
+}
+
+.audit-action-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.audit-action-pill.is-info {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.audit-action-pill.is-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.audit-action-pill.is-danger {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
 /* Dark Mode styles for the table */
 body.dark-mode .activity-log-table th {
     background-color: #374151;
@@ -329,6 +370,21 @@ body.dark-mode .activity-log-table td {
 }
 body.dark-mode .activity-log-table tbody tr:hover {
     background-color: #374151;
+}
+
+body.dark-mode .audit-action-pill.is-info {
+    background: rgba(59, 130, 246, 0.18);
+    color: #bfdbfe;
+}
+
+body.dark-mode .audit-action-pill.is-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fde68a;
+}
+
+body.dark-mode .audit-action-pill.is-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
 }
 /* Fix for the large button in the modal footer */
 #activity-log-modal .modal-actions .btn {

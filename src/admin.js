@@ -14,6 +14,7 @@ import * as AdminModelManagerUI from './js/modules/admin/admin-model-manager.ui.
 import { initAdminUserManagerUI } from './js/modules/admin/admin-user-manager.ui.js';
 import { initAccountLogUI } from './js/modules/admin/admin-account-log.ui.js'; 
 import { initActivityLogUI } from './js/modules/admin/admin-activity-log.ui.js';
+import { initAdminAuditLogUI } from './js/modules/admin/admin-audit-log.ui.js';
 import { renderBillingInfo } from './js/modules/admin/admin.ui.js';
 import { initAdminReportingUI } from './js/modules/admin/admin-reporting.ui.js';
 import { ensurePageAccess } from './js/modules/auth/auth.guard.js';
@@ -80,6 +81,7 @@ async function initializeAdminPanel() {
     await initAdminUserManagerUI();
     initActivityLogUI(); // This call will now work correctly
     initAccountLogUI();
+    initAdminAuditLogUI();
     initAdminReportingUI(); // <-- [ADD THIS]
     initCrossTabSync();
 

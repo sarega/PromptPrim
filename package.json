@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "BROWSERSLIST_IGNORE_OLD_DATA=1 vite",
     "build": "BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
+    "build:cloudflare": "CF_PAGES=1 BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
+    "build:root": "VITE_PUBLIC_BASE_PATH=/ BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
+    "build:github": "VITE_PUBLIC_BASE_PATH=/PromptPrim/ BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
     "preview": "vite preview",
     "tw:version": "node -p \"require('tailwindcss/package.json').version\"",
     "tw:build": "tailwindcss -i src/styles/main.css -o public/assets/tw.css",

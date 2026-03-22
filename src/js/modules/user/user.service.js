@@ -2181,6 +2181,8 @@ export function getFinancialSummary() {
     const totalApiCalls = allUsers.reduce((sum, user) => sum + (user.activityLog?.length || 0), 0);
 
     return {
+        subscriptionRevenue: 0,
+        topupRevenue: totalRevenue,
         grossRevenue: totalRevenue,
         totalCosts: totalApiCost,
         netProfit: totalRevenue - totalApiCost,
@@ -2204,6 +2206,9 @@ export function getPerUserFinancials() {
                 userName: user.userName,
                 userId: user.userId,
                 plan: user.plan,
+                subscriptionRevenueUSD: 0,
+                topupRevenueUSD: totalRefilled,
+                totalRevenueUSD: totalRefilled,
                 totalRefilledUSD: totalRefilled,
                 totalUsageUSD: totalUsageUSD,
                 netValue: totalRefilled - totalUsageUSD

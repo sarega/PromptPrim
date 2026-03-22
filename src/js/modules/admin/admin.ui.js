@@ -8,6 +8,7 @@ import { stateManager } from '../../core/core.state.js';
 import { loadAllProviderModels, loadAllSystemModels } from '../../core/core.api.js';
 import * as AdminBillingService from './admin-billing.service.js';
 import * as AdminProviderBalanceService from './admin-provider-balance.service.js';
+import * as AdminAuditLogService from './admin-audit-log.service.js';
 import * as BackendAccountDataService from '../billing/backend-account-data.service.js';
 import * as BackendBillingSettingsService from '../billing/backend-billing-settings.service.js';
 
@@ -233,6 +234,8 @@ async function saveBillingSettings() {
         ? billingInfo.balanceUSD
         : document.getElementById('billing-balance-usd').value;
     const markupRate = document.getElementById('billing-markup-rate').value;
+    const previousMarkupRate = Number(billingInfo.markupRate) || 0;
+    const nextMarkupRate = Number(markupRate) || 0;
 
     if (BackendBillingSettingsService.isBackendBillingSettingsAvailable()) {
         try {
@@ -245,6 +248,16 @@ async function saveBillingSettings() {
     }
 
     AdminBillingService.saveBillingInfo({ balanceUSD, markupRate });
+    AdminAuditLogService.recordLocalAdminAuditLog({
+        actionType: 'billing_settings_updated',
+        summary: `Updated billing markup rate to ${nextMarkupRate || markupRate}.`,
+        metadata: {
+            source: 'local',
+            previousMarkupRate,
+            nextMarkupRate,
+            balanceUSD: Number(balanceUSD) || 0
+        }
+    });
     showCustomAlert('Billing settings saved!', 'Success');
     renderBillingInfo(); // Re-render to confirm
 }
