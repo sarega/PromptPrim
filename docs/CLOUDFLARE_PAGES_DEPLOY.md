@@ -14,9 +14,9 @@ This frontend is ready to deploy as a static multi-page app on Cloudflare Pages.
 
 The Vite base path is now environment-aware:
 
-- `CF_PAGES=1` defaults to `/`
+- default is `/`
 - `VITE_PUBLIC_BASE_PATH=/your-subpath/` overrides it explicitly
-- fallback default stays `/PromptPrim/` for the current GitHub Pages-style build
+- `npm run build:github` still forces `/PromptPrim/` for GitHub Pages-style deploys
 
 Cloudflare Pages route helpers are also included:
 

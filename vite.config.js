@@ -17,11 +17,7 @@ function resolvePublicBasePath() {
     return normalizeBasePath(explicitBasePath);
   }
 
-  if (process.env.CF_PAGES === '1') {
-    return '/';
-  }
-
-  return '/PromptPrim/';
+  return '/';
 }
 
 // https://vitejs.dev/config/
