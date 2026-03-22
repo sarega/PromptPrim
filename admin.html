@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - PromptPrim Studio</title>
-  <script type="module" crossorigin src="/PromptPrim/assets/admin-vA6Zcqnq.js"></script>
+  <script type="module" crossorigin src="/PromptPrim/assets/admin-CBEBNnM9.js"></script>
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-CLQSUiLm.js">
   <link rel="modulepreload" crossorigin href="/PromptPrim/assets/auth.service-C6v-CwKo.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/backend-account-data.service-48EFxF-5.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/backend-account-data.service-B4RU7iBy.js">
   <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-DWpJxxB0.css">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/admin-LiOadA-t.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/admin-yUozt3R-.css">
 </head>
 <body class="admin-page">
     <div class="admin-wrapper">
@@ -75,8 +75,11 @@
                         </div>
                     </div>
                     <div id="billing-warning-message" class="billing-warning hidden"></div>
-                        <button id="save-billing-btn" class="btn btn-small" style="margin-top: 10px;">Save Settings</button>
-                        <button id="generate-report-btn" class="btn btn-secondary btn-small" style="margin-top: 10px;">Generate Report</button>
+                        <div class="admin-action-row" style="margin-top: 10px;">
+                            <button id="save-billing-btn" class="btn btn-small">Save Settings</button>
+                            <button id="generate-report-btn" class="btn btn-secondary btn-small">Generate Report</button>
+                            <button id="view-audit-log-btn" class="btn btn-secondary btn-small">View Audit Trail</button>
+                        </div>
 
                         <div id="financial-report-modal" class="modal-overlay">
                             <div class="modal-box" style="max-width: 800px; width: 90vw;">
@@ -89,6 +92,20 @@
                                 <div class="modal-actions">
                                     <button class="btn btn-secondary modal-close-btn">Close</button>
                                     <button class="btn" id="export-report-csv-btn">Export as CSV</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="admin-audit-log-modal" class="modal-overlay">
+                            <div class="modal-box" style="max-width: 980px; width: 92vw;">
+                                <div class="modal-header">
+                                    <h3 id="admin-audit-log-title">Admin Audit Trail</h3>
+                                    <button type="button" class="modal-close-btn">&times;</button>
+                                </div>
+                                <div class="modal-body" id="admin-audit-log-body"></div>
+                                <div class="modal-actions">
+                                    <button class="btn btn-secondary modal-close-btn">Close</button>
+                                    <button class="btn" id="export-admin-audit-csv-btn">Export as CSV</button>
                                 </div>
                             </div>
                         </div>
