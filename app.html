@@ -33,12 +33,13 @@
     <!-- <link rel="manifest" href="/manifest.json"> -->
      <link rel="manifest" href="/PromptPrim/manifest.json">
     <link rel="apple-touch-icon" href="/PromptPrim/icon.png"> 
-  <script type="module" crossorigin src="/PromptPrim/assets/app-B1YeiWFO.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-BJmVq5o2.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/client-CZ2o165L.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-BytZV4a3.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-CijHDntV.css">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-Bb7ErUO1.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/app-DRG2J58j.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-CLQSUiLm.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/client-mHRVbwmC.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/auth.service-C6v-CwKo.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/backend-account-data.service-48EFxF-5.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-DWpJxxB0.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/app-BNfPyzOx.css">
 </head>
 <body class="admin-page">
     <div id="dropzone-overlay" class="dropzone-overlay">
@@ -143,9 +144,9 @@
                     <div class="sidebar-content">
                         <div class="sessions-frame">
                             <div id="book-sidebar-slot"></div>
-                            <div class="section-box">
+                            <div id="chat-sessions-section" class="section-box chat-sessions-section">
                                 <div class="section-header">
-                                    <h3 id="session-list-locate-trigger" class="session-list-locate-trigger" role="button" tabindex="0" title="Locate active chat in sessions">
+                                    <h3 id="session-list-locate-trigger" class="session-list-locate-trigger" role="button" tabindex="0" aria-expanded="true" aria-controls="chat-sessions-section-body" title="Hide chat sessions">
                                         <span class="material-symbols-outlined">folder</span>
                                         <span class="section-title-text">Chat Sessions</span>
                                     </h3>
@@ -197,12 +198,14 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div id="pinnedSessionList" class="item-list"></div>
-                                <div id="sessionListContainer" class="item-list"></div>
-                                <details class="collapsible-section hidden" id="archivedSessionsSection">
-                                    <summary>Archived Sessions</summary>
-                                    <div id="archivedSessionList" class="item-list"></div>
-                                </details>
+                                <div id="chat-sessions-section-body" class="chat-sessions-section-body">
+                                    <div id="pinnedSessionList" class="item-list"></div>
+                                    <div id="sessionListContainer" class="item-list"></div>
+                                    <details class="collapsible-section hidden" id="archivedSessionsSection">
+                                        <summary>Archived Sessions</summary>
+                                        <div id="archivedSessionList" class="item-list"></div>
+                                    </details>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -270,6 +273,18 @@
                     <div class="studio-header">
                         <h1>Agent & Asset Studio</h1>
                         <div class="studio-header-actions">
+                            <button
+                                type="button"
+                                id="asset-search-toggle-btn"
+                                class="btn-icon studio-search-toggle-btn is-active"
+                                data-action="studio:toggleSectionVisibility"
+                                data-section-key="search"
+                                title="Hide search and sorting"
+                                aria-label="Hide search and sorting"
+                                aria-pressed="true"
+                            >
+                                <span class="material-symbols-outlined">search</span>
+                            </button>
                             <div id="studio-visibility-menu" class="dropdown align-right">
                                 <button type="button" id="asset-filter-btn" class="btn-icon studio-visibility-btn" data-action="toggle-menu" title="Show or hide sections">
                                     <span class="material-symbols-outlined">filter_list</span>
@@ -315,7 +330,7 @@
                     <div class="studio-toolbar">
                         <div class="search-wrapper">
                             <span class="material-symbols-outlined">search</span>
-                            <input type="text" id="asset-search-input" placeholder="Search Agents...">
+                            <input type="text" id="asset-search-input" placeholder="Search Agents..." autocomplete="off" autocapitalize="off" spellcheck="false">
                         </div>
                         <div class="sort-wrapper">
                             <!-- <label for="asset-sort-select">Sort by:</label> -->
@@ -457,7 +472,7 @@
                             <div class="api-provider-switch-row">
                                 <div class="api-provider-switch-meta">
                                     <span class="api-provider-switch-title">OpenRouter</span>
-                                    <span class="api-provider-switch-desc">Cloud LLM provider</span>
+                                    <span class="api-provider-switch-desc">BYOK text provider for Studio</span>
                                 </div>
                                 <label class="api-toggle" for="openrouter-enabled-toggle">
                                     <input type="checkbox" id="openrouter-enabled-toggle" checked>
@@ -467,7 +482,7 @@
                             <div class="api-provider-switch-row">
                                 <div class="api-provider-switch-meta">
                                     <span class="api-provider-switch-title">Ollama</span>
-                                    <span class="api-provider-switch-desc">Local runtime endpoint</span>
+                                    <span class="api-provider-switch-desc">Local runtime on your machine (Studio only)</span>
                                 </div>
                                 <label class="api-toggle" for="ollama-enabled-toggle">
                                     <input type="checkbox" id="ollama-enabled-toggle" checked>
@@ -477,7 +492,7 @@
                             <div class="api-provider-switch-row">
                                 <div class="api-provider-switch-meta">
                                     <span class="api-provider-switch-title">Kie.ai</span>
-                                    <span class="api-provider-switch-desc">Image and video generation</span>
+                                    <span class="api-provider-switch-desc">Image and video tools (Studio only)</span>
                                 </div>
                                 <label class="api-toggle" for="kieai-enabled-toggle">
                                     <input type="checkbox" id="kieai-enabled-toggle" checked>
@@ -489,17 +504,18 @@
                         <div class="form-group" id="api-key-group">
                             <label for="apiKey">OpenRouter API Key</label>
                             <input type="password" id="apiKey" autocomplete="off">
-                            <p class="modal-warning">This setting is only available for the Master Plan.</p>
+                            <p class="modal-warning">Studio Plan and admin only. Pro uses PromptPrim's hosted text workflow instead.</p>
                         </div>
                         
                         <div class="form-group" id="ollama-url-group">
                             <label for="ollamaBaseUrl">Ollama Base URL</label>
                             <input type="text" id="ollamaBaseUrl" placeholder="http://localhost:11434" autocomplete="url">
+                            <p class="modal-warning">Studio/local mode only. This works only when Ollama is running on your machine or your own reachable endpoint.</p>
                         </div>
                         <div class="form-group" id="kieai-key-group">
                             <label for="kieAiApiKey">Kie.ai Image/Video API Key</label>
                             <input type="password" id="kieAiApiKey" autocomplete="off">
-                            <p class="modal-warning">Required for Image/Video Generation Agents.</p>
+                            <p class="modal-warning">Studio-only BYOK media tools. These costs are billed by your own provider, not from Pro monthly credits.</p>
                         </div>
 
                         <button type="button" id="load-models-btn" class="btn btn-small">Load/Refresh Model List</button>
@@ -554,7 +570,7 @@
                                 </label>
                             </div>
 
-                            <div id="model-master-list" class="item-list-scrollable">
+                            <div id="model-plan-list" class="item-list-scrollable">
                                 </div>
                         </div>
 
@@ -1096,9 +1112,12 @@
     </div>
     <div id="right-sidebar-overlay"></div>
     <div id="account-modal" class="modal-overlay">
-        <div class="modal-box">
+        <div class="modal-box account-modal-box">
             <div class="modal-header">
-                <h3>My Account</h3>
+                <div class="account-modal-heading">
+                    <h3>My Account</h3>
+                    <p>Profile, billing, usage, and account access in one place.</p>
+                </div>
                 <button type="button" class="modal-close-btn" title="Close">&times;</button>
             </div>
             <div class="modal-body" id="account-modal-body">
@@ -1109,6 +1128,7 @@
             </div>
         </div>
     </div>
+    <input type="file" id="account-avatar-input" accept="image/png,image/jpeg,image/webp,image/gif" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;" tabindex="-1" aria-hidden="true">
     <div id="user-switcher-modal" class="modal-overlay">
         <div class="modal-box" style="max-width: 400px;">
             <div class="modal-header">
@@ -1119,7 +1139,7 @@
                 <p>Select a profile to continue testing:</p>
                 <button class="btn" data-user-id="user_pro">Switch to: Kaiwan (Pro)</button>
                 <button class="btn" data-user-id="user_free">Switch to: Demo User (Free)</button>
-                <button class="btn" data-user-id="user_master">Switch to: Admin (Master)</button>
+                <button class="btn" data-user-id="user_admin">Switch to: Admin</button>
             </div>
         </div>
     </div>

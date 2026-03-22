@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - PromptPrim Studio</title>
-  <script type="module" crossorigin src="/PromptPrim/assets/admin-tiPKzZJK.js"></script>
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-BJmVq5o2.js">
-  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/core.theme-BytZV4a3.js">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-CijHDntV.css">
-  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/admin-B7Iv9p0h.css">
+  <script type="module" crossorigin src="/PromptPrim/assets/admin-vA6Zcqnq.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-CLQSUiLm.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/auth.service-C6v-CwKo.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/backend-account-data.service-48EFxF-5.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-DWpJxxB0.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/admin-LiOadA-t.css">
 </head>
 <body class="admin-page">
     <div class="admin-wrapper">
@@ -20,7 +21,7 @@
                     <label title="Dark"><input type="radio" name="theme-menu" value="dark"><span class="material-symbols-outlined">dark_mode</span></label>
                     <label title="System"><input type="radio" name="theme-menu" value="system"><span class="material-symbols-outlined">desktop_windows</span></label>
                 </div>
-                <a href="/" class="btn btn-small">← Back to App</a>
+                <a href="./app.html" class="btn btn-small">← Back to App</a>
             </div>
         </header>
         
@@ -43,17 +44,21 @@
 
                 <section class="admin-section">
                     <h3>OpenRouter & Credit Calculation</h3>
+                    <div class="flex-group" style="margin-bottom: 12px; align-items: center;">
+                        <button id="sync-openrouter-balance-btn" class="btn btn-secondary btn-small">Sync OpenRouter Balance</button>
+                        <span id="billing-sync-status" class="admin-inline-note">Using local billing values until provider sync is available.</span>
+                    </div>
                     <div class="admin-billing-grid">
                         <div class="form-group">
-                            <label for="billing-balance-usd">Starting Balance (USD)</label>
+                            <label for="billing-balance-usd">Total OpenRouter Credits (USD)</label>
                             <input type="number" id="billing-balance-usd" step="0.01" placeholder="e.g., 10.00">
                         </div>
                         <div class="form-group">
-                            <label>Balance Used (USD)</label>
+                            <label>OpenRouter Usage (USD)</label>
                             <input type="text" id="billing-used-usd" readonly class="read-only-display">
                         </div>
                         <div class="form-group">
-                            <label>Remaining Balance (USD)</label>
+                            <label>Remaining Provider Balance (USD)</label>
                             <input type="text" id="billing-remaining-usd" readonly class="read-only-display">
                         </div>
                         <div class="form-group">
@@ -93,13 +98,12 @@
 
             <section id="model-manager-section" class="admin-section">
                 <h2 style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>Model Manager (Master Presets)</span>
+                    <span>Model Manager (Plan Presets)</span>
                     <div class="flex-group">
                         <button id="import-presets-btn" class="btn btn-secondary btn-small">Import</button>
                         <button id="export-presets-btn" class="btn btn-secondary btn-small">Export</button>
                     </div>
                 </h2>
-                <!-- <h2>Model Manager (Master Presets)</h2> -->
                 <div class="model-manager-layout">
                     <div class="model-manager-column" id="model-manager-list-container">
                         <h4>All Available Models</h4>
@@ -112,12 +116,12 @@
                                 Show Selected Only
                             </label>
                         </div>
-                        <div id="admin-model-master-list" class="item-list-scrollable"></div>
+                        <div id="admin-model-plan-list" class="item-list-scrollable"></div>
                     </div>
                     <div class="model-manager-column" id="model-preset-editor">
-                        <h4>Master Presets (for User Tiers)</h4>
+                        <h4>Plan Presets (for User Tiers)</h4>
                         <div class="form-group">
-                            <label for="admin-preset-selector">Edit Master Preset</label>
+                            <label for="admin-preset-selector">Edit Plan Preset</label>
                             <select id="admin-preset-selector"></select>
                         </div>
                         <div class="form-group">
@@ -154,13 +158,14 @@
                 <section class="admin-section user-manager-section">
                     <h3>User Management</h3>
                     <div class="user-manager-controls">
-                        <input type="text" id="user-search-input" placeholder="Search by name, email, or ID...">
+                        <input type="text" id="user-search-input" placeholder="Search by name, email, or ID..." autocomplete="off" autocapitalize="off" spellcheck="false">
                         <select id="user-plan-filter">
                             <option value="all">All Plans</option>
-                            <option value="master">Master</option>
+                            <option value="studio">Studio</option>
                             <option value="pro">Pro</option>
                             <option value="free">Free</option>
                         </select>
+                        <button id="refresh-users-btn" class="btn btn-secondary btn-small" type="button">Refresh Users</button>
                         <button id="add-new-user-btn" class="btn btn-small">Add New User</button>
                     </div>
 

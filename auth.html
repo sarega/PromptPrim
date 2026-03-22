@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PromptPrim Auth</title>
+  <script type="module" crossorigin src="/PromptPrim/assets/auth-Cz0WKFWq.js"></script>
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/main-CLQSUiLm.js">
+  <link rel="modulepreload" crossorigin href="/PromptPrim/assets/auth.service-C6v-CwKo.js">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/main-DWpJxxB0.css">
+  <link rel="stylesheet" crossorigin href="/PromptPrim/assets/auth-CTj021z1.css">
+</head>
+<body class="auth-page">
+    <main class="auth-shell">
+        <section class="auth-panel">
+            <div class="auth-panel-header">
+                <a href="./" class="auth-back-link">← Back</a>
+                <div class="auth-badge">Phase 1 Auth</div>
+            </div>
+
+            <h1 id="auth-title">Sign in to PromptPrim</h1>
+            <p id="auth-subtitle" class="auth-subtitle">Use your account to access the hosted app and admin tools.</p>
+
+            <div id="auth-config-warning" class="auth-notice auth-notice-warning hidden">
+                Supabase is not configured yet. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to start auth locally.
+            </div>
+
+            <div id="auth-status" class="auth-notice hidden"></div>
+
+            <form id="auth-form" class="auth-form">
+                <label class="auth-field auth-field-optional hidden" id="auth-display-name-group">
+                    <span>Display name</span>
+                    <input type="text" id="auth-display-name" autocomplete="name" placeholder="Your name">
+                </label>
+
+                <label class="auth-field">
+                    <span>Email</span>
+                    <input type="email" id="auth-email" autocomplete="email" required placeholder="name@example.com">
+                </label>
+
+                <label class="auth-field">
+                    <span>Password</span>
+                    <input type="password" id="auth-password" autocomplete="current-password" required minlength="8" placeholder="At least 8 characters">
+                </label>
+
+                <label class="auth-field auth-field-optional hidden" id="auth-confirm-password-group">
+                    <span>Confirm password</span>
+                    <input type="password" id="auth-confirm-password" autocomplete="new-password" minlength="8" placeholder="Repeat your new password">
+                </label>
+
+                <button type="submit" id="auth-submit-btn" class="btn auth-submit-btn">Sign In</button>
+            </form>
+
+            <button type="button" id="auth-forgot-password-btn" class="auth-secondary-link">
+                Forgot your password?
+            </button>
+
+            <button type="button" id="auth-mode-toggle" class="auth-mode-toggle">
+                Need an account? Create one
+            </button>
+
+            <div class="auth-footer-note">
+                Admin access is controlled by Supabase user role metadata and will be enforced on `admin.html`.
+            </div>
+        </section>
+    </main>
+
+</body>
+</html>
