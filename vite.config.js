@@ -4,8 +4,6 @@ import react from '@vitejs/plugin-react'
 // import tailwindcss from 'tailwindcss';
 import packageJson from './package.json';
 
-import { cloudflare } from "@cloudflare/vite-plugin";
-
 function normalizeBasePath(rawValue = '/') {
   const normalizedValue = String(rawValue || '/').trim();
   if (!normalizedValue || normalizedValue === '/') return '/';
@@ -31,7 +29,7 @@ const htmlEntryPoints = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), cloudflare()], 
+  plugins: [react()], 
   server: {
     host: '0.0.0.0', // For local/LAN access
     port: 5173,
