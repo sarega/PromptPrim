@@ -9,19 +9,22 @@
     "build:cloudflare": "CF_PAGES=1 BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
     "build:root": "VITE_PUBLIC_BASE_PATH=/ BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
     "build:github": "VITE_PUBLIC_BASE_PATH=/PromptPrim/ BROWSERSLIST_IGNORE_OLD_DATA=1 vite build",
-    "preview": "vite preview",
+    "preview": "npm run build && wrangler dev",
     "tw:version": "node -p \"require('tailwindcss/package.json').version\"",
     "tw:build": "tailwindcss -i src/styles/main.css -o public/assets/tw.css",
-    "tw:watch": "tailwindcss -i src/styles/main.css -o public/assets/tw.css --watch"
+    "tw:watch": "tailwindcss -i src/styles/main.css -o public/assets/tw.css --watch",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.30.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
     "gh-pages": "^6.3.0",
     "postcss": "^8.5.6",
     "supabase": "^2.83.0",
     "tailwindcss": "^3.4.17",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "wrangler": "^4.76.0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
